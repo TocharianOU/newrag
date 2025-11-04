@@ -130,7 +130,7 @@ Key configuration areas:
 
 ## License Information
 
-This project is licensed under the [LICENSE.md](LICENSE.md).
+This project is licensed under the [LICENSE](LICENSE).
 
 Currently, some models in this project were previously trained with third-party detectors. We plan to explore and replace them with models under more permissive licenses to enhance user-friendliness and flexibility.
 
