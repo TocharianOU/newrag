@@ -137,7 +137,7 @@ cp configs/config.yaml.example configs/config.yaml
 
 ## License Information
 
-本项目采用 [LICENSE.md](LICENSE.md)。
+本项目采用 [LICENSE](LICENSE)。
 
 本项目部分模型历史上使用过第三方检测器。未来我们将逐步替换为更宽松许可的方案，以提升用户友好度与灵活性。
 
