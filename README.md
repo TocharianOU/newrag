@@ -94,7 +94,7 @@ python scripts/download_models.py
 bash scripts/start_vllm.sh
 ```
 
-For detailed local model deployment guide, see [LOCAL_MODELS.md](docs/local-models.md).
+For detailed local model deployment guide, see [LOCAL_MODELS](docs/local-models.md).
 
 
 ## Key Features

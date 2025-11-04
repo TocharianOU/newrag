@@ -102,7 +102,7 @@ python scripts/download_models.py
 bash scripts/start_vllm.sh
 ```
 
-详细的本地模型部署指南请参考 [LOCAL_MODELS.md](docs/LOCAL_MODELS.md)。
+详细的本地模型部署指南请参考 [LOCAL_MODELS](docs/LOCAL_MODELS.md)。
 
 
 ## 核心特色
