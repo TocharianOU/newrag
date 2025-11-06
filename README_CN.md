@@ -5,7 +5,7 @@
 </div>
 
 <p align="center">
-    🤗 <a href="https://www.modelscope.cn/models/Alibaba-EI/SmartResume">Model</a>&nbsp&nbsp | &nbsp&nbsp📑 <a href="https://arxiv.org/abs/2510.09722">Technical Report</a>
+    🤗 <a href="https://www.modelscope.cn/models/Alibaba-EI/SmartResume">Model</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/studios/Alibaba-EI/SmartResumeDemo/summary">Demo</a>&nbsp&nbsp | &nbsp&nbsp📑 <a href="https://arxiv.org/abs/2510.09722">Technical Report</a>
 </p>
 
 <p align="right"><a href="README.md">English</a> | <b>中文</b></p>
