@@ -123,7 +123,9 @@ We plan to explore and replace them with models under more permissive licenses t
 
 ## Important Notice
 
-Due to open-source compliance requirements, this codebase is a refactored version. The internal PDF parsing and OCR components cannot be published. We have replaced them with open-source alternatives, and some features may not be fully compatible with the original implementation. The following features are pending optimization:
+Due to open-source compliance requirements, this codebase is a refactored version. The internal PDF parsing and OCR components cannot be published. We have replaced them with open-source alternatives, and some features may not be fully compatible with the original implementation.
+
+## TODO List
 
 1. **Avoid loading models on every call, support vLLM deployment** - Optimize model loading mechanism to avoid repeated loading and support vLLM deployment calls
 2. **Watermarked and corrupted PDF parsing via OCR pipeline** - Use OCR pipeline for parsing watermarked or corrupted PDF files
