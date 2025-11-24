@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIOps RAG Knowledge Base</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .flag-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .flag-icon:hover {
+            transform: scale(1.1);
+        }
+        /* Highlight styles for search results */
+        .highlight-content mark {
+            background-color: #fef08a;
+            color: #854d0e;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen flex">
+        <!-- Sidebar -->
+        <div class="w-64 bg-gray-900 text-white p-6">
+            <div class="flex items-center justify-between mb-8">
+                <h1 class="text-2xl font-bold">
+                    <i class="fas fa-database mr-2"></i>
+                    <span data-i18n="app.title">AIOps RAG KB</span>
+                </h1>
+            </div>
+            
+            <!-- Language Switcher -->
+            <div class="mb-6 flex items-center gap-3 pb-4 border-b border-gray-700">
+                <span class="text-sm text-gray-400" data-i18n="app.language">Language</span>
+                <button onclick="switchLanguage('zh')" id="lang-zh" class="px-3 py-1 rounded text-sm opacity-50 hover:opacity-100 hover:bg-gray-800 transition-all">
+                    中文
+                </button>
+                <button onclick="switchLanguage('en')" id="lang-en" class="px-3 py-1 rounded text-sm opacity-50 hover:opacity-100 hover:bg-gray-800 transition-all">
+                    EN
+                </button>
+            </div>
+            
+            <nav class="space-y-2">
+                <button onclick="showTab('upload')" class="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-800 tab-btn active" data-tab="upload">
+                    <i class="fas fa-upload mr-2"></i> <span data-i18n="nav.upload">Upload</span>
+                </button>
+                <button onclick="showTab('search')" class="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-800 tab-btn" data-tab="search">
+                    <i class="fas fa-search mr-2"></i> <span data-i18n="nav.search">Search</span>
+                </button>
+                <button onclick="showTab('stats')" class="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-800 tab-btn" data-tab="stats">
+                    <i class="fas fa-chart-bar mr-2"></i> <span data-i18n="nav.stats">Statistics</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 p-8">
+            <!-- Upload Tab -->
+            <div id="upload-tab" class="tab-content">
+                <h2 class="text-3xl font-bold mb-6" data-i18n="upload.title">Upload Documents</h2>
+                
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="upload.type">Upload Type</label>
+                        <select id="upload-type" class="w-full px-4 py-2 border rounded-lg">
+                            <option value="single" data-i18n="upload.single">Single File</option>
+                            <option value="batch" data-i18n="upload.batch">Multiple Files</option>
+                            <option value="zip" data-i18n="upload.zip">ZIP Archive</option>
+                        </select>
+                    </div>
+
+                    <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-blue-500 transition-colors cursor-pointer">
+                        <i class="fas fa-cloud-upload-alt text-6xl text-gray-400 mb-4"></i>
+                        <p class="text-lg text-gray-600 mb-2" data-i18n="upload.dragDrop">Drag & drop files here</p>
+                        <p class="text-sm text-gray-500" data-i18n="upload.clickBrowse">or click to browse</p>
+                        <input type="file" id="file-input" class="hidden" multiple>
+                    </div>
+
+                    <!-- Selected Files Display -->
+                    <div id="selected-files" class="mt-4 hidden">
+                        <h4 class="text-sm font-medium text-gray-700 mb-2" data-i18n="upload.selectedFiles">Selected Files:</h4>
+                        <div id="files-list" class="space-y-2"></div>
+                    </div>
+
+                    <div class="mt-4 grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="upload.category">Category</label>
+                            <input type="text" id="category" class="w-full px-4 py-2 border rounded-lg" data-i18n-placeholder="upload.categoryPlaceholder">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="upload.author">Author</label>
+                            <input type="text" id="author" class="w-full px-4 py-2 border rounded-lg" data-i18n-placeholder="upload.authorPlaceholder">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="upload.tags">Tags (comma-separated)</label>
+                            <input type="text" id="tags" class="w-full px-4 py-2 border rounded-lg" data-i18n-placeholder="upload.tagsPlaceholder">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="upload.description">Description</label>
+                            <textarea id="description" class="w-full px-4 py-2 border rounded-lg" rows="2" data-i18n-placeholder="upload.descriptionPlaceholder"></textarea>
+                        </div>
+                    </div>
+
+                    <button onclick="uploadFiles()" class="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-upload mr-2"></i> <span data-i18n="upload.button">Upload & Process</span>
+                    </button>
+                </div>
+
+                <div id="upload-status" class="hidden bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4" data-i18n="upload.status">Processing Status</h3>
+                    <div id="status-content"></div>
+                </div>
+            </div>
+
+            <!-- Search Tab -->
+            <div id="search-tab" class="tab-content hidden">
+                <h2 class="text-3xl font-bold mb-6" data-i18n="search.title">Search Knowledge Base</h2>
+                
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <div class="flex gap-4">
+                        <input type="text" id="search-query" class="flex-1 px-4 py-3 border rounded-lg text-lg" data-i18n-placeholder="search.queryPlaceholder">
+                        <button onclick="performSearch()" class="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                            <i class="fas fa-search mr-2"></i> <span data-i18n="search.button">Search</span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 flex gap-4">
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="search.categoryFilter">Category Filter</label>
+                            <input type="text" id="filter-category" class="w-full px-4 py-2 border rounded-lg" data-i18n-placeholder="search.optional">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="search.typeFilter">File Type Filter</label>
+                            <input type="text" id="filter-type" class="w-full px-4 py-2 border rounded-lg" data-i18n-placeholder="search.optional">
+                        </div>
+                        <div class="w-32">
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="search.results">Results</label>
+                            <input type="number" id="search-k" class="w-full px-4 py-2 border rounded-lg" value="5" min="1" max="20">
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="use-hybrid" class="mr-2" checked>
+                            <span class="text-sm text-gray-700" data-i18n="search.hybrid">Use Hybrid Search (Vector + BM25)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="search-results" class="space-y-4"></div>
+            </div>
+
+            <!-- Statistics Tab -->
+            <div id="stats-tab" class="tab-content hidden">
+                <h2 class="text-3xl font-bold mb-6" data-i18n="stats.title">Knowledge Base Statistics</h2>
+                
+                <!-- ES Index Status -->
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <h3 class="text-lg font-semibold mb-4" data-i18n="stats.esIndexStatus">Elasticsearch Index Status</h3>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <div class="text-sm text-gray-600" data-i18n="stats.indexName">Index Name</div>
+                            <div class="text-lg font-semibold" id="es-index-name">-</div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-600" data-i18n="stats.status">Status</div>
+                            <div class="text-lg font-semibold" id="es-index-status">-</div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-600" data-i18n="stats.docCount">Document Count</div>
+                            <div class="text-lg font-semibold text-blue-600" id="es-doc-count">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-4 gap-6 mb-6">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="text-3xl font-bold text-blue-600" id="stat-docs">-</div>
+                        <div class="text-gray-600 mt-2" data-i18n="stats.totalUploaded">Total Uploaded</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="text-3xl font-bold text-green-600" id="stat-completed">-</div>
+                        <div class="text-gray-600 mt-2" data-i18n="stats.completed">Completed</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="text-3xl font-bold text-yellow-600" id="stat-processing">-</div>
+                        <div class="text-gray-600 mt-2" data-i18n="stats.processing">Processing</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="text-3xl font-bold text-red-600" id="stat-failed">-</div>
+                        <div class="text-gray-600 mt-2" data-i18n="stats.failed">Failed</div>
+                    </div>
+                </div>
+
+                <!-- Document List -->
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold" data-i18n="stats.recentDocs">Recent Documents</h3>
+                        <button onclick="deleteAllDocuments()" class="text-red-600 hover:text-red-800 text-sm font-medium">
+                            <i class="fas fa-trash mr-1"></i> <span data-i18n="stats.clearAll">Clear All</span>
+                        </button>
+                    </div>
+                    <div id="documents-list" class="space-y-2"></div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-6">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold mb-4" data-i18n="stats.topCategories">Top Categories</h3>
+                        <div id="categories-list"></div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-semibold mb-4" data-i18n="stats.fileTypes">File Types</h3>
+                        <div id="file-types-list"></div>
+                    </div>
+                </div>
+
+                <button onclick="loadStats()" class="mt-6 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-sync-alt mr-2"></i> <span data-i18n="stats.refresh">Refresh Statistics</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-gray-800');
+            });
+            
+            document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active', 'bg-gray-800');
+            
+            if (tabName === 'stats') {
+                loadStats();
+            }
+        }
+
+        // Drag and drop
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const selectedFilesDiv = document.getElementById('selected-files');
+        const filesList = document.getElementById('files-list');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // File input change event
+        fileInput.addEventListener('change', () => {
+            displaySelectedFiles();
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-blue-500', 'bg-blue-50');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+            fileInput.files = e.dataTransfer.files;
+            displaySelectedFiles();
+        });
+
+        // Display selected files
+        function displaySelectedFiles() {
+            const files = fileInput.files;
+            if (files.length === 0) {
+                selectedFilesDiv.classList.add('hidden');
+                return;
+            }
+
+            selectedFilesDiv.classList.remove('hidden');
+            filesList.innerHTML = '';
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileItem = document.createElement('div');
+                fileItem.className = 'flex items-center justify-between p-3 bg-gray-50 rounded border';
+                fileItem.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-file text-blue-500"></i>
+                        <div>
+                            <div class="text-sm font-medium">${file.name}</div>
+                            <div class="text-xs text-gray-500">${(file.size / 1024).toFixed(1)} KB</div>
+                        </div>
+                    </div>
+                    <i class="fas fa-check-circle text-green-500"></i>
+                `;
+                filesList.appendChild(fileItem);
+            }
+        }
+
+        // Upload files
+        async function uploadFiles() {
+            const files = fileInput.files;
+            if (!files.length) {
+                const msg = currentLang === 'zh' ? '请选择要上传的文件' : 'Please select files to upload';
+                alert(msg);
+                return;
+            }
+
+            const uploadType = document.getElementById('upload-type').value;
+            const category = document.getElementById('category').value;
+            const author = document.getElementById('author').value;
+            const tags = document.getElementById('tags').value;
+            const description = document.getElementById('description').value;
+
+            const formData = new FormData();
+            
+            if (uploadType === 'zip') {
+                formData.append('file', files[0]);
+            } else if (uploadType === 'batch') {
+                for (let file of files) {
+                    formData.append('files', file);
+                }
+            } else {
+                formData.append('file', files[0]);
+            }
+
+            if (category) formData.append('category', category);
+            if (author) formData.append('author', author);
+            if (tags) formData.append('tags', tags);
+            if (description) formData.append('description', description);
+
+            const endpoint = uploadType === 'zip' ? '/upload_zip' : 
+                            uploadType === 'batch' ? '/upload_batch' : '/upload';
+
+            document.getElementById('upload-status').classList.remove('hidden');
+                   const processingTitle = currentLang === 'zh' ? '正在处理文件...' : 'Processing files...';
+                   const processingMsg = currentLang === 'zh' ? '请稍候，我们正在提取和索引您的文档' : 'Please wait while we extract and index your document';
+                   
+                   document.getElementById('status-content').innerHTML = `
+                       <div class="flex items-center space-x-3 text-blue-600">
+                           <i class="fas fa-spinner fa-spin text-2xl"></i>
+                           <div>
+                               <div class="font-medium">${processingTitle}</div>
+                               <div class="text-sm text-gray-600">${processingMsg}</div>
+                           </div>
+                       </div>
+                   `;
+
+            try {
+                console.log('Uploading to:', endpoint);
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                console.log('Upload result:', result);
+                
+                       if (response.ok) {
+                           // Check if duplicate
+                           if (result.status === 'duplicate') {
+                               const dupTitle = currentLang === 'zh' ? '检测到重复文件' : 'Duplicate File Detected';
+                               const msgLabel = currentLang === 'zh' ? '消息' : 'Message';
+                               const prevUpload = currentLang === 'zh' ? '之前的上传' : 'Previous Upload';
+                               const filenameLabel = currentLang === 'zh' ? '文件名' : 'Filename';
+                               const statusLabel = currentLang === 'zh' ? '状态' : 'Status';
+                               const uploadedLabel = currentLang === 'zh' ? '上传时间' : 'Uploaded';
+                               const chunksLabel = currentLang === 'zh' ? '块数' : 'Chunks';
+                               
+                               document.getElementById('status-content').innerHTML = `
+                                   <div class="text-yellow-600">
+                                       <div class="flex items-center space-x-2 mb-3">
+                                           <i class="fas fa-exclamation-triangle text-2xl"></i>
+                                           <div class="text-lg font-semibold">${dupTitle}</div>
+                                       </div>
+                                       <div class="mt-3 space-y-2 text-sm text-gray-700 bg-yellow-50 p-4 rounded">
+                                           <div><strong>${msgLabel}:</strong> ${result.message}</div>
+                                           ${result.document ? `
+                                               <div class="mt-3 pt-3 border-t border-yellow-200">
+                                                   <div class="font-medium mb-2">${prevUpload}:</div>
+                                                   <div><strong>${filenameLabel}:</strong> ${result.document.filename}</div>
+                                                   <div><strong>${statusLabel}:</strong> ${result.document.status}</div>
+                                                   <div><strong>${uploadedLabel}:</strong> ${result.document.uploaded_at ? new Date(result.document.uploaded_at).toLocaleString() : 'N/A'}</div>
+                                                   ${result.document.num_chunks ? `<div><strong>${chunksLabel}:</strong> ${result.document.num_chunks}</div>` : ''}
+                                               </div>
+                                           ` : ''}
+                                       </div>
+                                   </div>
+                               `;
+                           } else {
+                               // Successful upload
+                               const successTitle = currentLang === 'zh' ? '上传成功！' : 'Upload Successful!';
+                               const statusLabel = currentLang === 'zh' ? '状态' : 'Status';
+                               const docIdLabel = currentLang === 'zh' ? '文档 ID' : 'Document ID';
+                               const chunksLabel = currentLang === 'zh' ? '创建的块数' : 'Chunks Created';
+                               const msgLabel = currentLang === 'zh' ? '消息' : 'Message';
+                               
+                               document.getElementById('status-content').innerHTML = `
+                                   <div class="text-green-600">
+                                       <div class="flex items-center space-x-2 mb-3">
+                                           <i class="fas fa-check-circle text-2xl"></i>
+                                           <div class="text-lg font-semibold">${successTitle}</div>
+                                       </div>
+                                       <div class="mt-3 space-y-2 text-sm text-gray-700 bg-green-50 p-4 rounded">
+                                           <div><strong>${statusLabel}:</strong> ${result.status || 'completed'}</div>
+                                           <div><strong>${docIdLabel}:</strong> ${result.document_id || 'N/A'}</div>
+                                           <div><strong>${chunksLabel}:</strong> ${result.num_chunks || 0}</div>
+                                           ${result.message ? `<div><strong>${msgLabel}:</strong> ${result.message}</div>` : ''}
+                                       </div>
+                                   </div>
+                               `;
+                           }
+                    // Clear file input and selected files display
+                    fileInput.value = '';
+                    selectedFilesDiv.classList.add('hidden');
+                } else {
+                    throw new Error(result.detail || 'Upload failed');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                const failTitle = currentLang === 'zh' ? '上传失败' : 'Upload Failed';
+                const errorLabel = currentLang === 'zh' ? '错误' : 'Error';
+                
+                document.getElementById('status-content').innerHTML = `
+                    <div class="text-red-600">
+                        <div class="flex items-center space-x-2 mb-3">
+                            <i class="fas fa-exclamation-circle text-2xl"></i>
+                            <div class="text-lg font-semibold">${failTitle}</div>
+                        </div>
+                        <div class="mt-3 text-sm bg-red-50 p-4 rounded">
+                            <strong>${errorLabel}:</strong> ${error.message}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Search
+        async function performSearch() {
+            const query = document.getElementById('search-query').value;
+            if (!query) {
+                const msg = currentLang === 'zh' ? '请输入搜索查询' : 'Please enter a search query';
+                alert(msg);
+                return;
+            }
+
+            const k = parseInt(document.getElementById('search-k').value);
+            const useHybrid = document.getElementById('use-hybrid').checked;
+            const filterCategory = document.getElementById('filter-category').value;
+            const filterType = document.getElementById('filter-type').value;
+
+            const filters = {};
+            if (filterCategory) filters.category = filterCategory;
+            if (filterType) filters.file_type = filterType;
+
+            const searchingMsg = currentLang === 'zh' ? '搜索中...' : 'Searching...';
+            document.getElementById('search-results').innerHTML = `<div class="text-blue-600">${searchingMsg}</div>`;
+
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        query,
+                        k,
+                        filters: Object.keys(filters).length > 0 ? filters : null,
+                        use_hybrid: useHybrid
+                    })
+                });
+
+                const data = await response.json();
+                console.log('Search response:', data);
+                console.log('First result:', data.results?.[0]);
+                
+                if (data.results && data.results.length > 0) {
+                    const resultsHTML = data.results.map((result, index) => {
+                        // Use highlighted text if available, otherwise use regular content
+                        let displayText = '';
+                        if (result.highlighted) {
+                            displayText = result.highlighted;
+                        } else if (result.content) {
+                            displayText = result.content.substring(0, 300) + '...';
+                        } else if (result.text) {
+                            displayText = result.text.substring(0, 300) + '...';
+                        }
+                        
+                        return `
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div class="text-lg font-semibold">#${index + 1} ${result.metadata?.filename || 'Unknown'}</div>
+                                    ${result.score ? `<div class="text-sm text-gray-500">Score: ${result.score.toFixed(3)}</div>` : ''}
+                                </div>
+                                <div class="text-gray-700 mb-3 highlight-content">${displayText}</div>
+                                <div class="flex gap-2 flex-wrap">
+                                    ${result.metadata?.category ? `<span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">${result.metadata.category}</span>` : ''}
+                                    ${result.metadata?.file_type ? `<span class="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded">${result.metadata.file_type}</span>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    document.getElementById('search-results').innerHTML = resultsHTML;
+                } else {
+                    const noResultsMsg = currentLang === 'zh' ? '未找到结果' : 'No results found';
+                    document.getElementById('search-results').innerHTML = `<div class="text-gray-600">${noResultsMsg}</div>`;
+                }
+            } catch (error) {
+                const errorLabel = currentLang === 'zh' ? '错误' : 'Error';
+                document.getElementById('search-results').innerHTML = `<div class="text-red-600">${errorLabel}: ${error.message}</div>`;
+            }
+        }
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const response = await fetch('/stats');
+                const stats = await response.json();
+
+                // ES Index Status
+                if (stats.index) {
+                    document.getElementById('es-index-name').textContent = stats.index.name || '-';
+                    const status = stats.index.status || 'unknown';
+                    const statusEl = document.getElementById('es-index-status');
+                    statusEl.textContent = status;
+                    statusEl.className = 'text-lg font-semibold ' + 
+                        (status === 'green' ? 'text-green-600' : 
+                         status === 'not_created' ? 'text-gray-600' : 'text-yellow-600');
+                    document.getElementById('es-doc-count').textContent = stats.index.document_count || 0;
+                }
+
+                // Database stats
+                if (stats.database) {
+                    document.getElementById('stat-docs').textContent = stats.database.total || 0;
+                    document.getElementById('stat-completed').textContent = stats.database.completed || 0;
+                    document.getElementById('stat-processing').textContent = stats.database.processing || 0;
+                    document.getElementById('stat-failed').textContent = stats.database.failed || 0;
+                }
+
+                const categoriesHTML = stats.categories?.map(cat => `
+                    <div class="flex justify-between items-center py-2 border-b">
+                        <span>${cat.name}</span>
+                        <span class="font-semibold">${cat.count}</span>
+                    </div>
+                `).join('') || '<div class="text-gray-500">No data</div>';
+
+                const fileTypesHTML = stats.file_types?.map(type => `
+                    <div class="flex justify-between items-center py-2 border-b">
+                        <span>${type.name}</span>
+                        <span class="font-semibold">${type.count}</span>
+                    </div>
+                `).join('') || '<div class="text-gray-500">No data</div>';
+
+                document.getElementById('categories-list').innerHTML = categoriesHTML;
+                document.getElementById('file-types-list').innerHTML = fileTypesHTML;
+
+                // Load documents list
+                await loadDocuments();
+            } catch (error) {
+                console.error('Failed to load statistics:', error);
+            }
+        }
+
+        // Load documents list
+        async function loadDocuments() {
+            try {
+                const response = await fetch('/documents?limit=10');
+                const data = await response.json();
+
+                if (data.documents && data.documents.length > 0) {
+                    const docsHTML = data.documents.map(doc => {
+                        const statusColor = 
+                            doc.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            doc.status === 'failed' ? 'bg-red-100 text-red-800' :
+                            doc.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800';
+                        
+                        return `
+                            <div class="flex items-center justify-between py-3 border-b hover:bg-gray-50">
+                                <div class="flex-1">
+                                    <div class="font-medium">${doc.filename}</div>
+                                    <div class="text-xs text-gray-500">
+                                        ${doc.file_type} • ${(doc.file_size / 1024).toFixed(1)} KB
+                                        ${doc.num_chunks ? ` • ${doc.num_chunks} chunks` : ''}
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="px-2 py-1 rounded text-xs ${statusColor}">${doc.status}</span>
+                                    <button onclick="deleteDocument(${doc.id})" class="text-red-600 hover:text-red-800 text-sm">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    document.getElementById('documents-list').innerHTML = docsHTML;
+                } else {
+                    const noDocsMsg = currentLang === 'zh' ? '尚未上传任何文档' : 'No documents uploaded yet';
+                    document.getElementById('documents-list').innerHTML = `<div class="text-gray-500 text-center py-4">${noDocsMsg}</div>`;
+                }
+            } catch (error) {
+                console.error('Failed to load documents:', error);
+            }
+        }
+
+        // Delete single document
+        async function deleteDocument(docId) {
+            const msg = currentLang === 'zh' ? '确定要删除这个文档吗？' : 'Are you sure you want to delete this document?';
+            if (!confirm(msg)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/documents/${docId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    await loadStats();  // Reload stats and documents
+                } else {
+                    const error = await response.json();
+                    const errMsg = currentLang === 'zh' ? '删除失败: ' : 'Delete failed: ';
+                    alert(errMsg + (error.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Delete failed:', error);
+                const errMsg = currentLang === 'zh' ? '删除失败: ' : 'Delete failed: ';
+                alert(errMsg + error.message);
+            }
+        }
+
+        // Delete all documents
+        async function deleteAllDocuments() {
+            const msg = currentLang === 'zh' ? '确定要清空所有文档记录吗？这个操作不可恢复！' : 'Are you sure you want to clear all documents? This action cannot be undone!';
+            if (!confirm(msg)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/documents', {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    await loadStats();  // Reload stats and documents
+                    const successMsg = currentLang === 'zh' ? '所有文档已清空' : 'All documents cleared';
+                    alert(successMsg);
+                } else {
+                    const error = await response.json();
+                    const errMsg = currentLang === 'zh' ? '清空失败: ' : 'Clear failed: ';
+                    alert(errMsg + (error.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Delete all failed:', error);
+                const errMsg = currentLang === 'zh' ? '清空失败: ' : 'Clear failed: ';
+                alert(errMsg + error.message);
+            }
+        }
+
+        // Search on Enter
+        document.getElementById('search-query').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performSearch();
+        });
+
+        // ========== i18n Support ==========
+        const translations = {
+            zh: {
+                app: {
+                    title: 'AIOps RAG KB',
+                    language: '语言'
+                },
+                nav: {
+                    upload: '上传',
+                    search: '搜索',
+                    stats: '统计'
+                },
+                upload: {
+                    title: '上传文档',
+                    type: '上传类型',
+                    single: '单个文件',
+                    batch: '多个文件',
+                    zip: 'ZIP 压缩包',
+                    dragDrop: '拖放文件到这里',
+                    clickBrowse: '或点击浏览',
+                    selectedFiles: '已选择的文件：',
+                    category: '分类',
+                    categoryPlaceholder: '例如：incident, log, alert',
+                    author: '作者',
+                    authorPlaceholder: '您的名字',
+                    tags: '标签（逗号分隔）',
+                    tagsPlaceholder: 'security, ops, monitoring',
+                    description: '描述',
+                    descriptionPlaceholder: '可选描述',
+                    button: '上传并处理',
+                    status: '处理状态'
+                },
+                search: {
+                    title: '搜索知识库',
+                    queryPlaceholder: '输入您的搜索查询...',
+                    button: '搜索',
+                    categoryFilter: '分类过滤',
+                    typeFilter: '文件类型过滤',
+                    optional: '可选',
+                    results: '结果数',
+                    hybrid: '使用混合搜索（向量 + BM25）'
+                },
+                stats: {
+                    title: '知识库统计',
+                    esIndexStatus: 'Elasticsearch 索引状态',
+                    indexName: '索引名称',
+                    status: '状态',
+                    docCount: '文档数量',
+                    totalUploaded: '总上传',
+                    completed: '已完成',
+                    processing: '处理中',
+                    failed: '失败',
+                    recentDocs: '最近文档',
+                    clearAll: '清空全部',
+                    topCategories: '热门分类',
+                    fileTypes: '文件类型',
+                    refresh: '刷新统计'
+                }
+            },
+            en: {
+                app: {
+                    title: 'AIOps RAG KB',
+                    language: 'Language'
+                },
+                nav: {
+                    upload: 'Upload',
+                    search: 'Search',
+                    stats: 'Statistics'
+                },
+                upload: {
+                    title: 'Upload Documents',
+                    type: 'Upload Type',
+                    single: 'Single File',
+                    batch: 'Multiple Files',
+                    zip: 'ZIP Archive',
+                    dragDrop: 'Drag & drop files here',
+                    clickBrowse: 'or click to browse',
+                    selectedFiles: 'Selected Files:',
+                    category: 'Category',
+                    categoryPlaceholder: 'e.g., incident, log, alert',
+                    author: 'Author',
+                    authorPlaceholder: 'Your name',
+                    tags: 'Tags (comma-separated)',
+                    tagsPlaceholder: 'security, ops, monitoring',
+                    description: 'Description',
+                    descriptionPlaceholder: 'Optional description',
+                    button: 'Upload & Process',
+                    status: 'Processing Status'
+                },
+                search: {
+                    title: 'Search Knowledge Base',
+                    queryPlaceholder: 'Enter your search query...',
+                    button: 'Search',
+                    categoryFilter: 'Category Filter',
+                    typeFilter: 'File Type Filter',
+                    optional: 'Optional',
+                    results: 'Results',
+                    hybrid: 'Use Hybrid Search (Vector + BM25)'
+                },
+                stats: {
+                    title: 'Knowledge Base Statistics',
+                    esIndexStatus: 'Elasticsearch Index Status',
+                    indexName: 'Index Name',
+                    status: 'Status',
+                    docCount: 'Document Count',
+                    totalUploaded: 'Total Uploaded',
+                    completed: 'Completed',
+                    processing: 'Processing',
+                    failed: 'Failed',
+                    recentDocs: 'Recent Documents',
+                    clearAll: 'Clear All',
+                    topCategories: 'Top Categories',
+                    fileTypes: 'File Types',
+                    refresh: 'Refresh Statistics'
+                }
+            }
+        };
+
+        let currentLang = localStorage.getItem('language') || 'zh';
+
+        function switchLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('language', lang);
+            document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+            
+            // Update flag opacity
+            document.getElementById('lang-zh').style.opacity = lang === 'zh' ? '1' : '0.5';
+            document.getElementById('lang-en').style.opacity = lang === 'en' ? '1' : '0.5';
+            
+            // Update all i18n elements
+            updateTranslations();
+        }
+
+        function updateTranslations() {
+            const t = translations[currentLang];
+            
+            // Update text content
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                const keys = key.split('.');
+                let value = t;
+                
+                for (const k of keys) {
+                    value = value?.[k];
+                }
+                
+                if (value) {
+                    el.textContent = value;
+                }
+            });
+            
+            // Update placeholders
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                const keys = key.split('.');
+                let value = t;
+                
+                for (const k of keys) {
+                    value = value?.[k];
+                }
+                
+                if (value) {
+                    el.placeholder = value;
+                }
+            });
+        }
+
+        // Initialize language on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            switchLanguage(currentLang);
+        });
+    </script>
+</body>
+</html>
+

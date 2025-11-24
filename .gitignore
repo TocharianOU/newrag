@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.cursor/
+
+# Data & Outputs
+data/
+uploads/
+*.db
+*.sqlite3
+
+# Test outputs (temporary)
+*_adaptive/
+*_adaptive_paddle/
+*_adaptive_vision/
+*_adaptive_easy/
+*_600_easy/
+*_600_vision/
+*_180_easy/
+*_180_vision/
+*_300_vison/
+*_apple/
+converted_images/
+output_images/
+
+# Comparison scripts (temporary)
+compare_*.py
+
+# Test PDFs (keep only in local)
+Aizimaiti.pdf
+wendanglizi.pdf
+
+# Lock files
+uv.lock
+.python-version
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local

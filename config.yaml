@@ -1,0 +1,198 @@
+# AIOps RAG Knowledge Base Configuration
+# 面向 IT 运维和安全场景的智能知识库系统配置
+
+# 模型配置
+models:
+  # Embedding 模型配置
+  embedding:
+    provider: lmstudio  # lmstudio / openai / custom
+    api_url: http://localhost:1234/v1
+    api_key: lm-studio
+    model_name: text-embedding-qwen3-embedding-0.6b
+    dimensions: 1024  # Qwen3-Embedding-0.6B output dimension
+    batch_size: 32
+    timeout: 30
+  
+  # Vision 模型配置（用于处理图片和扫描文档）
+  vision:
+    enabled: true
+    provider: lmstudio  # lmstudio / openai / custom
+    api_url: http://localhost:1234/v1
+    api_key: lm-studio
+    model_name: qwen/qwen3-vl-30b  # Changed to qwen/qwen3-vl-30b as requested
+    max_tokens: 2048
+    temperature: 0.0  # Must be 0 to prevent hallucination
+    timeout: 60
+
+# 文本切分配置
+text_splitting:
+  strategy: fixed_character
+  chunk_size: 3000  # 增大以支持页面级索引（普通页面约1000-2000字符）
+  chunk_overlap: 200
+  # 中文标点符号分隔符
+  separators:
+    - "\n\n"
+    - "\n"
+    - "。"
+    - "！"
+    - "？"
+    - "；"
+    - "，"
+    - " "
+    - ""
+  length_function: len  # 使用字符长度而非 token 数
+
+# Elasticsearch 配置
+elasticsearch:
+  hosts:
+    - http://localhost:9200
+  index_name: aiops_knowledge_base
+  username: ""  # 如需认证请填写
+  password: ""
+  timeout: 30
+  max_retries: 3
+  retry_on_timeout: true
+  # 混合检索配置
+  hybrid_search:
+    enabled: true
+    vector_weight: 0.7
+    bm25_weight: 0.3
+
+# 元数据配置
+metadata:
+  # 基础字段（自动提取）
+  basic_fields:
+    - filename
+    - filepath
+    - file_type
+    - created_at
+    - updated_at
+    - file_size
+    - checksum
+  
+  # 扩展字段（可选，用户可编辑）
+  extended_fields:
+    - author
+    - category
+    - tags
+    - version
+    - department
+    - description
+  
+  # AIOps/SecOps 专用字段
+  aiops_fields:
+    - severity  # 告警等级: critical / high / medium / low / info
+    - log_level  # 日志级别: ERROR / WARN / INFO / DEBUG
+    - event_type  # 事件类型: incident / alert / log / document
+    - source_system  # 来源系统: prometheus / elk / splunk / custom
+
+# 文档处理配置
+processing:
+  # 支持的文件格式
+  supported_formats:
+    - pdf
+    - docx
+    - doc
+    - txt
+    - md
+    - html
+    - csv
+    - xlsx
+    - png
+    - jpg
+    - jpeg
+  
+  batch_size: 10
+  max_file_size: 52428800  # 50MB in bytes
+  ocr_enabled: true
+  extract_images: true  # 从 PDF 提取图片并用 Vision 模型识别
+  
+  # 页面级索引配置
+  page_level_indexing: true  # 每页作为独立的可搜索单元
+  detect_tables: true  # 检测表格内容
+  table_detection_threshold: 0.3  # 表格检测阈值
+  convert_to_image_for_tables: true  # 表格页面转图片用GLM提取
+  max_page_size_chars: 4000  # 单页最大字符数（超过则切分）
+  max_page_size_mb: 50  # 单页最大大小
+  
+  # 并发处理配置
+  max_workers: 2  # 降低并发数以避免 LM Studio 崩溃
+  async_processing: true
+
+# 元器件提取配置（用于工业图纸）
+component_extraction:
+  enabled: true
+  extract_all_components: true  # 提取所有元器件编号
+  # 元器件类型前缀（电容C、电阻R、芯片U/IC、二极管D、晶体管Q、阀门V、泵P等）
+  component_types:
+    - C   # 电容 Capacitor
+    - R   # 电阻 Resistor
+    - U   # 芯片 IC
+    - IC  # 集成电路
+    - D   # 二极管 Diode
+    - Q   # 晶体管 Transistor
+    - L   # 电感 Inductor
+    - T   # 变压器 Transformer
+    - V   # 阀门 Valve
+    - P   # 泵 Pump
+    - SA  # 取样器 Sampler
+    - FI  # 流量指示器
+    - PI  # 压力指示器
+    - TI  # 温度指示器
+  validate_schema: true  # 验证JSON输出格式
+  auto_fix_json: true  # 自动修复JSON错误
+
+# Web 应用配置
+web:
+  host: 0.0.0.0
+  port: 9000
+  upload_folder: ./uploads
+  max_content_length: 104857600  # 100MB in bytes
+  allowed_extensions:
+    - pdf
+    - docx
+    - doc
+    - txt
+    - md
+    - html
+    - zip
+  
+  # CORS 配置
+  cors:
+    enabled: true
+    allow_origins:
+      - "*"
+    allow_methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+    allow_headers:
+      - "*"
+
+# 日志配置
+logging:
+  level: INFO  # DEBUG / INFO / WARNING / ERROR
+  format: json  # json / text
+  output: stdout  # stdout / file
+  file_path: ./logs/app.log
+  max_file_size: 10485760  # 10MB
+  backup_count: 5
+
+# 安全配置
+security:
+  # 文件上传安全
+  validate_file_type: true
+  scan_malware: false  # 需要安装 ClamAV
+  max_filename_length: 255
+  
+  # API 安全
+  rate_limit:
+    enabled: true
+    requests_per_minute: 60
+  
+  # 认证（可选）
+  auth:
+    enabled: false
+    type: basic  # basic / jwt / oauth
+

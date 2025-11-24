@@ -1,0 +1,190 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "analysis": {
+      "analyzer": {
+        "document_analyzer": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["lowercase", "asciifolding"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "document_id": {
+        "type": "keyword"
+      },
+      "document_type": {
+        "type": "keyword"
+      },
+      "revision": {
+        "type": "keyword"
+      },
+      "source_file": {
+        "type": "keyword"
+      },
+      "source_file_path": {
+        "type": "keyword",
+        "index": false
+      },
+      "project": {
+        "properties": {
+          "name": {
+            "type": "text",
+            "analyzer": "document_analyzer",
+            "fields": {
+              "keyword": {
+                "type": "keyword"
+              }
+            }
+          },
+          "plant": {
+            "type": "text",
+            "analyzer": "document_analyzer"
+          },
+          "phase": {
+            "type": "keyword"
+          }
+        }
+      },
+      "equipment": {
+        "properties": {
+          "tag": {
+            "type": "keyword"
+          },
+          "name": {
+            "type": "text",
+            "analyzer": "document_analyzer"
+          },
+          "title": {
+            "type": "text",
+            "analyzer": "document_analyzer"
+          },
+          "unit": {
+            "type": "keyword"
+          },
+          "area": {
+            "type": "keyword"
+          },
+          "package": {
+            "type": "keyword"
+          }
+        }
+      },
+      "content": {
+        "properties": {
+          "full_text": {
+            "type": "text",
+            "analyzer": "document_analyzer"
+          },
+          "full_text_raw": {
+            "type": "text",
+            "index": false
+          },
+          "summary": {
+            "type": "text",
+            "analyzer": "document_analyzer"
+          }
+        }
+      },
+      "revisions": {
+        "type": "nested",
+        "properties": {
+          "revision": {
+            "type": "keyword"
+          },
+          "date": {
+            "type": "date",
+            "format": "yyyy-MM-dd||dd-MMM-yy||dd-MMM-yyyy",
+            "ignore_malformed": true
+          },
+          "description": {
+            "type": "text",
+            "analyzer": "document_analyzer"
+          },
+          "prepared_by": {
+            "type": "keyword"
+          },
+          "checked_by": {
+            "type": "keyword"
+          },
+          "approved_by": {
+            "type": "keyword"
+          }
+        }
+      },
+      "procedures": {
+        "properties": {
+          "external_documentation": {
+            "type": "text",
+            "analyzer": "document_analyzer"
+          },
+          "review_acceptance_notes": {
+            "type": "text",
+            "analyzer": "document_analyzer"
+          }
+        }
+      },
+      "keywords": {
+        "type": "keyword"
+      },
+      "ocr_metadata": {
+        "properties": {
+          "text_blocks_count": {
+            "type": "integer"
+          },
+          "average_confidence": {
+            "type": "float"
+          },
+          "image_size": {
+            "properties": {
+              "width": {
+                "type": "integer"
+              },
+              "height": {
+                "type": "integer"
+              }
+            }
+          },
+          "extraction_date": {
+            "type": "date"
+          }
+        }
+      },
+      "text_blocks": {
+        "type": "nested",
+        "properties": {
+          "text": {
+            "type": "text",
+            "analyzer": "document_analyzer"
+          },
+          "bbox": {
+            "type": "float",
+            "index": false
+          },
+          "confidence": {
+            "type": "float"
+          }
+        }
+      },
+      "page_info": {
+        "properties": {
+          "current_page": {
+            "type": "keyword"
+          },
+          "total_pages": {
+            "type": "keyword"
+          }
+        }
+      },
+      "extraction_notes": {
+        "type": "text",
+        "index": false
+      }
+    }
+  }
+}
+

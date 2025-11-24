@@ -1,0 +1,971 @@
+"""Document processing module with LangChain integration"""
+
+import hashlib
+import os
+import tempfile
+import zipfile
+import concurrent.futures
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import structlog
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+    UnstructuredWordDocumentLoader,
+    UnstructuredHTMLLoader,
+    CSVLoader,
+    UnstructuredExcelLoader,
+)
+from langchain.schema import Document
+
+try:
+    from pdf2image import convert_from_path
+    PDF2IMAGE_AVAILABLE = True
+except ImportError:
+    PDF2IMAGE_AVAILABLE = False
+
+from src.config import config
+from src.models import VisionModel
+from src.glm_extractor import GLMPageExtractor
+
+logger = structlog.get_logger(__name__)
+
+
+def detect_garbled_text(text: str, threshold: float = 0.15) -> tuple[bool, float]:
+    """
+    检测文本是否包含过多乱码
+    
+    Args:
+        text: 要检测的文本
+        threshold: 乱码率阈值（默认 15%）
+    
+    Returns:
+        (is_garbled, garbled_ratio): 是否乱码，乱码率
+    """
+    if not text or len(text) == 0:
+        return False, 0.0
+    
+    # 统计各类字符
+    total_chars = len(text)
+    garbled_count = 0
+    
+    for char in text:
+        code_point = ord(char)
+        
+        # 检测常见乱码字符范围
+        # 1. 控制字符（除了常见的空白符）
+        if 0x0000 <= code_point <= 0x001F and char not in ['\n', '\r', '\t']:
+            garbled_count += 1
+        # 2. 私用区
+        elif 0xE000 <= code_point <= 0xF8FF:
+            garbled_count += 1
+        # 3. 特殊符号区的异常字符
+        elif code_point in [0xFFFD, 0xFFFE, 0xFFFF]:  # 替换字符
+            garbled_count += 1
+        # 4. 连续的框框字符 (tofu/豆腐块)
+        elif 0x2580 <= code_point <= 0x259F:
+            garbled_count += 1
+    
+    garbled_ratio = garbled_count / total_chars if total_chars > 0 else 0.0
+    is_garbled = garbled_ratio > threshold
+    
+    return is_garbled, garbled_ratio
+
+
+class DocumentProcessor:
+    """Document processor with multi-format support and metadata extraction"""
+
+    def __init__(self):
+        """Initialize document processor"""
+        self.config = config.processing_config
+        self.text_splitting_config = config.text_splitting_config
+        self.metadata_config = config.metadata_config
+        
+        # Initialize text splitter
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=self.text_splitting_config.get('chunk_size', 500),
+            chunk_overlap=self.text_splitting_config.get('chunk_overlap', 50),
+            separators=self.text_splitting_config.get('separators', ["\n\n", "\n", " ", ""]),
+            length_function=len,
+        )
+        
+        # Initialize vision model if enabled
+        self.vision_model = None
+        if self.config.get('extract_images', False):
+            try:
+                self.vision_model = VisionModel()
+            except Exception as e:
+                logger.warning("vision_model_init_failed", error=str(e))
+        
+        # Initialize GLM page extractor
+        self.glm_extractor = None
+        try:
+            self.glm_extractor = GLMPageExtractor()
+            logger.info("glm_extractor_initialized")
+        except Exception as e:
+            logger.warning("glm_extractor_init_failed", error=str(e))
+        
+        logger.info("document_processor_initialized")
+    
+    def load_document(self, file_path: str) -> List[Document]:
+        """
+        Load document using appropriate loader
+        
+        Args:
+            file_path: Path to document file
+        
+        Returns:
+            List of LangChain Document objects
+        """
+        file_path = Path(file_path)
+        file_ext = file_path.suffix.lower()
+        
+        try:
+            if file_ext == '.pdf':
+                loader = PyPDFLoader(str(file_path))
+                documents = loader.load()
+                
+                logger.info(
+                    "pdf_loaded",
+                    file_path=str(file_path),
+                    num_pages=len(documents)
+                )
+                
+                # Process pages concurrently
+                processed_documents = [None] * len(documents)
+                
+                def process_single_page(idx, doc):
+                    try:
+                        # Detect page content type
+                        page_type = self.detect_page_content_type(doc.page_content)
+                        
+                        # Check if page has garbled text or is a drawing
+                        is_garbled, garbled_ratio = detect_garbled_text(doc.page_content) if doc.page_content else (False, 0.0)
+                        content_len = len(doc.page_content.strip()) if doc.page_content else 0
+                        
+                        # Use GLM if:
+                        # 1. Garbled text
+                        # 2. Very short content (< 50 chars)
+                        # 3. Drawing (ALWAYS use vision for drawings to capture spatial layout)
+                        # 4. Table AND content is not rich (tables with rich text are usually extractable)
+                        # 5. Explicitly configured to convert tables
+                        is_rich_text = content_len > 800
+                        
+                        needs_glm = (
+                            is_garbled or 
+                            content_len < 50 or
+                            page_type == 'drawing' or  # Always use vision for drawings
+                            (page_type == 'table' and not is_rich_text and self.config.get('convert_to_image_for_tables', True))
+                        )
+                        
+                        logger.info(
+                            "pdf_page_analysis",
+                            page=idx + 1,
+                            page_type=page_type,
+                            is_garbled=is_garbled,
+                            garbled_ratio=f"{garbled_ratio:.2%}",
+                            needs_glm=needs_glm,
+                            content_length=content_len
+                        )
+                        
+                        # Use GLM extraction if needed
+                        if needs_glm and self.glm_extractor and PDF2IMAGE_AVAILABLE:
+                            try:
+                                logger.info("using_glm_for_page", page=idx + 1)
+                                
+                                # Convert page to image
+                                image_path = self._convert_pdf_page_to_image(file_path, idx)
+                                
+                                try:
+                                    # Extract with GLM
+                                    page_json = self.glm_extractor.extract_page_content(image_path, page_type)
+                                    
+                                    # Convert JSON to searchable text
+                                    doc.page_content = self._flatten_to_searchable_text(page_json)
+                                    doc.metadata['page_json'] = page_json
+                                    doc.metadata['page_type'] = page_type
+                                    doc.metadata['extraction_method'] = 'glm'
+                                    
+                                    logger.info(
+                                        "glm_extraction_success",
+                                        page=idx + 1,
+                                        num_equipment=len(page_json.get('equipment', [])),
+                                        num_components=len(page_json.get('components', []))
+                                    )
+                                finally:
+                                    # Clean up temp image
+                                    try:
+                                        os.unlink(image_path)
+                                    except:
+                                        pass
+                            
+                            except Exception as e:
+                                logger.error(
+                                    "glm_extraction_failed",
+                                    page=idx + 1,
+                                    error=str(e)
+                                )
+                                # Keep original content
+                                doc.metadata['page_type'] = page_type
+                                doc.metadata['extraction_method'] = 'text'
+                        else:
+                            # Use text content
+                            doc.metadata['page_type'] = page_type
+                            doc.metadata['extraction_method'] = 'text'
+                        
+                        return idx, doc
+                    except Exception as e:
+                        logger.error("page_processing_error", page=idx+1, error=str(e))
+                        return idx, doc
+
+                # Use ThreadPoolExecutor for concurrent processing
+                # Limit workers to avoid overloading LM Studio or Memory
+                max_workers = self.config.get('max_workers', 4)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = [executor.submit(process_single_page, i, doc) for i, doc in enumerate(documents)]
+                    for future in concurrent.futures.as_completed(futures):
+                        idx, processed_doc = future.result()
+                        processed_documents[idx] = processed_doc
+                
+                documents = processed_documents
+                
+                logger.info(
+                    "document_loaded",
+                    file_path=str(file_path),
+                    file_ext=file_ext,
+                    num_documents=len(documents)
+                )
+                
+                for idx, doc in enumerate(documents):
+                    content_length = len(doc.page_content) if doc.page_content else 0
+                    is_garbled, garbled_ratio = detect_garbled_text(doc.page_content) if doc.page_content else (False, 0.0)
+                    
+                    logger.info(
+                        "document_page_info",
+                        page_index=idx,
+                        content_length=content_length,
+                        has_content=bool(doc.page_content and doc.page_content.strip()),
+                        is_garbled=is_garbled,
+                        garbled_ratio=f"{garbled_ratio:.2%}",
+                        content_preview=doc.page_content[:200] if doc.page_content else "EMPTY"
+                    )
+                
+                return documents
+            elif file_ext in ['.docx', '.doc']:
+                # Try to split Word by pages using page breaks
+                try:
+                    return self._split_word_by_pages(file_path)
+                except Exception as e:
+                    logger.warning("word_page_split_failed", error=str(e))
+                    # Fall back to standard loading
+                    loader = UnstructuredWordDocumentLoader(str(file_path))
+            elif file_ext == '.txt':
+                loader = TextLoader(str(file_path), encoding='utf-8')
+            elif file_ext in ['.html', '.htm']:
+                loader = UnstructuredHTMLLoader(str(file_path))
+            elif file_ext == '.csv':
+                loader = CSVLoader(str(file_path))
+            elif file_ext in ['.xlsx', '.xls']:
+                # Process Excel by sheets
+                try:
+                    return self._process_excel_sheets(file_path)
+                except Exception as e:
+                    logger.warning("excel_sheet_processing_failed", error=str(e))
+                    # Fall back to standard loading
+                    loader = UnstructuredExcelLoader(str(file_path))
+            elif file_ext in ['.png', '.jpg', '.jpeg']:
+                # Use vision model for images
+                return self._load_image_document(file_path)
+            else:
+                raise ValueError(f"Unsupported file format: {file_ext}")
+            
+            # For non-PDF files, use the standard loading
+            documents = loader.load()
+            
+            # Log detailed information about loaded documents
+            logger.info(
+                "document_loaded",
+                file_path=str(file_path),
+                file_ext=file_ext,
+                num_documents=len(documents)
+            )
+            
+            # Log content of each document
+            for idx, doc in enumerate(documents):
+                content_length = len(doc.page_content) if doc.page_content else 0
+                logger.info(
+                    "document_page_info",
+                    page_index=idx,
+                    content_length=content_length,
+                    has_content=bool(doc.page_content and doc.page_content.strip()),
+                    content_preview=doc.page_content[:200] if doc.page_content else "EMPTY"
+                )
+            
+            return documents
+        
+        except Exception as e:
+            logger.error("document_load_failed", error=str(e), file_path=str(file_path))
+            raise
+    
+    def _load_image_document(self, image_path: Path) -> List[Document]:
+        """
+        Load image document using vision model
+        
+        Args:
+            image_path: Path to image file
+        
+        Returns:
+            List containing single Document with extracted text
+        """
+        if self.vision_model is None or not self.vision_model.enabled:
+            raise ValueError("Vision model is not enabled. Cannot process image files.")
+        
+        result = self.vision_model.extract_text_from_image(str(image_path))
+        
+        if result.get('error'):
+            raise ValueError(f"Image extraction failed: {result['error']}")
+        
+        doc = Document(
+            page_content=result['text'],
+            metadata={
+                'source': str(image_path),
+                'file_type': 'image',
+                'extraction_method': 'vision_model'
+            }
+        )
+        
+        return [doc]
+    
+    def _process_pdf_with_vision(self, pdf_path: Path) -> List[Document]:
+        """
+        Convert PDF pages to images and extract text using vision model
+        
+        Args:
+            pdf_path: Path to PDF file
+        
+        Returns:
+            List of Documents with extracted text from each page
+        """
+        if not self.vision_model or not self.vision_model.enabled:
+            logger.warning("vision_model_not_enabled")
+            return []
+        
+        logger.info("converting_pdf_to_images", pdf_path=str(pdf_path))
+        
+        # Convert PDF to images
+        images = convert_from_path(str(pdf_path), dpi=200)
+        logger.info("pdf_converted_to_images", num_pages=len(images))
+        
+        documents = []
+        temp_files = []
+        
+        try:
+            # Process each page
+            for page_num, image in enumerate(images):
+                logger.info("processing_pdf_page_with_vision", page=page_num + 1, total=len(images))
+                
+                # Save image to temp file
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                    image.save(tmp_file.name, 'PNG')
+                    temp_files.append(tmp_file.name)
+                    
+                    # Extract text using vision model
+                    result = self.vision_model.extract_text_from_image(tmp_file.name)
+                    
+                    if result.get('text'):
+                        doc = Document(
+                            page_content=result['text'],
+                            metadata={
+                                'source': str(pdf_path),
+                                'page': page_num + 1,
+                                'file_type': 'pdf',
+                                'extraction_method': 'vision_model'
+                            }
+                        )
+                        documents.append(doc)
+                        
+                        logger.info(
+                            "pdf_page_extracted",
+                            page=page_num + 1,
+                            text_length=len(result['text'])
+                        )
+                    else:
+                        logger.warning(
+                            "pdf_page_no_text",
+                            page=page_num + 1,
+                            error=result.get('error', 'No text extracted')
+                        )
+        
+        finally:
+            # Clean up temp files
+            for temp_file in temp_files:
+                try:
+                    os.unlink(temp_file)
+                except Exception as e:
+                    logger.warning("temp_file_cleanup_failed", file=temp_file, error=str(e))
+        
+        return documents
+    
+    def extract_metadata(self, file_path: str) -> Dict[str, Any]:
+        """
+        Extract metadata from file
+        
+        Args:
+            file_path: Path to file
+        
+        Returns:
+            Dictionary containing file metadata
+        """
+        file_path = Path(file_path)
+        
+        # Basic file info
+        stat = file_path.stat()
+        
+        # Calculate checksum
+        with open(file_path, 'rb') as f:
+            file_hash = hashlib.sha256(f.read()).hexdigest()
+        
+        metadata = {
+            'filename': file_path.name,
+            'filepath': str(file_path.absolute()),
+            'file_type': file_path.suffix.lower().lstrip('.'),
+            'file_size': stat.st_size,
+            'created_at': datetime.fromtimestamp(stat.st_ctime).isoformat(),
+            'updated_at': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            'checksum': file_hash,
+        }
+        
+        return metadata
+    
+    def detect_page_content_type(self, page_content: str) -> str:
+        """
+        Detect page content type
+        
+        Args:
+            page_content: Page text content
+        
+        Returns:
+            Content type (text/table/drawing/mixed)
+        """
+        if not page_content or not page_content.strip():
+            return 'text'
+            
+        page_content_lower = page_content.lower()
+        
+        # Check for drawing indicators
+        drawing_indicators = [
+            'drawing', 'dwg', 'sheet', '图纸', '图号', 'scale', 'rev.', 
+            'p&id', 'flow diagram', 'layout', 'datasheet', 'specification'
+        ]
+        has_drawing = any(indicator in page_content_lower for indicator in drawing_indicators)
+        
+        # Check for table indicators
+        # 1. Explicit keywords
+        table_keywords = ['table', '表格', 'list', 'schedule', 'parameters', 'properties', 'characteristics']
+        has_table_keyword = any(keyword in page_content_lower for keyword in table_keywords)
+        
+        # 2. Structure indicators (lines with separators or aligned columns)
+        lines = page_content.split('\n')
+        table_lines = 0
+        for line in lines[:20]:  # Check first 20 lines
+            if '|' in line or '\t' in line or '  ' in line:  # Simple heuristic
+                table_lines += 1
+        
+        has_table_structure = table_lines > 3
+        
+        # Check content length (short content might be scanned or just a title block)
+        is_short = len(page_content.strip()) < 200
+        
+        if has_drawing:
+            return 'drawing'
+        elif has_table_keyword or has_table_structure:
+            return 'table'
+        elif is_short:
+             # If short but has drawing keywords, it's drawing. Otherwise maybe just text.
+             # But here we prioritize "drawing" if it looks like a technical doc page
+             return 'mixed'
+        else:
+            return 'text'
+    
+    def _flatten_page_json(self, page_json: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Flatten page JSON for searchable fields
+        
+        Args:
+            page_json: Page data from GLM extraction
+        
+        Returns:
+            Flattened data dictionary
+        """
+        flattened = {}
+        
+        # Document info
+        doc_info = page_json.get('document_info', {})
+        flattened['drawing_number'] = doc_info.get('drawing_number', '')
+        flattened['project_name'] = doc_info.get('project_name', '')
+        
+        # Equipment tags (exact match)
+        equipment = page_json.get('equipment', [])
+        flattened['equipment_tags'] = [e.get('tag') or e.get('id') for e in equipment if e.get('tag') or e.get('id')]
+        flattened['equipment_names'] = [e.get('name') for e in equipment if e.get('name')]
+        
+        # All components (for search)
+        components = page_json.get('components', [])
+        component_ids = [c.get('id') for c in components if c.get('id')]
+        
+        # Also get from all_components_list if available
+        if 'all_components_list' in page_json:
+            component_ids.extend(page_json['all_components_list'])
+        
+        # Remove duplicates
+        component_ids = list(set(component_ids))
+        flattened['all_components'] = ' '.join(component_ids)
+        
+        # Component details (nested)
+        flattened['component_details'] = [
+            {
+                'id': c.get('id', ''),
+                'type': c.get('type', ''),
+                'value': c.get('value', ''),
+                'reference': c.get('id', ''),
+                'position': c.get('position', '')
+            }
+            for c in components
+        ]
+        
+        # Flatten tables
+        tables = page_json.get('tables', [])
+        table_cells = []
+        for table in tables:
+            # Add headers
+            headers = table.get('headers', [])
+            table_cells.extend([str(h) for h in headers])
+            
+            # Add all cells from rows
+            for row in table.get('rows', []):
+                table_cells.extend([str(cell) for cell in row])
+        
+        flattened['table_cells'] = table_cells
+        
+        # All text tokens
+        all_texts = page_json.get('all_text', [])
+        flattened['all_text_tokens'] = ' '.join(all_texts)
+        
+        return flattened
+    
+    def _flatten_to_searchable_text(self, page_json: Dict[str, Any]) -> str:
+        """
+        Convert page JSON to searchable text
+        
+        Args:
+            page_json: Page data from GLM extraction
+        
+        Returns:
+            Flattened text for content field
+        """
+        parts = []
+        
+        # Document info
+        doc_info = page_json.get('document_info', {})
+        for key, value in doc_info.items():
+            if value:
+                parts.append(f"{key}: {value}")
+        
+        # Equipment
+        for equip in page_json.get('equipment', []):
+            tag = equip.get('tag') or equip.get('id')
+            name = equip.get('name')
+            if tag:
+                parts.append(f"Equipment {tag}: {name or ''}")
+        
+        # Components
+        for comp in page_json.get('components', []):
+            comp_id = comp.get('id')
+            comp_type = comp.get('type')
+            value = comp.get('value')
+            if comp_id:
+                parts.append(f"Component {comp_id} ({comp_type}): {value or ''}")
+        
+        # All text
+        all_text = page_json.get('all_text', [])
+        parts.extend(all_text)
+        
+        # Notes
+        notes = page_json.get('notes', [])
+        parts.extend(notes)
+        
+        return '\n'.join(parts)
+    
+    def _convert_pdf_page_to_image(self, pdf_path: Path, page_num: int) -> str:
+        """
+        Convert single PDF page to image
+        
+        Args:
+            pdf_path: Path to PDF file
+            page_num: Page number (0-based)
+        
+        Returns:
+            Path to temporary image file
+        """
+        if not PDF2IMAGE_AVAILABLE:
+            raise ImportError("pdf2image not available")
+        
+        # Convert single page
+        # DPI 150 is sufficient for text recognition and faster than 200
+        images = convert_from_path(str(pdf_path), first_page=page_num + 1, last_page=page_num + 1, dpi=150)
+        
+        if not images:
+            raise ValueError(f"Failed to convert page {page_num}")
+        
+        # Save to temp file
+        temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+        images[0].save(temp_file.name, 'PNG')
+        
+        return temp_file.name
+    
+    def process_document(
+        self,
+        file_path: str,
+        additional_metadata: Optional[Dict[str, Any]] = None
+    ) -> List[Document]:
+        """
+        Process document: load, split, and add metadata
+        
+        Args:
+            file_path: Path to document file
+            additional_metadata: Additional metadata to add
+        
+        Returns:
+            List of processed Document chunks
+        """
+        # Load document
+        logger.info("loading_document", file_path=file_path)
+        documents = self.load_document(file_path)
+        logger.info("document_loaded", num_raw_documents=len(documents))
+        
+        # Log raw document content
+        for i, doc in enumerate(documents):
+            logger.debug(
+                "raw_document_content",
+                doc_index=i,
+                content_length=len(doc.page_content) if doc.page_content else 0,
+                content_type=type(doc.page_content).__name__,
+                content_preview=doc.page_content[:200] if doc.page_content else "EMPTY"
+            )
+        
+        # Extract metadata
+        file_metadata = self.extract_metadata(file_path)
+        logger.info("metadata_extracted", metadata_keys=list(file_metadata.keys()))
+        
+        # Merge additional metadata
+        if additional_metadata:
+            file_metadata.update(additional_metadata)
+            logger.info("additional_metadata_merged", keys=list(additional_metadata.keys()))
+        
+        # Add page-level metadata and flatten JSON
+        document_name = Path(file_path).name
+        total_pages = len(documents)
+        
+        for i, doc in enumerate(documents):
+            doc.metadata.update(file_metadata)
+            
+            # Add page metadata
+            doc.metadata['page_number'] = i + 1
+            doc.metadata['total_pages'] = total_pages
+            doc.metadata['document_name'] = document_name
+            
+            # Flatten page_json if exists
+            if 'page_json' in doc.metadata:
+                flattened = self._flatten_page_json(doc.metadata['page_json'])
+                doc.metadata.update(flattened)
+                logger.debug(
+                    "page_json_flattened",
+                    page_number=i + 1,
+                    num_components=len(flattened.get('component_details', [])),
+                    num_equipment=len(flattened.get('equipment_tags', []))
+                )
+        
+        # Split documents into chunks (don't split across pages)
+        logger.info("splitting_documents", num_documents=len(documents))
+        chunks = []
+        
+        # Determine if we should use page-level chunking
+        page_level_indexing = self.config.get('page_level_indexing', True)
+        max_page_size = self.config.get('max_page_size_chars', 4000)
+        
+        for doc in documents:
+            # Check document length
+            content_len = len(doc.page_content) if doc.page_content else 0
+            
+            if page_level_indexing and content_len < max_page_size:
+                # Keep as single chunk
+                doc.metadata['chunk_type'] = 'full_page'
+                # Ensure content is string
+                if not isinstance(doc.page_content, str):
+                    doc.page_content = str(doc.page_content) if doc.page_content else ""
+                chunks.append(doc)
+            else:
+                # Split large pages
+                page_chunks = self.text_splitter.split_documents([doc])
+                for i, chunk in enumerate(page_chunks):
+                    chunk.metadata['chunk_type'] = 'part_page'
+                    chunk.metadata['part_index'] = i
+                chunks.extend(page_chunks)
+                
+        logger.info("documents_split", num_chunks=len(chunks))
+        
+        # Filter out empty chunks and validate content
+        valid_chunks = []
+        skipped_count = 0
+        for idx, chunk in enumerate(chunks):
+            # Ensure page_content is string and not empty
+            if not isinstance(chunk.page_content, str):
+                logger.warning(
+                    "converting_non_string_content",
+                    chunk_index=idx,
+                    original_type=type(chunk.page_content).__name__
+                )
+                chunk.page_content = str(chunk.page_content)
+            
+            # Skip empty or whitespace-only chunks
+            if chunk.page_content.strip():
+                valid_chunks.append(chunk)
+                logger.debug(
+                    "valid_chunk",
+                    chunk_index=idx,
+                    content_length=len(chunk.page_content),
+                    content_preview=chunk.page_content[:100]
+                )
+            else:
+                skipped_count += 1
+                logger.warning("skipping_empty_chunk", chunk_index=idx)
+        
+        if skipped_count > 0:
+            logger.warning("empty_chunks_skipped", count=skipped_count)
+        
+        # Add chunk metadata
+        for i, chunk in enumerate(valid_chunks):
+            chunk.metadata['chunk_index'] = i
+            chunk.metadata['total_chunks'] = len(valid_chunks)
+            chunk.metadata['document_id'] = file_metadata['checksum']
+            chunk.metadata['chunk_id'] = f"{file_metadata['checksum']}_chunk_{i}"
+        
+        logger.info(
+            "document_processed",
+            file_path=file_path,
+            num_chunks=len(valid_chunks),
+            total_size=file_metadata['file_size']
+        )
+        
+        return valid_chunks
+    
+    def process_zip(
+        self,
+        zip_path: str,
+        extract_dir: Optional[str] = None,
+        additional_metadata: Optional[Dict[str, Any]] = None
+    ) -> List[Document]:
+        """
+        Process ZIP file containing multiple documents
+        
+        Args:
+            zip_path: Path to ZIP file
+            extract_dir: Directory to extract files (temp dir if None)
+            additional_metadata: Additional metadata to add
+        
+        Returns:
+            List of all processed document chunks
+        """
+        if extract_dir is None:
+            extract_dir = f"./uploads/extracted_{Path(zip_path).stem}"
+        
+        extract_path = Path(extract_dir)
+        extract_path.mkdir(parents=True, exist_ok=True)
+        
+        all_chunks = []
+        
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(extract_path)
+                
+                logger.info("zip_extracted", zip_path=zip_path, extract_dir=str(extract_path))
+                
+                # Process each file in ZIP
+                for root, _, files in os.walk(extract_path):
+                    for file in files:
+                        file_path = Path(root) / file
+                        
+                        # Skip hidden files and unsupported formats
+                        if file.startswith('.'):
+                            continue
+                        
+                        if file_path.suffix.lower().lstrip('.') not in self.config.get('supported_formats', []):
+                            logger.debug("file_skipped", file_path=str(file_path))
+                            continue
+                        
+                        try:
+                            chunks = self.process_document(
+                                str(file_path),
+                                additional_metadata
+                            )
+                            all_chunks.extend(chunks)
+                        except Exception as e:
+                            logger.error(
+                                "file_processing_failed",
+                                error=str(e),
+                                file_path=str(file_path)
+                            )
+                            continue
+        
+        except Exception as e:
+            logger.error("zip_processing_failed", error=str(e), zip_path=zip_path)
+            raise
+        
+        logger.info(
+            "zip_processed",
+            zip_path=zip_path,
+            total_chunks=len(all_chunks),
+            num_files=len(set(c.metadata['filepath'] for c in all_chunks))
+        )
+        
+        return all_chunks
+    
+    def process_batch(
+        self,
+        file_paths: List[str],
+        additional_metadata: Optional[Dict[str, Any]] = None
+    ) -> List[Document]:
+        """
+        Process multiple documents in batch
+        
+        Args:
+            file_paths: List of file paths
+            additional_metadata: Additional metadata to add
+        
+        Returns:
+            List of all processed document chunks
+        """
+        all_chunks = []
+        
+        for file_path in file_paths:
+            try:
+                chunks = self.process_document(file_path, additional_metadata)
+                all_chunks.extend(chunks)
+            except Exception as e:
+                logger.error(
+                    "batch_file_processing_failed",
+                    error=str(e),
+                    file_path=file_path
+                )
+                continue
+        
+        logger.info("batch_processed", total_files=len(file_paths), total_chunks=len(all_chunks))
+        
+        return all_chunks
+    
+    def _split_word_by_pages(self, file_path: Path) -> List[Document]:
+        """
+        Split Word document by page breaks
+        
+        Args:
+            file_path: Path to Word document
+        
+        Returns:
+            List of Documents, one per page
+        """
+        try:
+            from docx import Document as DocxDocument
+        except ImportError:
+            logger.warning("python-docx_not_available")
+            raise
+        
+        doc = DocxDocument(str(file_path))
+        pages = []
+        current_page_text = []
+        
+        for para in doc.paragraphs:
+            # Check for page break
+            if '\f' in para.text or '\x0c' in para.text:
+                # Save current page
+                if current_page_text:
+                    page_content = '\n'.join(current_page_text)
+                    pages.append(page_content)
+                    current_page_text = []
+            else:
+                if para.text.strip():
+                    current_page_text.append(para.text)
+        
+        # Add last page
+        if current_page_text:
+            pages.append('\n'.join(current_page_text))
+        
+        # If no page breaks found, treat as single page
+        if not pages:
+            pages = ['\n'.join(para.text for para in doc.paragraphs if para.text.strip())]
+        
+        # Create Document objects
+        documents = []
+        for i, page_text in enumerate(pages):
+            doc = Document(
+                page_content=page_text,
+                metadata={
+                    'source': str(file_path),
+                    'page': i + 1,
+                    'file_type': 'docx',
+                    'extraction_method': 'text',
+                    'page_type': 'text'
+                }
+            )
+            documents.append(doc)
+        
+        logger.info("word_split_by_pages", num_pages=len(documents))
+        
+        return documents
+    
+    def _process_excel_sheets(self, file_path: Path) -> List[Document]:
+        """
+        Process Excel file by sheets (each sheet as one page)
+        
+        Args:
+            file_path: Path to Excel file
+        
+        Returns:
+            List of Documents, one per sheet
+        """
+        try:
+            import pandas as pd
+        except ImportError:
+            logger.warning("pandas_not_available")
+            raise
+        
+        # Read all sheets
+        excel_file = pd.ExcelFile(str(file_path))
+        documents = []
+        
+        for i, sheet_name in enumerate(excel_file.sheet_names):
+            df = excel_file.parse(sheet_name)
+            
+            # Convert dataframe to text
+            sheet_text = f"Sheet: {sheet_name}\n\n"
+            sheet_text += df.to_string(index=False)
+            
+            doc = Document(
+                page_content=sheet_text,
+                metadata={
+                    'source': str(file_path),
+                    'page': i + 1,
+                    'sheet_name': sheet_name,
+                    'file_type': 'xlsx',
+                    'extraction_method': 'text',
+                    'page_type': 'table'
+                }
+            )
+            documents.append(doc)
+        
+        logger.info("excel_processed_by_sheets", num_sheets=len(documents))
+        
+        return documents
+

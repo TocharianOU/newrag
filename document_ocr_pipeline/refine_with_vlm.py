@@ -1,0 +1,419 @@
+#!/usr/bin/env python3
+"""
+使用VLM模型优化OCR结果，生成适合ES检索的规范化JSON
+支持LM Studio本地部署的模型
+"""
+import os
+import sys
+import json
+import base64
+import argparse
+from pathlib import Path
+from typing import Dict, Any, List
+from openai import OpenAI
+
+
+class VLMRefiner:
+    """使用VLM模型优化OCR结果"""
+    
+    def __init__(self, api_base: str = "http://localhost:1234/v1", api_key: str = "lm-studio"):
+        """
+        初始化VLM精炼器
+        
+        Args:
+            api_base: LM Studio API地址
+            api_key: API密钥（LM Studio默认不需要）
+        """
+        self.client = OpenAI(base_url=api_base, api_key=api_key)
+        print(f"✓ Connected to LM Studio at {api_base}")
+    
+    def encode_image_base64(self, image_path: str) -> str:
+        """将图片编码为base64"""
+        with open(image_path, 'rb') as f:
+            return base64.b64encode(f.read()).decode('utf-8')
+    
+    def build_prompt(self, ocr_data: Dict[str, Any], page_number: int = 1) -> str:
+        """构建提示词 - 针对每一页的理解和提取"""
+        full_text = ocr_data.get('full_text', '')
+        text_blocks_count = ocr_data.get('text_blocks_count', 0)
+        avg_confidence = ocr_data.get('average_confidence', 0) * 100
+        
+        prompt = f"""You are an expert document analyzer with vision understanding capabilities.
+
+**Task:** Analyze this document page (Page {page_number}) comprehensively - both WHAT YOU SEE in the image and WHAT THE TEXT SAYS.
+
+**OCR Extracted Text:**
+{full_text}
+
+**OCR Statistics:**
+- Text blocks: {text_blocks_count}
+- Average confidence: {avg_confidence:.1f}%
+
+**Your Analysis Must Include:**
+
+1. **Visual Page Description** (Most Important!)
+   - Describe what you SEE in this page image (layout, structure, visual elements)
+   - What type of page is this? (title page / data table / diagram / form / mixed content)
+   - What is the PURPOSE of this page in the document?
+   - Note visual elements: tables, diagrams, stamps, signatures, logos, borders, etc.
+
+2. **Content Understanding**
+   - Fix OCR errors (e.g., "4-AU9-25" → "4-Aug-25", "伛 SeP 3" → "15-Sep-25")
+   - Clean up garbled text
+   - Extract key information based on what's visible
+
+3. **Structured Data Extraction**
+   - Document metadata (if visible on this page)
+   - Tables (describe structure and content)
+   - Technical specifications
+   - Any domain-specific information (project, equipment, revisions, etc.)
+
+**Output Format:**
+Respond ONLY with a valid JSON object:
+```json
+{{
+  "page_analysis": {{
+    "page_number": {page_number},
+    "page_type": "title_page | data_table | diagram | text_content | form | mixed",
+    "page_description": "50-150 words describing what this page IS and what you SEE in the image",
+    "visual_elements": ["table", "stamp", "logo", "etc"],
+    "layout_structure": "Brief description of visual layout"
+  }},
+  
+  "extracted_content": {{
+    "full_text_cleaned": "Corrected and cleaned text from OCR",
+    "key_fields": [
+      {{"field": "field_name", "value": "field_value"}}
+    ],
+    "tables": [
+      {{"description": "what this table contains", "rows": 0, "cols": 0}}
+    ]
+  }},
+  
+  "document_metadata": {{
+    "document_id": "string or null",
+    "document_type": "string or null", 
+    "revision": "string or null",
+    "title": "string or null"
+  }},
+  
+  "domain_specific": {{
+    "project": {{"name": "...", "plant": "...", "phase": "..."}} or null,
+    "equipment": {{"tag": "...", "name": "...", "unit": "..."}} or null,
+    "revisions": [...] or null
+  }},
+  
+  "keywords": ["keyword1", "keyword2"],
+  "confidence": 0.0-1.0,
+  "notes": ["any uncertainties or observations"]
+}}
+```
+
+**Critical:** The page_description must describe WHAT YOU SEE in the image, not just repeat OCR text!
+
+Respond with ONLY the JSON, no additional text."""
+
+        return prompt
+    
+    def refine_with_image(self, image_path: str, ocr_json_path: str, 
+                          model: str = None, page_number: int = 1) -> Dict[str, Any]:
+        """
+        使用VLM模型和图片优化OCR结果
+        
+        Args:
+            image_path: 图片路径
+            ocr_json_path: OCR结果JSON路径
+            model: 模型名称（None则使用LM Studio加载的模型）
+            page_number: 页码（用于prompt）
+            
+        Returns:
+            精炼后的结构化数据
+        """
+        print(f"\n📄 Processing Page {page_number}: {os.path.basename(image_path)}")
+        
+        # 读取OCR结果
+        with open(ocr_json_path, 'r', encoding='utf-8') as f:
+            ocr_data = json.load(f)
+        
+        # 编码图片
+        print("🖼️  Encoding image...")
+        image_base64 = self.encode_image_base64(image_path)
+        
+        # 构建提示词
+        prompt = self.build_prompt(ocr_data, page_number)
+        
+        # 准备消息（支持vision）
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{image_base64}"
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": prompt
+                    }
+                ]
+            }
+        ]
+        
+        print("🤖 Calling VLM model...")
+        print("   (This may take a while for vision models...)")
+        
+        try:
+            # 调用模型
+            response = self.client.chat.completions.create(
+                model=model if model else "local-model",
+                messages=messages,
+                max_tokens=4096,
+                temperature=0.1,
+            )
+            
+            content = response.choices[0].message.content
+            print("✓ Model response received")
+            
+            # 解析JSON响应
+            json_start = content.find("{")
+            json_end = content.rfind("}") + 1
+            
+            if json_start != -1 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                refined_data = json.loads(json_str)
+            else:
+                raise ValueError("No valid JSON found in model response")
+            
+            return refined_data
+            
+        except Exception as e:
+            print(f"⚠️  Error calling VLM model: {e}")
+            print("   Falling back to text-only refinement...")
+            return self.refine_text_only(ocr_data, model)
+    
+    def refine_text_only(self, ocr_data: Dict[str, Any], model: str = None) -> Dict[str, Any]:
+        """
+        仅使用文本模式优化OCR结果（当vision不可用时）
+        
+        Args:
+            ocr_data: OCR结果数据
+            model: 模型名称
+            
+        Returns:
+            精炼后的结构化数据
+        """
+        print("📝 Using text-only mode...")
+        
+        prompt = self.build_prompt(ocr_data)
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=model if model else "local-model",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=4096,
+                temperature=0.1,
+            )
+            
+            content = response.choices[0].message.content
+            
+            # 解析JSON
+            json_start = content.find("{")
+            json_end = content.rfind("}") + 1
+            
+            if json_start != -1 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                refined_data = json.loads(json_str)
+            else:
+                raise ValueError("No valid JSON found in model response")
+            
+            return refined_data
+            
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            # 返回基础结构
+            return {
+                "document_metadata": {},
+                "document_content": {},
+                "revision_history": [],
+                "procedures": {},
+                "keywords": [],
+                "full_text_cleaned": ocr_data.get('full_text', ''),
+                "extraction_notes": [f"Error during refinement: {str(e)}"]
+            }
+    
+    def create_page_vlm_document(self, refined_data: Dict[str, Any], 
+                                  ocr_data: Dict[str, Any],
+                                  image_path: str, page_number: int) -> Dict[str, Any]:
+        """
+        创建包含OCR和VLM结果的完整页面文档
+        
+        Args:
+            refined_data: VLM精炼后的数据
+            ocr_data: 原始OCR数据
+            image_path: 图片路径
+            page_number: 页码
+            
+        Returns:
+            完整的页面文档结构
+        """
+        # 提取VLM分析结果
+        page_analysis = refined_data.get('page_analysis', {})
+        extracted_content = refined_data.get('extracted_content', {})
+        doc_metadata = refined_data.get('document_metadata', {})
+        domain_specific = refined_data.get('domain_specific', {})
+        
+        # 构建完整页面文档
+        page_doc = {
+            # ===== 页面基础信息 =====
+            "page_number": page_number,
+            "image_path": os.path.abspath(image_path),
+            "image_filename": os.path.basename(image_path),
+            
+            # ===== VLM页面分析（新增！）=====
+            "page_analysis": {
+                "page_type": page_analysis.get('page_type', 'unknown'),
+                "page_description": page_analysis.get('page_description', ''),
+                "visual_elements": page_analysis.get('visual_elements', []),
+                "layout_structure": page_analysis.get('layout_structure', '')
+            },
+            
+            # ===== 文本内容 =====
+            "content": {
+                "full_text_raw": ocr_data.get('full_text', ''),
+                "full_text_cleaned": extracted_content.get('full_text_cleaned', ''),
+                "key_fields": extracted_content.get('key_fields', []),
+                "tables": extracted_content.get('tables', [])
+            },
+            
+            # ===== 原始OCR数据 =====
+            "ocr_data": {
+                "text_blocks": ocr_data.get('text_blocks', []),
+                "text_blocks_count": ocr_data.get('text_blocks_count', 0),
+                "average_confidence": ocr_data.get('average_confidence', 0),
+                "image_size": ocr_data.get('image_size', {}),
+                "layout_regions": ocr_data.get('layout_regions', [])
+            },
+            
+            # ===== 提取的元数据 =====
+            "metadata": doc_metadata,
+            
+            # ===== 领域特定信息 =====
+            "domain_data": domain_specific,
+            
+            # ===== 搜索关键词 =====
+            "keywords": refined_data.get('keywords', []),
+            
+            # ===== VLM置信度和注释 =====
+            "vlm_metadata": {
+                "confidence": refined_data.get('confidence', 0.0),
+                "extraction_notes": refined_data.get('notes', [])
+            }
+        }
+        
+        return page_doc
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="使用VLM模型优化OCR结果，生成ES友好的JSON"
+    )
+    parser.add_argument("image", help="图片文件路径")
+    parser.add_argument("ocr_json", help="OCR结果JSON路径")
+    parser.add_argument("-o", "--output", help="输出JSON路径（默认：xxx_vlm.json）")
+    parser.add_argument("-p", "--page-number", type=int, default=1, 
+                       help="页码（用于VLM理解，默认：1）")
+    parser.add_argument("--api-base", default="http://localhost:1234/v1",
+                       help="LM Studio API地址（默认：http://localhost:1234/v1）")
+    parser.add_argument("--model", default="google/gemma-3-27b",
+                       help="模型名称（默认: google/gemma-3-27b）")
+    parser.add_argument("--text-only", action="store_true",
+                       help="仅使用文本模式（不发送图片）")
+    parser.add_argument("--pretty", action="store_true",
+                       help="输出可读性格式")
+    
+    args = parser.parse_args()
+    
+    # 检查文件是否存在
+    image_path = Path(args.image)
+    ocr_json_path = Path(args.ocr_json)
+    
+    if not image_path.exists():
+        print(f"❌ Error: Image not found: {image_path}")
+        return 1
+    
+    if not ocr_json_path.exists():
+        print(f"❌ Error: OCR JSON not found: {ocr_json_path}")
+        return 1
+    
+    # 确定输出路径
+    if args.output:
+        output_path = Path(args.output)
+    else:
+        output_path = image_path.with_stem(image_path.stem + "_vlm").with_suffix('.json')
+    
+    print("="*80)
+    print(f"🚀 VLM Page Analysis (Page {args.page_number})")
+    print("="*80)
+    
+    try:
+        # 初始化精炼器
+        refiner = VLMRefiner(api_base=args.api_base)
+        
+        # 读取OCR数据
+        with open(ocr_json_path, 'r', encoding='utf-8') as f:
+            ocr_data = json.load(f)
+        
+        # 精炼数据
+        if args.text_only:
+            refined_data = refiner.refine_text_only(ocr_data, args.model)
+        else:
+            refined_data = refiner.refine_with_image(
+                str(image_path), 
+                str(ocr_json_path),
+                args.model,
+                args.page_number
+            )
+        
+        print("\n✓ VLM analysis completed")
+        
+        # 创建完整页面文档
+        print("📦 Creating complete page document...")
+        page_doc = refiner.create_page_vlm_document(
+            refined_data, ocr_data, str(image_path), args.page_number
+        )
+        
+        # 保存结果
+        print(f"💾 Saving to: {output_path}")
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(page_doc, f, ensure_ascii=False, indent=2 if args.pretty else None)
+        
+        print("\n" + "="*80)
+        print("✅ SUCCESS!")
+        print("="*80)
+        
+        # 打印摘要
+        if args.pretty:
+            print("\n📋 Page Analysis Summary:")
+            print(f"  Page Number: {page_doc.get('page_number', 'N/A')}")
+            print(f"  Page Type: {page_doc.get('page_analysis', {}).get('page_type', 'N/A')}")
+            print(f"  Description: {page_doc.get('page_analysis', {}).get('page_description', 'N/A')[:100]}...")
+            print(f"  Visual Elements: {', '.join(page_doc.get('page_analysis', {}).get('visual_elements', []))}")
+            print(f"  Keywords: {', '.join(page_doc.get('keywords', [])[:5])}")
+            print(f"  OCR Confidence: {page_doc.get('ocr_data', {}).get('average_confidence', 0):.2f}")
+            print(f"  VLM Confidence: {page_doc.get('vlm_metadata', {}).get('confidence', 0):.2f}")
+        
+        print(f"\n📁 Output: {output_path}")
+        return 0
+        
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+

@@ -1,0 +1,234 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "refresh_interval": "1s",
+    "analysis": {
+      "analyzer": {
+        "component_id_analyzer": {
+          "type": "custom",
+          "tokenizer": "component_tokenizer",
+          "filter": ["lowercase", "asciifolding"]
+        },
+        "component_search_analyzer": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["lowercase", "component_ngram"]
+        },
+        "equipment_id_analyzer": {
+          "type": "custom",
+          "tokenizer": "keyword",
+          "filter": ["lowercase", "trim"]
+        }
+      },
+      "tokenizer": {
+        "component_tokenizer": {
+          "type": "pattern",
+          "pattern": "[\\s,\\-/]+",
+          "group": -1
+        }
+      },
+      "filter": {
+        "component_ngram": {
+          "type": "edge_ngram",
+          "min_gram": 2,
+          "max_gram": 15
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "content": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "content_vector": {
+        "type": "dense_vector",
+        "dims": 1024,
+        "index": true,
+        "similarity": "cosine"
+      },
+      "chunk_id": {
+        "type": "keyword"
+      },
+      "document_id": {
+        "type": "keyword"
+      },
+      "page_number": {
+        "type": "integer"
+      },
+      "total_pages": {
+        "type": "integer"
+      },
+      "document_name": {
+        "type": "keyword",
+        "fields": {
+          "text": {
+            "type": "text"
+          }
+        }
+      },
+      "page_type": {
+        "type": "keyword"
+      },
+      "original_content": {
+        "type": "object",
+        "enabled": false
+      },
+      "drawing_number": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "project_name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "all_components": {
+        "type": "text",
+        "analyzer": "component_id_analyzer",
+        "search_analyzer": "component_search_analyzer"
+      },
+      "component_details": {
+        "type": "nested",
+        "properties": {
+          "id": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text",
+                "analyzer": "component_id_analyzer"
+              }
+            }
+          },
+          "type": {
+            "type": "keyword"
+          },
+          "value": {
+            "type": "text"
+          },
+          "reference": {
+            "type": "keyword"
+          },
+          "position": {
+            "type": "keyword"
+          }
+        }
+      },
+      "equipment_tags": {
+        "type": "keyword",
+        "fields": {
+          "text": {
+            "type": "text",
+            "analyzer": "equipment_id_analyzer"
+          }
+        }
+      },
+      "equipment_names": {
+        "type": "text"
+      },
+      "table_cells": {
+        "type": "text"
+      },
+      "all_text_tokens": {
+        "type": "text"
+      },
+      "metadata": {
+        "properties": {
+          "filename": {
+            "type": "keyword"
+          },
+          "filepath": {
+            "type": "keyword"
+          },
+          "file_type": {
+            "type": "keyword"
+          },
+          "created_at": {
+            "type": "date",
+            "format": "strict_date_optional_time||epoch_millis"
+          },
+          "updated_at": {
+            "type": "date",
+            "format": "strict_date_optional_time||epoch_millis"
+          },
+          "file_size": {
+            "type": "long"
+          },
+          "checksum": {
+            "type": "keyword"
+          },
+          "author": {
+            "type": "keyword"
+          },
+          "category": {
+            "type": "keyword"
+          },
+          "tags": {
+            "type": "keyword"
+          },
+          "version": {
+            "type": "keyword"
+          },
+          "department": {
+            "type": "keyword"
+          },
+          "description": {
+            "type": "text"
+          },
+          "severity": {
+            "type": "keyword"
+          },
+          "log_level": {
+            "type": "keyword"
+          },
+          "event_type": {
+            "type": "keyword"
+          },
+          "source_system": {
+            "type": "keyword"
+          }
+        }
+      },
+      "extracted_images": {
+        "type": "nested",
+        "properties": {
+          "image_id": {
+            "type": "keyword"
+          },
+          "extracted_text": {
+            "type": "text"
+          },
+          "confidence": {
+            "type": "float"
+          }
+        }
+      },
+      "chunk_index": {
+        "type": "integer"
+      },
+      "total_chunks": {
+        "type": "integer"
+      },
+      "indexed_at": {
+        "type": "date",
+        "format": "strict_date_optional_time||epoch_millis"
+      }
+    }
+  }
+}
