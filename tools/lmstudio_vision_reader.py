@@ -5,13 +5,12 @@ import sys
 import argparse
 import base64
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional, Any
 from openai import OpenAI
 from PIL import Image
 
 
-# ==================== 在这里修改配置 ====================
-# 如果您在 LM Studio 中有更好的 Prompt，请直接替换下面的 DEFAULT_PROMPT
+# Default prompt template
 DEFAULT_PROMPT = """请仔细观察这张图片，提取其中所有文字、符号、表格和技术信息。
 
 输出JSON格式（严格遵守以下结构）：
@@ -56,26 +55,70 @@ DEFAULT_PROMPT = """请仔细观察这张图片，提取其中所有文字、符
 5. 如果某个字段没有内容，使用空数组[]或空字符串""
 6. 严禁编造不存在的信息"""
 
-DEFAULT_MODEL = "google/gemma-3-27b"
-DEFAULT_MAX_TOKENS = 4096
-DEFAULT_BASE_URL = "http://localhost:1234/v1"
-DEFAULT_TEMPERATURE = 0.1  # 与 LM Studio 设置一致
-# =======================================================
-
 
 class LMStudioVisionReader:
+    """Vision model reader that uses LM Studio API (supports Gemini, Qwen-VL, etc.)"""
     
-    def __init__(self, base_url: str = DEFAULT_BASE_URL, model: str = DEFAULT_MODEL):
-        self.client = OpenAI(base_url=base_url, api_key="lm-studio")
-        self.model = model
+    def __init__(self, config_dict: Optional[Dict[str, Any]] = None):
+        """
+        Initialize vision reader with config
+        
+        Args:
+            config_dict: Vision model configuration. If None, will load from config.yaml
+        """
+        if config_dict is None:
+            # Load from config.yaml
+            try:
+                from src.config import config
+                config_dict = config.vision_config
+            except ImportError:
+                # Fallback to defaults if config module not available
+                config_dict = {
+                    'api_url': 'http://localhost:1234/v1',
+                    'api_key': 'lm-studio',
+                    'model_name': 'google/gemma-3-27b',
+                    'max_tokens': 2048,
+                    'temperature': 0.0
+                }
+        
+        self.base_url = config_dict.get('api_url', 'http://localhost:1234/v1')
+        self.api_key = config_dict.get('api_key', 'lm-studio')
+        self.model = config_dict.get('model_name', 'google/gemma-3-27b')
+        self.default_max_tokens = config_dict.get('max_tokens', 2048)
+        self.default_temperature = config_dict.get('temperature', 0.0)
+        
+        self.client = OpenAI(base_url=self.base_url, api_key=self.api_key)
     
     def encode_image(self, image_path: str) -> str:
+        """Encode image to base64 string"""
         with open(image_path, "rb") as f:
             return base64.b64encode(f.read()).decode('utf-8')
     
-    def read_image(self, image_path: str, prompt: str = DEFAULT_PROMPT, max_tokens: int = DEFAULT_MAX_TOKENS, temperature: float = DEFAULT_TEMPERATURE) -> str:
+    def read_image(
+        self, 
+        image_path: str, 
+        prompt: str = DEFAULT_PROMPT, 
+        max_tokens: Optional[int] = None, 
+        temperature: Optional[float] = None
+    ) -> str:
+        """
+        Read and analyze image using vision model
+        
+        Args:
+            image_path: Path to image file
+            prompt: Prompt for the vision model
+            max_tokens: Maximum tokens to generate (uses config default if None)
+            temperature: Sampling temperature (uses config default if None)
+        
+        Returns:
+            Model's text response
+        """
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"图片不存在: {image_path}")
+        
+        # Use config defaults if not specified
+        max_tokens = max_tokens or self.default_max_tokens
+        temperature = temperature or self.default_temperature
         
         base64_image = self.encode_image(image_path)
         
@@ -120,17 +163,37 @@ class LMStudioVisionReader:
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("image_path", type=str)
-    parser.add_argument("-p", "--prompt", type=str, default=DEFAULT_PROMPT)
-    parser.add_argument("-m", "--model", type=str, default=DEFAULT_MODEL)
-    parser.add_argument("-u", "--url", type=str, default=DEFAULT_BASE_URL)
-    parser.add_argument("-t", "--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
-    parser.add_argument("-o", "--output", type=str, required=True)
+    # Load defaults from config
+    try:
+        from src.config import config
+        vision_cfg = config.vision_config
+        default_model = vision_cfg.get('model_name', 'google/gemma-3-27b')
+        default_url = vision_cfg.get('api_url', 'http://localhost:1234/v1')
+        default_max_tokens = vision_cfg.get('max_tokens', 2048)
+    except ImportError:
+        default_model = 'google/gemma-3-27b'
+        default_url = 'http://localhost:1234/v1'
+        default_max_tokens = 2048
+    
+    parser = argparse.ArgumentParser(
+        description="Vision model reader using LM Studio API (Gemini, Qwen-VL, etc.)"
+    )
+    parser.add_argument("image_path", type=str, help="Path to image file or directory")
+    parser.add_argument("-p", "--prompt", type=str, default=DEFAULT_PROMPT, help="Prompt for vision model")
+    parser.add_argument("-m", "--model", type=str, default=default_model, help=f"Model name (default from config: {default_model})")
+    parser.add_argument("-u", "--url", type=str, default=default_url, help=f"API base URL (default from config: {default_url})")
+    parser.add_argument("-t", "--max-tokens", type=int, default=default_max_tokens, help=f"Max tokens (default from config: {default_max_tokens})")
+    parser.add_argument("-o", "--output", type=str, required=True, help="Output JSON file path")
     
     args = parser.parse_args()
     
-    reader = LMStudioVisionReader(base_url=args.url, model=args.model)
+    # Create reader with custom config if args provided
+    config_dict = {
+        'api_url': args.url,
+        'model_name': args.model,
+        'max_tokens': args.max_tokens
+    }
+    reader = LMStudioVisionReader(config_dict=config_dict)
     input_path = Path(args.image_path)
     
     if input_path.is_file():

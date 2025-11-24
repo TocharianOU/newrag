@@ -1,0 +1,579 @@
+{
+  "file": "page_002_region_02_600dpi.png",
+  "image_size": {
+    "width": 1488,
+    "height": 2104
+  },
+  "status": "success",
+  "text_blocks_count": 47,
+  "layout_regions_count": 0,
+  "text_blocks": [
+    {
+      "text": "Required:",
+      "bbox": [
+        723.0,
+        15.0,
+        1031.0,
+        102.0
+      ],
+      "confidence": 0.9991403222084045,
+      "center_x": 877.0,
+      "center_y": 58.5
+    },
+    {
+      "text": "292.25",
+      "bbox": [
+        1136.0,
+        26.0,
+        1374.0,
+        101.0
+      ],
+      "confidence": 0.9997892379760742,
+      "center_x": 1255.0,
+      "center_y": 63.5
+    },
+    {
+      "text": "W/(m•K)",
+      "bbox": [
+        116.0,
+        34.0,
+        411.0,
+        121.0
+      ],
+      "confidence": 0.883196234703064,
+      "center_x": 263.5,
+      "center_y": 77.5
+    },
+    {
+      "text": "Inlet nozzle:",
+      "bbox": [
+        724.0,
+        120.0,
+        1089.0,
+        202.0
+      ],
+      "confidence": 0.9949946999549866,
+      "center_x": 906.5,
+      "center_y": 161.0
+    },
+    {
+      "text": "2156.67",
+      "bbox": [
+        1173.0,
+        126.0,
+        1454.0,
+        206.0
+      ],
+      "confidence": 0.9996138215065002,
+      "center_x": 1313.5,
+      "center_y": 166.0
+    },
+    {
+      "text": "kg/(m.s2)",
+      "bbox": [
+        122.0,
+        129.0,
+        411.0,
+        228.0
+      ],
+      "confidence": 0.9615024924278259,
+      "center_x": 266.5,
+      "center_y": 178.5
+    },
+    {
+      "text": "Sour Service:",
+      "bbox": [
+        1020.0,
+        231.0,
+        1446.0,
+        315.0
+      ],
+      "confidence": 0.998494029045105,
+      "center_x": 1233.0,
+      "center_y": 273.0
+    },
+    {
+      "text": "(Y/N)",
+      "bbox": [
+        799.0,
+        234.0,
+        972.0,
+        323.0
+      ],
+      "confidence": 0.9904803037643433,
+      "center_x": 885.5,
+      "center_y": 278.5
+    },
+    {
+      "text": "Shell Side",
+      "bbox": [
+        457.0,
+        247.0,
+        722.0,
+        319.0
+      ],
+      "confidence": 0.9648272395133972,
+      "center_x": 589.5,
+      "center_y": 283.0
+    },
+    {
+      "text": "Side",
+      "bbox": [
+        0.0,
+        250.0,
+        138.0,
+        320.0
+      ],
+      "confidence": 0.9999414682388306,
+      "center_x": 69.0,
+      "center_y": 285.0
+    },
+    {
+      "text": "(￥/N)",
+      "bbox": [
+        210.0,
+        248.0,
+        381.0,
+        339.0
+      ],
+      "confidence": 0.8870757222175598,
+      "center_x": 295.5,
+      "center_y": 293.5
+    },
+    {
+      "text": "HELL",
+      "bbox": [
+        0.0,
+        359.0,
+        198.0,
+        433.0
+      ],
+      "confidence": 0.9923743605613708,
+      "center_x": 99.0,
+      "center_y": 396.0
+    },
+    {
+      "text": "19.00",
+      "bbox": [
+        444.0,
+        470.0,
+        619.0,
+        546.0
+      ],
+      "confidence": 0.9998723268508911,
+      "center_x": 531.5,
+      "center_y": 508.0
+    },
+    {
+      "text": "mm",
+      "bbox": [
+        720.0,
+        477.0,
+        849.0,
+        541.0
+      ],
+      "confidence": 0.9997475743293762,
+      "center_x": 784.5,
+      "center_y": 509.0
+    },
+    {
+      "text": "OD:",
+      "bbox": [
+        139.0,
+        475.0,
+        273.0,
+        553.0
+      ],
+      "confidence": 0.9820177555084229,
+      "center_x": 206.0,
+      "center_y": 514.0
+    },
+    {
+      "text": "00",
+      "bbox": [
+        0.0,
+        581.0,
+        76.0,
+        653.0
+      ],
+      "confidence": 0.9433743953704834,
+      "center_x": 38.0,
+      "center_y": 617.0
+    },
+    {
+      "text": "mm",
+      "bbox": [
+        136.0,
+        590.0,
+        265.0,
+        656.0
+      ],
+      "confidence": 0.9996960163116455,
+      "center_x": 200.5,
+      "center_y": 623.0
+    },
+    {
+      "text": "inc",
+      "bbox": [
+        1388.0,
+        676.0,
+        1488.0,
+        744.0
+      ],
+      "confidence": 0.9926267266273499,
+      "center_x": 1438.0,
+      "center_y": 710.0
+    },
+    {
+      "text": "Inlet:",
+      "bbox": [
+        1172.0,
+        677.0,
+        1322.0,
+        745.0
+      ],
+      "confidence": 0.9936098456382751,
+      "center_x": 1247.0,
+      "center_y": 711.0
+    },
+    {
+      "text": "60",
+      "bbox": [
+        856.0,
+        675.0,
+        951.0,
+        751.0
+      ],
+      "confidence": 0.9997806549072266,
+      "center_x": 903.5,
+      "center_y": 713.0
+    },
+    {
+      "text": "mm Tube layout:",
+      "bbox": [
+        51.0,
+        682.0,
+        573.0,
+        764.0
+      ],
+      "confidence": 0.9880608916282654,
+      "center_x": 312.0,
+      "center_y": 723.0
+    },
+    {
+      "text": "Outlet:inc",
+      "bbox": [
+        1172.0,
+        776.0,
+        1488.0,
+        845.0
+      ],
+      "confidence": 0.8849740028381348,
+      "center_x": 1330.0,
+      "center_y": 810.5
+    },
+    {
+      "text": "Plain",
+      "bbox": [
+        819.0,
+        777.0,
+        984.0,
+        854.0
+      ],
+      "confidence": 0.9969110488891602,
+      "center_x": 901.5,
+      "center_y": 815.5
+    },
+    {
+      "text": "mm Tube type:",
+      "bbox": [
+        49.0,
+        788.0,
+        526.0,
+        871.0
+      ],
+      "confidence": 0.9502856731414795,
+      "center_x": 287.5,
+      "center_y": 829.5
+    },
+    {
+      "text": "Intermediat",
+      "bbox": [
+        1172.0,
+        878.0,
+        1488.0,
+        945.0
+      ],
+      "confidence": 0.9567962884902954,
+      "center_x": 1330.0,
+      "center_y": 911.5
+    },
+    {
+      "text": "Vent:",
+      "bbox": [
+        1169.0,
+        983.0,
+        1329.0,
+        1048.0
+      ],
+      "confidence": 0.9997879266738892,
+      "center_x": 1249.0,
+      "center_y": 1015.5
+    },
+    {
+      "text": "一",
+      "bbox": [
+        720.0,
+        991.0,
+        759.0,
+        1057.0
+      ],
+      "confidence": 0.5224610567092896,
+      "center_x": 739.5,
+      "center_y": 1024.0
+    },
+    {
+      "text": "700",
+      "bbox": [
+        451.0,
+        988.0,
+        577.0,
+        1063.0
+      ],
+      "confidence": 0.9997243881225586,
+      "center_x": 514.0,
+      "center_y": 1025.5
+    },
+    {
+      "text": "(ID/OD)",
+      "bbox": [
+        50.0,
+        992.0,
+        305.0,
+        1084.0
+      ],
+      "confidence": 0.996673047542572,
+      "center_x": 177.5,
+      "center_y": 1038.0
+    },
+    {
+      "text": "Drain:",
+      "bbox": [
+        1171.0,
+        1084.0,
+        1352.0,
+        1149.0
+      ],
+      "confidence": 0.9994547963142395,
+      "center_x": 1261.5,
+      "center_y": 1116.5
+    },
+    {
+      "text": "SINGLE-SEG.",
+      "bbox": [
+        264.0,
+        1092.0,
+        680.0,
+        1166.0
+      ],
+      "confidence": 0.9956119060516357,
+      "center_x": 472.0,
+      "center_y": 1129.0
+    },
+    {
+      "text": "Pressure re",
+      "bbox": [
+        1170.0,
+        1194.0,
+        1488.0,
+        1257.0
+      ],
+      "confidence": 0.919414758682251,
+      "center_x": 1329.0,
+      "center_y": 1225.5
+    },
+    {
+      "text": "nm No.of cross passes:",
+      "bbox": [
+        0.0,
+        1199.0,
+        738.0,
+        1293.0
+      ],
+      "confidence": 0.9682207703590393,
+      "center_x": 369.0,
+      "center_y": 1246.0
+    },
+    {
+      "text": "Design Pressure:",
+      "bbox": [
+        724.0,
+        1291.0,
+        1238.0,
+        1377.0
+      ],
+      "confidence": 0.9971989393234253,
+      "center_x": 981.0,
+      "center_y": 1334.0
+    },
+    {
+      "text": "vertical/horizontal",
+      "bbox": [
+        130.0,
+        1299.0,
+        655.0,
+        1389.0
+      ],
+      "confidence": 0.9956243634223938,
+      "center_x": 392.5,
+      "center_y": 1344.0
+    },
+    {
+      "text": "Vacuum Pressure:",
+      "bbox": [
+        723.0,
+        1391.0,
+        1275.0,
+        1470.0
+      ],
+      "confidence": 0.998517632484436,
+      "center_x": 999.0,
+      "center_y": 1430.5
+    },
+    {
+      "text": "Design Temp. (Max/MDM",
+      "bbox": [
+        725.0,
+        1479.0,
+        1488.0,
+        1575.0
+      ],
+      "confidence": 0.9719354510307312,
+      "center_x": 1106.5,
+      "center_y": 1527.0
+    },
+    {
+      "text": "oe:",
+      "bbox": [
+        0.0,
+        1536.0,
+        104.0,
+        1594.0
+      ],
+      "confidence": 0.9598789215087891,
+      "center_x": 52.0,
+      "center_y": 1565.0
+    },
+    {
+      "text": "Number of passes per she",
+      "bbox": [
+        724.0,
+        1577.0,
+        1488.0,
+        1674.0
+      ],
+      "confidence": 0.8291557431221008,
+      "center_x": 1106.0,
+      "center_y": 1625.5
+    },
+    {
+      "text": "Corrosion Allowance:",
+      "bbox": [
+        729.0,
+        1678.0,
+        1361.0,
+        1764.0
+      ],
+      "confidence": 0.9648831486701965,
+      "center_x": 1045.0,
+      "center_y": 1721.0
+    },
+    {
+      "text": "Type:",
+      "bbox": [
+        309.0,
+        1705.0,
+        494.0,
+        1794.0
+      ],
+      "confidence": 0.9991070032119751,
+      "center_x": 401.5,
+      "center_y": 1749.5
+    },
+    {
+      "text": "(Y/N)",
+      "bbox": [
+        34.0,
+        1708.0,
+        229.0,
+        1811.0
+      ],
+      "confidence": 0.992883026599884,
+      "center_x": 131.5,
+      "center_y": 1759.5
+    },
+    {
+      "text": "RUCTION",
+      "bbox": [
+        0.0,
+        1819.0,
+        312.0,
+        1911.0
+      ],
+      "confidence": 0.9679269790649414,
+      "center_x": 156.0,
+      "center_y": 1865.0
+    },
+    {
+      "text": "SA-312 TP321",
+      "bbox": [
+        742.0,
+        1889.0,
+        1187.0,
+        1974.0
+      ],
+      "confidence": 0.9831458926200867,
+      "center_x": 964.5,
+      "center_y": 1931.5
+    },
+    {
+      "text": "Tubes:",
+      "bbox": [
+        312.0,
+        1917.0,
+        533.0,
+        1995.0
+      ],
+      "confidence": 0.9993300437927246,
+      "center_x": 422.5,
+      "center_y": 1956.0
+    },
+    {
+      "text": "Sh",
+      "bbox": [
+        1409.0,
+        1985.0,
+        1488.0,
+        2054.0
+      ],
+      "confidence": 0.9460563063621521,
+      "center_x": 1448.5,
+      "center_y": 2019.5
+    },
+    {
+      "text": "SA-240 321",
+      "bbox": [
+        450.0,
+        1999.0,
+        811.0,
+        2091.0
+      ],
+      "confidence": 0.9829216003417969,
+      "center_x": 630.5,
+      "center_y": 2045.0
+    }
+  ],
+  "layout_regions": null,
+  "full_text": "Required:\n292.25\nW/(m•K)\nInlet nozzle:\n2156.67\nkg/(m.s2)\nSour Service:\n(Y/N)\nShell Side\nSide\n(￥/N)\nHELL\n19.00\nmm\nOD:\n00\nmm\ninc\nInlet:\n60\nmm Tube layout:\nOutlet:inc\nPlain\nmm Tube type:\nIntermediat\nVent:\n一\n700\n(ID/OD)\nDrain:\nSINGLE-SEG.\nPressure re\nnm No.of cross passes:\nDesign Pressure:\nvertical/horizontal\nVacuum Pressure:\nDesign Temp. (Max/MDM\noe:\nNumber of passes per she\nCorrosion Allowance:\nType:\n(Y/N)\nRUCTION\nSA-312 TP321\nTubes:\nSh\nSA-240 321",
+  "average_confidence": 0.9648744007374378
+}

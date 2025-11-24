@@ -1,0 +1,40 @@
+{
+  "page_number": 1,
+  "stage1_global": {
+    "resolution": "300 DPI",
+    "image": "page_001_300dpi.png",
+    "ocr_json": "page_001_global_ocr.json",
+    "visualized": "page_001_global_visualized.png"
+  },
+  "stage2_refined_regions": [
+    {
+      "region_id": 1,
+      "bbox_300dpi": [
+        0,
+        1754,
+        620,
+        2631
+      ],
+      "bbox_600dpi": [
+        0,
+        3333,
+        1364,
+        5437
+      ],
+      "image": "page_001_region_01_600dpi.png",
+      "ocr_json": "page_001_region_01_ocr.json",
+      "visualized": "page_001_region_01_visualized.png",
+      "text_blocks": 3,
+      "avg_confidence": 0.6292102436224619
+    }
+  ],
+  "total_refined_regions": 1,
+  "statistics": {
+    "total_text_blocks": 79,
+    "average_confidence": 0.9600767349895043,
+    "low_confidence_blocks": 1
+  },
+  "stage3_vlm": {
+    "vlm_json": "page_001_vlm.json"
+  }
+}

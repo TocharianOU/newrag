@@ -1,0 +1,60 @@
+{
+  "page_number": 2,
+  "stage1_global": {
+    "resolution": "300 DPI",
+    "image": "page_002_300dpi.png",
+    "ocr_json": "page_002_global_ocr.json",
+    "visualized": "page_002_global_visualized.png"
+  },
+  "stage2_refined_regions": [
+    {
+      "region_id": 1,
+      "bbox_300dpi": [
+        1240,
+        877,
+        1860,
+        1754
+      ],
+      "bbox_600dpi": [
+        2356,
+        1579,
+        3844,
+        3683
+      ],
+      "image": "page_002_region_01_600dpi.png",
+      "ocr_json": "page_002_region_01_ocr.json",
+      "visualized": "page_002_region_01_visualized.png",
+      "text_blocks": 45,
+      "avg_confidence": 0.9195042418109046
+    },
+    {
+      "region_id": 2,
+      "bbox_300dpi": [
+        620,
+        1754,
+        1240,
+        2631
+      ],
+      "bbox_600dpi": [
+        1116,
+        3333,
+        2604,
+        5437
+      ],
+      "image": "page_002_region_02_600dpi.png",
+      "ocr_json": "page_002_region_02_ocr.json",
+      "visualized": "page_002_region_02_visualized.png",
+      "text_blocks": 47,
+      "avg_confidence": 0.9648744007374378
+    }
+  ],
+  "total_refined_regions": 2,
+  "statistics": {
+    "total_text_blocks": 374,
+    "average_confidence": 0.9792955960022575,
+    "low_confidence_blocks": 5
+  },
+  "stage3_vlm": {
+    "vlm_json": "page_002_vlm.json"
+  }
+}

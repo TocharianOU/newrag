@@ -8,8 +8,8 @@ models:
     provider: lmstudio  # lmstudio / openai / custom
     api_url: http://localhost:1234/v1
     api_key: lm-studio
-    model_name: text-embedding-qwen3-embedding-0.6b
-    dimensions: 1024  # Qwen3-Embedding-0.6B output dimension
+    model_name: text-embedding-qwen3-embedding-4b
+    dimensions: 2560  # Qwen3-Embedding-4B actual output dimension
     batch_size: 32
     timeout: 30
   
@@ -19,7 +19,7 @@ models:
     provider: lmstudio  # lmstudio / openai / custom
     api_url: http://localhost:1234/v1
     api_key: lm-studio
-    model_name: qwen/qwen3-vl-30b  # Changed to qwen/qwen3-vl-30b as requested
+    model_name: google/gemma-3-27b  # VLM model for document understanding
     max_tokens: 2048
     temperature: 0.0  # Must be 0 to prevent hallucination
     timeout: 60
@@ -111,7 +111,7 @@ processing:
   page_level_indexing: true  # 每页作为独立的可搜索单元
   detect_tables: true  # 检测表格内容
   table_detection_threshold: 0.3  # 表格检测阈值
-  convert_to_image_for_tables: true  # 表格页面转图片用GLM提取
+  convert_to_image_for_tables: true  # 表格页面转图片用VLM提取
   max_page_size_chars: 4000  # 单页最大字符数（超过则切分）
   max_page_size_mb: 50  # 单页最大大小
   
@@ -145,7 +145,7 @@ component_extraction:
 # Web 应用配置
 web:
   host: 0.0.0.0
-  port: 9000
+  port: 8080
   upload_folder: ./uploads
   max_content_length: 104857600  # 100MB in bytes
   allowed_extensions:

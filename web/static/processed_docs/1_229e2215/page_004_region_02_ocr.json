@@ -1,0 +1,135 @@
+{
+  "file": "page_004_region_02_600dpi.png",
+  "image_size": {
+    "width": 1488,
+    "height": 1929
+  },
+  "status": "success",
+  "text_blocks_count": 10,
+  "layout_regions_count": 0,
+  "text_blocks": [
+    {
+      "text": "Process Datasheet for ES-313",
+      "bbox": [
+        272.0,
+        487.0,
+        1488.0,
+        614.0
+      ],
+      "confidence": 0.9964507818222046,
+      "center_x": 880.0,
+      "center_y": 550.5
+    },
+    {
+      "text": "一",
+      "bbox": [
+        6.0,
+        538.0,
+        49.0,
+        578.0
+      ],
+      "confidence": 0.17295889556407928,
+      "center_x": 27.5,
+      "center_y": 558.0
+    },
+    {
+      "text": "-",
+      "bbox": [
+        13.0,
+        570.0,
+        40.0,
+        590.0
+      ],
+      "confidence": 0.1996755599975586,
+      "center_x": 26.5,
+      "center_y": 580.0
+    },
+    {
+      "text": "WaterCooler",
+      "bbox": [
+        938.0,
+        597.0,
+        1488.0,
+        705.0
+      ],
+      "confidence": 0.9978199005126953,
+      "center_x": 1213.0,
+      "center_y": 651.0
+    },
+    {
+      "text": "Doc. No.:",
+      "bbox": [
+        699.0,
+        789.0,
+        1016.0,
+        858.0
+      ],
+      "confidence": 0.9541490077972412,
+      "center_x": 857.5,
+      "center_y": 823.5
+    },
+    {
+      "text": "Loc",
+      "bbox": [
+        1355.0,
+        870.0,
+        1488.0,
+        951.0
+      ],
+      "confidence": 0.9508787989616394,
+      "center_x": 1421.5,
+      "center_y": 910.5
+    },
+    {
+      "text": "Iten",
+      "bbox": [
+        1359.0,
+        979.0,
+        1488.0,
+        1052.0
+      ],
+      "confidence": 0.9624570608139038,
+      "center_x": 1423.5,
+      "center_y": 1015.5
+    },
+    {
+      "text": "Fab",
+      "bbox": [
+        1360.0,
+        1076.0,
+        1488.0,
+        1154.0
+      ],
+      "confidence": 0.9818106293678284,
+      "center_x": 1424.0,
+      "center_y": 1115.0
+    },
+    {
+      "text": "Sketch",
+      "bbox": [
+        1231.0,
+        1167.0,
+        1488.0,
+        1253.0
+      ],
+      "confidence": 0.9955361485481262,
+      "center_x": 1359.5,
+      "center_y": 1210.0
+    },
+    {
+      "text": "N03",
+      "bbox": [
+        142.0,
+        1839.0,
+        274.0,
+        1929.0
+      ],
+      "confidence": 0.8603227138519287,
+      "center_x": 208.0,
+      "center_y": 1884.0
+    }
+  ],
+  "layout_regions": null,
+  "full_text": "Process Datasheet for ES-313\n一\n-\nWaterCooler\nDoc. No.:\nLoc\nIten\nFab\nSketch\nN03",
+  "average_confidence": 0.8072059497237205
+}

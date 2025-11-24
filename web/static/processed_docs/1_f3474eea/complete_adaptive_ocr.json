@@ -1,0 +1,164 @@
+{
+  "source_file": "/Users/ablatazmat/Downloads/SmartResume/uploads/招聘信息  Join Our Team.pdf",
+  "total_pages": 5,
+  "ocr_engine": "paddle",
+  "confidence_threshold": 0.7,
+  "pages": [
+    {
+      "page_number": 1,
+      "stage1_global": {
+        "resolution": "300 DPI",
+        "image": "page_001_300dpi.png",
+        "ocr_json": "page_001_global_ocr.json",
+        "visualized": "page_001_global_visualized.png"
+      },
+      "stage2_refined_regions": [],
+      "total_refined_regions": 0,
+      "statistics": {
+        "total_text_blocks": 32,
+        "average_confidence": 0.9828755110502243,
+        "low_confidence_blocks": 0
+      },
+      "stage3_vlm": {
+        "vlm_json": "page_001_vlm.json"
+      }
+    },
+    {
+      "page_number": 2,
+      "stage1_global": {
+        "resolution": "300 DPI",
+        "image": "page_002_300dpi.png",
+        "ocr_json": "page_002_global_ocr.json",
+        "visualized": "page_002_global_visualized.png"
+      },
+      "stage2_refined_regions": [],
+      "total_refined_regions": 0,
+      "statistics": {
+        "total_text_blocks": 34,
+        "average_confidence": 0.9790930625270394,
+        "low_confidence_blocks": 0
+      },
+      "stage3_vlm": {
+        "vlm_json": "page_002_vlm.json"
+      }
+    },
+    {
+      "page_number": 3,
+      "stage1_global": {
+        "resolution": "300 DPI",
+        "image": "page_003_300dpi.png",
+        "ocr_json": "page_003_global_ocr.json",
+        "visualized": "page_003_global_visualized.png"
+      },
+      "stage2_refined_regions": [],
+      "total_refined_regions": 0,
+      "statistics": {
+        "total_text_blocks": 29,
+        "average_confidence": 0.9874276970994884,
+        "low_confidence_blocks": 0
+      },
+      "stage3_vlm": {
+        "vlm_json": "page_003_vlm.json"
+      }
+    },
+    {
+      "page_number": 4,
+      "stage1_global": {
+        "resolution": "300 DPI",
+        "image": "page_004_300dpi.png",
+        "ocr_json": "page_004_global_ocr.json",
+        "visualized": "page_004_global_visualized.png"
+      },
+      "stage2_refined_regions": [
+        {
+          "region_id": 1,
+          "bbox_300dpi": [
+            0,
+            877,
+            620,
+            1754
+          ],
+          "bbox_600dpi": [
+            0,
+            1579,
+            1364,
+            3683
+          ],
+          "image": "page_004_region_01_600dpi.png",
+          "ocr_json": "page_004_region_01_ocr.json",
+          "visualized": "page_004_region_01_visualized.png",
+          "text_blocks": 7,
+          "avg_confidence": 0.9947040506771633
+        },
+        {
+          "region_id": 2,
+          "bbox_300dpi": [
+            0,
+            1754,
+            620,
+            2631
+          ],
+          "bbox_600dpi": [
+            0,
+            3333,
+            1364,
+            5437
+          ],
+          "image": "page_004_region_02_600dpi.png",
+          "ocr_json": "page_004_region_02_ocr.json",
+          "visualized": "page_004_region_02_visualized.png",
+          "text_blocks": 19,
+          "avg_confidence": 0.9409937544872886
+        },
+        {
+          "region_id": 3,
+          "bbox_300dpi": [
+            0,
+            2631,
+            620,
+            3508
+          ],
+          "bbox_600dpi": [
+            0,
+            5087,
+            1364,
+            7016
+          ],
+          "image": "page_004_region_03_600dpi.png",
+          "ocr_json": "page_004_region_03_ocr.json",
+          "visualized": "page_004_region_03_visualized.png",
+          "text_blocks": 20,
+          "avg_confidence": 0.9347025848925113
+        }
+      ],
+      "total_refined_regions": 3,
+      "statistics": {
+        "total_text_blocks": 38,
+        "average_confidence": 0.915011141645281,
+        "low_confidence_blocks": 4
+      },
+      "stage3_vlm": {
+        "vlm_json": "page_004_vlm.json"
+      }
+    },
+    {
+      "page_number": 5,
+      "stage1_global": {
+        "resolution": "300 DPI",
+        "image": "page_005_300dpi.png",
+        "ocr_json": "page_005_global_ocr.json",
+        "visualized": "page_005_global_visualized.png"
+      },
+      "stage2_refined_regions": [],
+      "total_refined_regions": 0,
+      "statistics": {
+        "total_text_blocks": 0,
+        "average_confidence": 0,
+        "low_confidence_blocks": 0
+      },
+      "stage3_vlm": {
+        "vlm_json": "page_005_vlm.json"
+      }
+    }
+  ]
+}

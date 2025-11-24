@@ -50,7 +50,7 @@
       },
       "content_vector": {
         "type": "dense_vector",
-        "dims": 1024,
+        "dims": 2560,
         "index": true,
         "similarity": "cosine"
       },
@@ -76,6 +76,10 @@
       },
       "page_type": {
         "type": "keyword"
+      },
+      "page_json": {
+        "type": "object",
+        "enabled": false
       },
       "original_content": {
         "type": "object",

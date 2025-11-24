@@ -25,6 +25,14 @@
             border-radius: 3px;
             font-weight: 500;
         }
+        
+        /* Line clamp for text truncation */
+        .line-clamp-4 {
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -99,6 +107,14 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="upload.author">Author</label>
                             <input type="text" id="author" class="w-full px-4 py-2 border rounded-lg" data-i18n-placeholder="upload.authorPlaceholder">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="upload.ocrEngine">OCR Engine</label>
+                            <select id="ocr-engine" class="w-full px-4 py-2 border rounded-lg">
+                                <option value="easy" selected>EasyOCR - 快速 (Fast, Basic)</option>
+                                <option value="paddle">PaddleOCR - 最强 (Best, Multi-direction Chinese+English)</option>
+                                <option value="vision">Apple Vision - 高精度 (macOS Only, High Accuracy)</option>
+                            </select>
                         </div>
                         <div class="col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="upload.tags">Tags (comma-separated)</label>
@@ -320,6 +336,7 @@
             const author = document.getElementById('author').value;
             const tags = document.getElementById('tags').value;
             const description = document.getElementById('description').value;
+            const ocrEngine = document.getElementById('ocr-engine').value;
 
             const formData = new FormData();
             
@@ -337,6 +354,7 @@
             if (author) formData.append('author', author);
             if (tags) formData.append('tags', tags);
             if (description) formData.append('description', description);
+            if (ocrEngine) formData.append('ocr_engine', ocrEngine);
 
             const endpoint = uploadType === 'zip' ? '/upload_zip' : 
                             uploadType === 'batch' ? '/upload_batch' : '/upload';
@@ -365,7 +383,8 @@
                 const result = await response.json();
                 console.log('Upload result:', result);
                 
-                       if (response.ok) {
+                       // Check both HTTP status AND result.status field
+                       if (response.ok && result.status !== 'failed') {
                            // Check if duplicate
                            if (result.status === 'duplicate') {
                                const dupTitle = currentLang === 'zh' ? '检测到重复文件' : 'Duplicate File Detected';
@@ -396,8 +415,13 @@
                                        </div>
                                    </div>
                                `;
+                           } else if (result.status === 'processing') {
+                               // Start polling for progress
+                               const docId = result.document_id;
+                               const filename = result.filename || 'Document';
+                               startProgressPolling(docId, filename);
                            } else {
-                               // Successful upload
+                               // Successful upload (completed)
                                const successTitle = currentLang === 'zh' ? '上传成功！' : 'Upload Successful!';
                                const statusLabel = currentLang === 'zh' ? '状态' : 'Status';
                                const docIdLabel = currentLang === 'zh' ? '文档 ID' : 'Document ID';
@@ -423,12 +447,18 @@
                     fileInput.value = '';
                     selectedFilesDiv.classList.add('hidden');
                 } else {
-                    throw new Error(result.detail || 'Upload failed');
+                    // Handle failed status (ES write failure, etc.)
+                    const errorMsg = result.error || result.detail || result.message || 'Upload failed';
+                    throw new Error(errorMsg);
                 }
             } catch (error) {
                 console.error('Upload error:', error);
-                const failTitle = currentLang === 'zh' ? '上传失败' : 'Upload Failed';
-                const errorLabel = currentLang === 'zh' ? '错误' : 'Error';
+                const failTitle = currentLang === 'zh' ? '❌ 上传失败' : '❌ Upload Failed';
+                const errorLabel = currentLang === 'zh' ? '错误详情' : 'Error Details';
+                const suggestionLabel = currentLang === 'zh' ? '建议' : 'Suggestion';
+                const suggestion = currentLang === 'zh' 
+                    ? '请检查日志文件 logs/smartresume_errors.log 获取详细信息' 
+                    : 'Please check logs/smartresume_errors.log for detailed information';
                 
                 document.getElementById('status-content').innerHTML = `
                     <div class="text-red-600">
@@ -436,11 +466,123 @@
                             <i class="fas fa-exclamation-circle text-2xl"></i>
                             <div class="text-lg font-semibold">${failTitle}</div>
                         </div>
-                        <div class="mt-3 text-sm bg-red-50 p-4 rounded">
-                            <strong>${errorLabel}:</strong> ${error.message}
+                        <div class="mt-3 space-y-3 text-sm bg-red-50 p-4 rounded">
+                            <div>
+                                <strong>${errorLabel}:</strong>
+                                <div class="mt-1 text-gray-800 font-mono text-xs bg-white p-2 rounded border border-red-200">
+                                    ${error.message}
+                                </div>
+                            </div>
+                            <div class="pt-2 border-t border-red-200">
+                                <strong>${suggestionLabel}:</strong>
+                                <div class="mt-1 text-gray-700">${suggestion}</div>
+                            </div>
                         </div>
                     </div>
                 `;
+            }
+        }
+
+        // Progress polling
+        let progressIntervalId = null;
+        
+        function startProgressPolling(docId, filename) {
+            const processingTitle = currentLang === 'zh' ? '正在处理文档...' : 'Processing Document...';
+            const filenameLabel = currentLang === 'zh' ? '文件名' : 'Filename';
+            
+            // Initial progress display
+            document.getElementById('status-content').innerHTML = `
+                <div class="text-blue-600">
+                    <div class="flex items-center space-x-2 mb-3">
+                        <i class="fas fa-spinner fa-spin text-2xl"></i>
+                        <div class="text-lg font-semibold">${processingTitle}</div>
+                    </div>
+                    <div class="mt-3 space-y-3 text-sm text-gray-700 bg-blue-50 p-4 rounded">
+                        <div><strong>${filenameLabel}:</strong> ${filename}</div>
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <span id="progress-message" class="text-xs font-medium">Starting...</span>
+                                <span id="progress-percentage" class="text-xs font-medium">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div id="page-progress" class="text-xs text-gray-600"></div>
+                    </div>
+                </div>
+            `;
+            
+            // Poll progress every 2 seconds
+            progressIntervalId = setInterval(async () => {
+                try {
+                    const response = await fetch(`/documents/${docId}/progress`);
+                    const progress = await response.json();
+                    
+                    // Update progress bar
+                    const percentage = progress.progress_percentage || 0;
+                    document.getElementById('progress-bar').style.width = `${percentage}%`;
+                    document.getElementById('progress-percentage').textContent = `${percentage}%`;
+                    document.getElementById('progress-message').textContent = progress.progress_message || 'Processing...';
+                    
+                    // Update page progress if available
+                    if (progress.total_pages > 0) {
+                        const pageProgressText = currentLang === 'zh' 
+                            ? `页面 ${progress.processed_pages}/${progress.total_pages}`
+                            : `Page ${progress.processed_pages}/${progress.total_pages}`;
+                        document.getElementById('page-progress').textContent = pageProgressText;
+                    }
+                    
+                    // Check if completed or failed
+                    if (progress.status === 'completed') {
+                        stopProgressPolling();
+                        const successTitle = currentLang === 'zh' ? '✅ 处理完成！' : '✅ Processing Complete!';
+                        const docIdLabel = currentLang === 'zh' ? '文档 ID' : 'Document ID';
+                        const pagesLabel = currentLang === 'zh' ? '总页数' : 'Total Pages';
+                        
+                        document.getElementById('status-content').innerHTML = `
+                            <div class="text-green-600">
+                                <div class="flex items-center space-x-2 mb-3">
+                                    <i class="fas fa-check-circle text-2xl"></i>
+                                    <div class="text-lg font-semibold">${successTitle}</div>
+                                </div>
+                                <div class="mt-3 space-y-2 text-sm text-gray-700 bg-green-50 p-4 rounded">
+                                    <div><strong>${filenameLabel}:</strong> ${filename}</div>
+                                    <div><strong>${docIdLabel}:</strong> ${docId}</div>
+                                    <div><strong>${pagesLabel}:</strong> ${progress.total_pages || 0}</div>
+                                </div>
+                            </div>
+                        `;
+                    } else if (progress.status === 'failed') {
+                        stopProgressPolling();
+                        const failTitle = currentLang === 'zh' ? '❌ 处理失败' : '❌ Processing Failed';
+                        const errorLabel = currentLang === 'zh' ? '错误' : 'Error';
+                        
+                        document.getElementById('status-content').innerHTML = `
+                            <div class="text-red-600">
+                                <div class="flex items-center space-x-2 mb-3">
+                                    <i class="fas fa-exclamation-circle text-2xl"></i>
+                                    <div class="text-lg font-semibold">${failTitle}</div>
+                                </div>
+                                <div class="mt-3 space-y-2 text-sm text-gray-700 bg-red-50 p-4 rounded">
+                                    <div><strong>${filenameLabel}:</strong> ${filename}</div>
+                                    <div><strong>${docIdLabel}:</strong> ${docId}</div>
+                                    <div><strong>${errorLabel}:</strong> ${progress.progress_message || 'Unknown error'}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    console.error('Progress polling error:', error);
+                    stopProgressPolling();
+                }
+            }, 2000); // Poll every 2 seconds
+        }
+        
+        function stopProgressPolling() {
+            if (progressIntervalId) {
+                clearInterval(progressIntervalId);
+                progressIntervalId = null;
             }
         }
 
@@ -478,8 +620,18 @@
                 });
 
                 const data = await response.json();
-                console.log('Search response:', data);
+                console.log('=== Search Response ===');
+                console.log('Total results:', data.total);
                 console.log('First result:', data.results?.[0]);
+                if (data.results?.[0]) {
+                    console.log('Metadata:', data.results[0].metadata);
+                    console.log('Pages data:', data.results[0].metadata?.pages_data);
+                    console.log('OCR engine:', data.results[0].metadata?.ocr_engine);
+                    console.log('Matched bboxes:', data.results[0].matched_bboxes);
+                }
+                
+                // Store search results globally for bbox drawing
+                window.searchResults = data.results || [];
                 
                 if (data.results && data.results.length > 0) {
                     const resultsHTML = data.results.map((result, index) => {
@@ -493,17 +645,196 @@
                             displayText = result.text.substring(0, 300) + '...';
                         }
                         
+                        // Build image preview section
+                        let imageSection = '';
+                        const pages = result.metadata?.pages_data;
+                        const ocrEngine = result.metadata?.ocr_engine || 'standard';
+                        const pageNumber = result.metadata?.page_number || 1;
+                        
+                        console.log(`Result ${index}: pages_data =`, pages, 'ocr_engine =', ocrEngine);
+                        
+                        if (pages && Array.isArray(pages) && pages.length > 0) {
+                            // Find the EXACT page that matches (not always first page!)
+                            const matchedPageNum = result.metadata?.page_number || result.metadata?.page || 1;
+                            let matchedPage = pages.find(p => p.page_num === matchedPageNum);
+                            
+                            // Fallback to first page if exact match not found
+                            if (!matchedPage && pages.length > 0) {
+                                matchedPage = pages[0];
+                                console.warn(`  Page ${matchedPageNum} not found, using page ${matchedPage.page_num} as fallback`);
+                            }
+                            
+                            const resultId = `result-${index}`;
+                            
+                            console.log(`  Building image section for result ${index}:`, {
+                                requested_page: matchedPageNum,
+                                actual_page: matchedPage?.page_num,
+                                image_path: matchedPage?.image_path,
+                                visualized_path: matchedPage?.visualized_path,
+                                text_count: matchedPage?.text_count
+                            });
+                            
+                            const pageLabel = currentLang === 'zh' ? '页' : 'Page';
+                            const engineLabel = currentLang === 'zh' ? '引擎' : 'Engine';
+                            const textsDetectedLabel = currentLang === 'zh' ? '个文本检测' : 'texts detected';
+                            const showImagesLabel = currentLang === 'zh' ? '显示图片' : 'Show Images';
+                            
+                            imageSection = `
+                                <div class="mt-4 border-t pt-4">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <div class="text-sm font-medium text-gray-700">
+                                            📄 <span class="font-bold text-blue-600">${pageLabel} ${matchedPage.page_num || matchedPageNum}</span> / ${pages.length} | 
+                                            ${engineLabel}: <span class="font-bold text-green-600">${ocrEngine.toUpperCase()}</span> | 
+                                            ${matchedPage.text_count || 0} ${textsDetectedLabel}
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button onclick="toggleImage('${resultId}')" class="px-3 py-1 bg-blue-500 text-white hover:bg-blue-600 rounded text-sm transition-colors">
+                                                <i class="fas fa-eye"></i> ${showImagesLabel}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div id="${resultId}-images" class="hidden mt-3 grid grid-cols-2 gap-3">
+                                        <div class="bg-gray-50 p-2 rounded">
+                                            <div class="text-xs font-semibold text-gray-700 mb-2">📷 ${currentLang === 'zh' ? '原始页面（带匹配标记）' : 'Original Page (with matches)'}</div>
+                                            <div class="relative" style="width: 100%;">
+                                                <canvas id="${resultId}-canvas" 
+                                                        class="w-full border-2 border-gray-300 rounded cursor-pointer hover:border-red-500 hover:shadow-lg transition-all"
+                                                        onclick="openFullView('${matchedPage.image_path}')"
+                                                        data-image-path="${matchedPage.image_path}"
+                                                        data-result-index="${index}"
+                                                        style="max-width: 100%; height: auto;">
+                                                </canvas>
+                                            </div>
+                                        </div>
+                                        <div class="bg-gray-50 p-2 rounded">
+                                            <div class="text-xs font-semibold text-gray-700 mb-2">🔍 ${currentLang === 'zh' ? 'OCR 检测' : 'OCR Detection'}</div>
+                                            <img src="${matchedPage.visualized_path}" 
+                                                 alt="OCR Visualization Page ${matchedPage.page_num}" 
+                                                 class="w-full border-2 border-gray-300 rounded cursor-pointer hover:border-green-500 hover:shadow-lg transition-all" 
+                                                 onclick="openFullView('${matchedPage.visualized_path}')"
+                                                 onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22><text x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22>${currentLang === 'zh' ? '可视化未找到' : 'Visualization not found'}</text></svg>'; console.error('Failed to load visualization:', '${matchedPage.visualized_path}')">
+                                        </div>
+                                    </div>
+                                    ${matchedPage.components && Array.isArray(matchedPage.components) && matchedPage.components.length > 0 ? `
+                                        <div class="mt-3 p-2 bg-purple-50 rounded">
+                                            <div class="flex gap-1 flex-wrap items-center">
+                                                <span class="text-xs font-semibold text-purple-900">🔧 ${currentLang === 'zh' ? '组件' : 'Components'}:</span>
+                                                ${matchedPage.components.slice(0, 10).map(c => `<span class="px-2 py-1 bg-purple-200 text-purple-900 text-xs rounded font-mono">${c}</span>`).join('')}
+                                                ${matchedPage.components.length > 10 ? `<span class="text-xs text-purple-700 font-semibold">+${matchedPage.components.length - 10} ${currentLang === 'zh' ? '个更多' : 'more'}</span>` : ''}
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                        } else {
+                            console.log(`  No pages_data for result ${index}`);
+                            // 如果没有 pages_data，显示提示
+                            const noPreviewMsg = currentLang === 'zh' 
+                                ? 'ℹ️ 无页面预览（文档可能需要使用OCR管道重新处理）'
+                                : 'ℹ️ No page preview available (document may need reprocessing with OCR pipeline)';
+                            imageSection = `
+                                <div class="mt-4 border-t pt-4">
+                                    <div class="text-sm text-gray-500 italic">
+                                        ${noPreviewMsg}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        
+                        // Extract matched bbox info
+                        let locationInfo = '';
+                        const matchedBboxes = result.matched_bboxes || [];
+                        
+                        if (matchedBboxes.length > 0) {
+                            const matchesLabel = currentLang === 'zh' ? '个匹配位置' : 'matched locations';
+                            const coordLabel = currentLang === 'zh' ? '坐标' : 'Coordinates';
+                            const confLabel = currentLang === 'zh' ? '置信度' : 'confidence';
+                            
+                            const bboxInfo = matchedBboxes.slice(0, 3).map((match, idx) => {
+                                const coords = `[${match.bbox.map(n => Math.round(n)).join(', ')}]`;
+                                const conf = `${(match.confidence * 100).toFixed(0)}%`;
+                                return `<span class="inline-block mr-2 mb-1"><span class="font-bold text-red-600">${idx+1}.</span> ${match.text.substring(0, 15)}${match.text.length > 15 ? '...' : ''} <span class="text-gray-500">(${confLabel}: ${conf})</span></span>`;
+                            }).join('');
+                            
+                            locationInfo = `
+                                <div class="mt-2 p-2 bg-red-50 rounded border border-red-200">
+                                    <div class="text-xs font-semibold text-red-700 mb-1">
+                                        🎯 ${matchedBboxes.length} ${matchesLabel}
+                                    </div>
+                                    <div class="text-xs text-gray-700">
+                                        ${bboxInfo}
+                                        ${matchedBboxes.length > 3 ? `<span class="text-red-600 font-semibold">+${matchedBboxes.length - 3} more</span>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        
+                        // Full content (collapsible)
+                        const fullContent = result.content || result.text || displayText;
+                        const isLongContent = fullContent.length > 500;
+                        const contentId = `content-${index}`;
+                        
+                        const unknownDocLabel = currentLang === 'zh' ? '未知文档' : 'Unknown Document';
+                        const pageLabel2 = currentLang === 'zh' ? '页' : 'Page';
+                        const relevanceLabel = currentLang === 'zh' ? '相关度' : 'Relevance';
+                        const matchedContentLabel = currentLang === 'zh' ? '匹配内容' : 'Matched Content';
+                        const showFullContentLabel = currentLang === 'zh' ? '显示完整内容' : 'Show Full Content';
+                        const hideContentLabel = currentLang === 'zh' ? '隐藏内容' : 'Hide Content';
+                        
                         return `
-                            <div class="bg-white rounded-lg shadow p-6">
-                                <div class="flex justify-between items-start mb-3">
-                                    <div class="text-lg font-semibold">#${index + 1} ${result.metadata?.filename || 'Unknown'}</div>
-                                    ${result.score ? `<div class="text-sm text-gray-500">Score: ${result.score.toFixed(3)}</div>` : ''}
+                            <div class="bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow p-6 border-l-4 border-blue-500">
+                                <!-- Header -->
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <div class="text-xl font-bold text-gray-900 mb-1">
+                                            📄 ${result.metadata?.filename || unknownDocLabel}
+                                        </div>
+                                        <div class="flex items-center gap-3 text-sm text-gray-600">
+                                            <span class="font-semibold">#${index + 1}</span>
+                                            ${result.metadata?.page_number || result.metadata?.page ? 
+                                                `<span>• ${pageLabel2} <span class="font-bold text-blue-600">${result.metadata.page_number || result.metadata.page}</span></span>` : ''}
+                                            ${result.metadata?.filepath ? 
+                                                `<span class="truncate max-w-md" title="${result.metadata.filepath}">• 📁 ${result.metadata.filepath}</span>` : ''}
+                                        </div>
+                                    </div>
+                                    ${result.score ? `
+                                        <div class="text-right">
+                                            <div class="text-xs text-gray-500">${relevanceLabel}</div>
+                                            <div class="text-lg font-bold text-green-600">${(result.score * 100).toFixed(1)}%</div>
+                                        </div>
+                                    ` : ''}
                                 </div>
-                                <div class="text-gray-700 mb-3 highlight-content">${displayText}</div>
-                                <div class="flex gap-2 flex-wrap">
-                                    ${result.metadata?.category ? `<span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">${result.metadata.category}</span>` : ''}
-                                    ${result.metadata?.file_type ? `<span class="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded">${result.metadata.file_type}</span>` : ''}
+                                
+                                <!-- Content Preview with Highlight -->
+                                <div class="mb-3">
+                                    <div class="text-sm font-semibold text-gray-700 mb-2">📝 ${matchedContentLabel}:</div>
+                                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded highlight-content">
+                                        <div id="${contentId}-preview" class="text-gray-800 leading-relaxed ${isLongContent ? 'line-clamp-4' : ''}">
+                                            ${displayText}
+                                        </div>
+                                        ${isLongContent ? `
+                                            <div id="${contentId}-full" class="hidden text-gray-800 leading-relaxed mt-2 pt-2 border-t border-yellow-300">
+                                                ${fullContent}
+                                            </div>
+                                            <button onclick="toggleContent('${contentId}')" 
+                                                    class="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                                <span id="${contentId}-toggle-text">
+                                                    <i class="fas fa-chevron-down"></i> ${showFullContentLabel}
+                                                </span>
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                    ${locationInfo}
                                 </div>
+                                
+                                <!-- Metadata Tags -->
+                                <div class="flex gap-2 flex-wrap mb-3">
+                                    ${result.metadata?.category ? `<span class="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">📂 ${result.metadata.category}</span>` : ''}
+                                    ${result.metadata?.file_type ? `<span class="px-3 py-1 bg-gray-100 text-gray-800 text-xs font-semibold rounded-full">📎 ${result.metadata.file_type.toUpperCase()}</span>` : ''}
+                                    ${result.metadata?.extraction_method ? `<span class="px-3 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full">⚙️ ${result.metadata.extraction_method}</span>` : ''}
+                                </div>
+                                
+                                ${imageSection}
                             </div>
                         `;
                     }).join('');
@@ -570,6 +901,8 @@
         }
 
         // Load documents list
+        let documentsPollingIntervalId = null;
+        
         async function loadDocuments() {
             try {
                 const response = await fetch('/documents?limit=10');
@@ -583,32 +916,81 @@
                             doc.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
                             'bg-gray-100 text-gray-800';
                         
-                        return `
-                            <div class="flex items-center justify-between py-3 border-b hover:bg-gray-50">
-                                <div class="flex-1">
-                                    <div class="font-medium">${doc.filename}</div>
-                                    <div class="text-xs text-gray-500">
-                                        ${doc.file_type} • ${(doc.file_size / 1024).toFixed(1)} KB
-                                        ${doc.num_chunks ? ` • ${doc.num_chunks} chunks` : ''}
+                        // Build progress bar for processing documents
+                        let progressBar = '';
+                        if (doc.status === 'processing') {
+                            const percentage = doc.progress_percentage || 0;
+                            const progressMsg = doc.progress_message || (currentLang === 'zh' ? '处理中...' : 'Processing...');
+                            const pageInfo = doc.total_pages > 0 ? 
+                                (currentLang === 'zh' ? `${doc.processed_pages}/${doc.total_pages} 页` : `${doc.processed_pages}/${doc.total_pages} pages`) : '';
+                            
+                            progressBar = `
+                                <div class="mt-2">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="text-xs text-gray-600">${progressMsg}</span>
+                                        <span class="text-xs font-medium text-blue-600">${percentage}%</span>
                                     </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                        <div class="bg-blue-600 h-1.5 rounded-full transition-all duration-300" style="width: ${percentage}%"></div>
+                                    </div>
+                                    ${pageInfo ? `<div class="text-xs text-gray-500 mt-1">${pageInfo}</div>` : ''}
                                 </div>
-                                <div class="flex items-center space-x-2">
-                                    <span class="px-2 py-1 rounded text-xs ${statusColor}">${doc.status}</span>
-                                    <button onclick="deleteDocument(${doc.id})" class="text-red-600 hover:text-red-800 text-sm">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                            `;
+                        }
+                        
+                        return `
+                            <div class="py-3 border-b hover:bg-gray-50" id="doc-${doc.id}">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex-1">
+                                        <div class="font-medium">${doc.filename}</div>
+                                        <div class="text-xs text-gray-500">
+                                            ${doc.file_type} • ${(doc.file_size / 1024).toFixed(1)} KB
+                                            ${doc.num_chunks ? ` • ${doc.num_chunks} chunks` : ''}
+                                        </div>
+                                        ${progressBar}
+                                    </div>
+                                    <div class="flex items-center space-x-2 ml-4">
+                                        <span class="px-2 py-1 rounded text-xs ${statusColor}">${doc.status}</span>
+                                        <button onclick="deleteDocument(${doc.id})" class="text-red-600 hover:text-red-800 text-sm">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         `;
                     }).join('');
                     
                     document.getElementById('documents-list').innerHTML = docsHTML;
+                    
+                    // Start polling if there are processing documents
+                    const hasProcessing = data.documents.some(doc => doc.status === 'processing');
+                    if (hasProcessing) {
+                        startDocumentsPolling();
+                    } else {
+                        stopDocumentsPolling();
+                    }
                 } else {
                     const noDocsMsg = currentLang === 'zh' ? '尚未上传任何文档' : 'No documents uploaded yet';
                     document.getElementById('documents-list').innerHTML = `<div class="text-gray-500 text-center py-4">${noDocsMsg}</div>`;
+                    stopDocumentsPolling();
                 }
             } catch (error) {
                 console.error('Failed to load documents:', error);
+            }
+        }
+        
+        function startDocumentsPolling() {
+            if (documentsPollingIntervalId) return; // Already polling
+            
+            documentsPollingIntervalId = setInterval(() => {
+                loadDocuments(); // Reload documents list
+            }, 3000); // Poll every 3 seconds
+        }
+        
+        function stopDocumentsPolling() {
+            if (documentsPollingIntervalId) {
+                clearInterval(documentsPollingIntervalId);
+                documentsPollingIntervalId = null;
             }
         }
 
@@ -700,6 +1082,7 @@
                     tagsPlaceholder: 'security, ops, monitoring',
                     description: '描述',
                     descriptionPlaceholder: '可选描述',
+                    ocrEngine: 'OCR 引擎',
                     button: '上传并处理',
                     status: '处理状态'
                 },
@@ -711,7 +1094,8 @@
                     typeFilter: '文件类型过滤',
                     optional: '可选',
                     results: '结果数',
-                    hybrid: '使用混合搜索（向量 + BM25）'
+                    hybrid: '使用混合搜索（向量 + BM25）',
+                    showImage: '显示图片'
                 },
                 stats: {
                     title: '知识库统计',
@@ -757,6 +1141,7 @@
                     tagsPlaceholder: 'security, ops, monitoring',
                     description: 'Description',
                     descriptionPlaceholder: 'Optional description',
+                    ocrEngine: 'OCR Engine',
                     button: 'Upload & Process',
                     status: 'Processing Status'
                 },
@@ -768,7 +1153,8 @@
                     typeFilter: 'File Type Filter',
                     optional: 'Optional',
                     results: 'Results',
-                    hybrid: 'Use Hybrid Search (Vector + BM25)'
+                    hybrid: 'Use Hybrid Search (Vector + BM25)',
+                    showImage: 'Show'
                 },
                 stats: {
                     title: 'Knowledge Base Statistics',
@@ -842,7 +1228,208 @@
         document.addEventListener('DOMContentLoaded', () => {
             switchLanguage(currentLang);
         });
+
+        // Toggle image visibility and draw matched bboxes on canvas
+        function toggleImage(resultId) {
+            const imageDiv = document.getElementById(`${resultId}-images`);
+            if (imageDiv) {
+                const wasHidden = imageDiv.classList.contains('hidden');
+                imageDiv.classList.toggle('hidden');
+                
+                // If we're showing the image for the first time, draw bboxes
+                if (wasHidden) {
+                    const canvas = document.getElementById(`${resultId}-canvas`);
+                    if (canvas && !canvas.dataset.drawn) {
+                        const resultIndex = parseInt(canvas.dataset.resultIndex);
+                        drawMatchedBboxes(resultId, resultIndex);
+                        canvas.dataset.drawn = 'true';
+                    }
+                }
+            }
+        }
+        
+        // Draw matched bboxes on canvas (方案D: 矩形框 + 箭头 + 序号)
+        async function drawMatchedBboxes(resultId, resultIndex) {
+            const canvas = document.getElementById(`${resultId}-canvas`);
+            if (!canvas) {
+                console.warn('Canvas not found:', resultId);
+                return;
+            }
+            
+            const imagePath = canvas.dataset.imagePath;
+            const ctx = canvas.getContext('2d');
+            
+            // Load the image
+            const img = new Image();
+            img.onload = function() {
+                // Set canvas size to match image
+                canvas.width = img.width;
+                canvas.height = img.height;
+                
+                // Draw the image
+                ctx.drawImage(img, 0, 0);
+                
+                // Get matched bboxes from global search results
+                if (window.searchResults && window.searchResults[resultIndex]) {
+                    const result = window.searchResults[resultIndex];
+                    const matchedBboxes = result.matched_bboxes || [];
+                    
+                    console.log(`Drawing ${matchedBboxes.length} matched bboxes for result ${resultIndex}`);
+                    
+                    if (matchedBboxes.length === 0) {
+                        console.log('No matched bboxes found');
+                        return;
+                    }
+                    
+                    // Draw each matched bbox
+                    matchedBboxes.forEach((match, idx) => {
+                        const [x1, y1, x2, y2] = match.bbox;
+                        const width = x2 - x1;
+                        const height = y2 - y1;
+                        
+                        // Generate color based on index (red, orange, yellow cycle)
+                        const colors = [
+                            { border: '#EF4444', fill: 'rgba(239, 68, 68, 0.15)', arrow: '#DC2626' },  // red
+                            { border: '#F97316', fill: 'rgba(249, 115, 22, 0.15)', arrow: '#EA580C' }, // orange
+                            { border: '#EAB308', fill: 'rgba(234, 179, 8, 0.15)', arrow: '#CA8A04' }   // yellow
+                        ];
+                        const color = colors[idx % colors.length];
+                        
+                        // 1. Draw semi-transparent rectangle fill
+                        ctx.fillStyle = color.fill;
+                        ctx.fillRect(x1, y1, width, height);
+                        
+                        // 2. Draw rectangle border (thick, rounded)
+                        ctx.strokeStyle = color.border;
+                        ctx.lineWidth = 4;
+                        ctx.setLineDash([]);
+                        ctx.strokeRect(x1, y1, width, height);
+                        
+                        // 3. Draw sequence number badge (top-left corner)
+                        const badgeSize = Math.min(40, width / 3, height / 3);
+                        const badgeX = x1;
+                        const badgeY = y1;
+                        
+                        // Badge background circle
+                        ctx.fillStyle = color.border;
+                        ctx.beginPath();
+                        ctx.arc(badgeX + badgeSize/2, badgeY - badgeSize/2, badgeSize/2, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // Badge number
+                        ctx.fillStyle = 'white';
+                        ctx.font = `bold ${badgeSize * 0.6}px Arial`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(idx + 1, badgeX + badgeSize/2, badgeY - badgeSize/2);
+                        
+                        // 4. Draw arrow pointing to center of bbox
+                        const centerX = x1 + width / 2;
+                        const centerY = y1 + height / 2;
+                        const arrowStartX = x1 - 60;
+                        const arrowStartY = y1 - 40;
+                        
+                        // Arrow line
+                        ctx.strokeStyle = color.arrow;
+                        ctx.lineWidth = 3;
+                        ctx.setLineDash([8, 4]);
+                        ctx.beginPath();
+                        ctx.moveTo(arrowStartX, arrowStartY);
+                        ctx.lineTo(x1 + 10, y1 + 10);
+                        ctx.stroke();
+                        
+                        // Arrow head
+                        ctx.setLineDash([]);
+                        ctx.fillStyle = color.arrow;
+                        ctx.beginPath();
+                        const headSize = 12;
+                        const angle = Math.atan2(y1 + 10 - arrowStartY, x1 + 10 - arrowStartX);
+                        ctx.moveTo(x1 + 10, y1 + 10);
+                        ctx.lineTo(
+                            x1 + 10 - headSize * Math.cos(angle - Math.PI / 6),
+                            y1 + 10 - headSize * Math.sin(angle - Math.PI / 6)
+                        );
+                        ctx.lineTo(
+                            x1 + 10 - headSize * Math.cos(angle + Math.PI / 6),
+                            y1 + 10 - headSize * Math.sin(angle + Math.PI / 6)
+                        );
+                        ctx.closePath();
+                        ctx.fill();
+                        
+                        // 5. Draw matched text label near arrow start
+                        const labelText = `${idx + 1}. ${match.text.substring(0, 20)}${match.text.length > 20 ? '...' : ''}`;
+                        ctx.fillStyle = 'white';
+                        ctx.strokeStyle = color.arrow;
+                        ctx.lineWidth = 3;
+                        ctx.font = 'bold 14px Arial';
+                        ctx.textAlign = 'left';
+                        ctx.textBaseline = 'bottom';
+                        ctx.strokeText(labelText, arrowStartX, arrowStartY - 5);
+                        ctx.fillText(labelText, arrowStartX, arrowStartY - 5);
+                    });
+                    
+                    console.log(`✅ Drew ${matchedBboxes.length} bboxes on canvas`);
+                } else {
+                    console.log('No search results found in global scope');
+                }
+            };
+            
+            img.onerror = function() {
+                console.error('Failed to load image for bbox drawing:', imagePath);
+                // Draw error message on canvas
+                canvas.width = 400;
+                canvas.height = 300;
+                ctx.fillStyle = '#fee';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#c00';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(currentLang === 'zh' ? '图片加载失败' : 'Failed to load image', canvas.width/2, canvas.height/2);
+            };
+            
+            img.src = imagePath;
+        }
+        
+        // Toggle full content display
+        function toggleContent(contentId) {
+            const preview = document.getElementById(`${contentId}-preview`);
+            const full = document.getElementById(`${contentId}-full`);
+            const toggleText = document.getElementById(`${contentId}-toggle-text`);
+            
+            if (full && preview && toggleText) {
+                const isHidden = full.classList.contains('hidden');
+                const showLessLabel = currentLang === 'zh' ? '收起内容' : 'Show Less';
+                const showFullContentLabel = currentLang === 'zh' ? '显示完整内容' : 'Show Full Content';
+                
+                if (isHidden) {
+                    full.classList.remove('hidden');
+                    preview.classList.add('hidden');
+                    toggleText.innerHTML = `<i class="fas fa-chevron-up"></i> ${showLessLabel}`;
+                } else {
+                    full.classList.add('hidden');
+                    preview.classList.remove('hidden');
+                    toggleText.innerHTML = `<i class="fas fa-chevron-down"></i> ${showFullContentLabel}`;
+                }
+            }
+        }
+
+        // Open full view modal
+        function openFullView(imagePath) {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
+            modal.onclick = () => modal.remove();
+            modal.innerHTML = `
+                <div class="relative max-w-6xl max-h-screen p-4">
+                    <button onclick="this.closest('.fixed').remove()" class="absolute top-2 right-2 text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded">
+                        <i class="fas fa-times"></i> Close
+                    </button>
+                    <img src="${imagePath}" class="max-w-full max-h-screen object-contain" onclick="event.stopPropagation()">
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
     </script>
 </body>
 </html>
+
 

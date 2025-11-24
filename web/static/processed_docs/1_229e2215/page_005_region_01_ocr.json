@@ -1,0 +1,327 @@
+{
+  "file": "page_005_region_01_600dpi.png",
+  "image_size": {
+    "width": 1364,
+    "height": 1929
+  },
+  "status": "success",
+  "text_blocks_count": 26,
+  "layout_regions_count": 0,
+  "text_blocks": [
+    {
+      "text": "汉兴能源",
+      "bbox": [
+        660.0,
+        475.0,
+        1313.0,
+        640.0
+      ],
+      "confidence": 0.9975396394729614,
+      "center_x": 986.5,
+      "center_y": 557.5
+    },
+    {
+      "text": "Hanxing Energy",
+      "bbox": [
+        665.0,
+        614.0,
+        1297.0,
+        712.0
+      ],
+      "confidence": 0.988998532295227,
+      "center_x": 981.0,
+      "center_y": 663.0
+    },
+    {
+      "text": "P.O. No.:",
+      "bbox": [
+        343.0,
+        734.0,
+        661.0,
+        823.0
+      ],
+      "confidence": 0.9866442084312439,
+      "center_x": 502.0,
+      "center_y": 778.5
+    },
+    {
+      "text": "1",
+      "bbox": [
+        403.0,
+        836.0,
+        451.0,
+        903.0
+      ],
+      "confidence": 0.9999933242797852,
+      "center_x": 427.0,
+      "center_y": 869.5
+    },
+    {
+      "text": "Client:",
+      "bbox": [
+        468.0,
+        836.0,
+        689.0,
+        918.0
+      ],
+      "confidence": 0.996995747089386,
+      "center_x": 578.5,
+      "center_y": 877.0
+    },
+    {
+      "text": "WasteFuel",
+      "bbox": [
+        887.0,
+        844.0,
+        1267.0,
+        929.0
+      ],
+      "confidence": 0.9993888139724731,
+      "center_x": 1077.0,
+      "center_y": 886.5
+    },
+    {
+      "text": "2",
+      "bbox": [
+        385.0,
+        923.0,
+        454.0,
+        1006.0
+      ],
+      "confidence": 0.9998623132705688,
+      "center_x": 419.5,
+      "center_y": 964.5
+    },
+    {
+      "text": "Process uni1 31 Unit",
+      "bbox": [
+        456.0,
+        927.0,
+        1137.0,
+        1032.0
+      ],
+      "confidence": 0.9682003855705261,
+      "center_x": 796.5,
+      "center_y": 979.5
+    },
+    {
+      "text": "3",
+      "bbox": [
+        377.0,
+        1014.0,
+        441.0,
+        1090.0
+      ],
+      "confidence": 0.9996042847633362,
+      "center_x": 409.0,
+      "center_y": 1052.0
+    },
+    {
+      "text": "Job No.:",
+      "bbox": [
+        450.0,
+        1020.0,
+        736.0,
+        1101.0
+      ],
+      "confidence": 0.9976175427436829,
+      "center_x": 593.0,
+      "center_y": 1060.5
+    },
+    {
+      "text": "4",
+      "bbox": [
+        365.0,
+        1111.0,
+        437.0,
+        1193.0
+      ],
+      "confidence": 0.9989680051803589,
+      "center_x": 401.0,
+      "center_y": 1152.0
+    },
+    {
+      "text": "NOTES:",
+      "bbox": [
+        445.0,
+        1121.0,
+        725.0,
+        1197.0
+      ],
+      "confidence": 0.9944749474525452,
+      "center_x": 585.0,
+      "center_y": 1159.0
+    },
+    {
+      "text": "5",
+      "bbox": [
+        366.0,
+        1211.0,
+        426.0,
+        1283.0
+      ],
+      "confidence": 0.9996694326400757,
+      "center_x": 396.0,
+      "center_y": 1247.0
+    },
+    {
+      "text": "1.The sheet shows th",
+      "bbox": [
+        595.0,
+        1213.0,
+        1364.0,
+        1322.0
+      ],
+      "confidence": 0.9823921322822571,
+      "center_x": 979.5,
+      "center_y": 1267.5
+    },
+    {
+      "text": "9",
+      "bbox": [
+        360.0,
+        1308.0,
+        420.0,
+        1381.0
+      ],
+      "confidence": 0.9993171691894531,
+      "center_x": 390.0,
+      "center_y": 1344.5
+    },
+    {
+      "text": "rating case.",
+      "bbox": [
+        670.0,
+        1318.0,
+        1096.0,
+        1415.0
+      ],
+      "confidence": 0.9942238926887512,
+      "center_x": 883.0,
+      "center_y": 1366.5
+    },
+    {
+      "text": "7",
+      "bbox": [
+        347.0,
+        1405.0,
+        415.0,
+        1487.0
+      ],
+      "confidence": 0.9998749494552612,
+      "center_x": 381.0,
+      "center_y": 1446.0
+    },
+    {
+      "text": "2.The design margin",
+      "bbox": [
+        585.0,
+        1407.0,
+        1356.0,
+        1521.0
+      ],
+      "confidence": 0.9954424500465393,
+      "center_x": 970.5,
+      "center_y": 1464.0
+    },
+    {
+      "text": "8",
+      "bbox": [
+        335.0,
+        1507.0,
+        407.0,
+        1589.0
+      ],
+      "confidence": 0.9989822506904602,
+      "center_x": 371.0,
+      "center_y": 1548.0
+    },
+    {
+      "text": "3.Max flowrate of tube",
+      "bbox": [
+        582.0,
+        1506.0,
+        1364.0,
+        1612.0
+      ],
+      "confidence": 0.9898548722267151,
+      "center_x": 973.0,
+      "center_y": 1559.0
+    },
+    {
+      "text": "6",
+      "bbox": [
+        323.0,
+        1608.0,
+        393.0,
+        1691.0
+      ],
+      "confidence": 0.9999243021011353,
+      "center_x": 358.0,
+      "center_y": 1649.5
+    },
+    {
+      "text": "4.Design case hydrog",
+      "bbox": [
+        577.0,
+        1601.0,
+        1364.0,
+        1727.0
+      ],
+      "confidence": 0.9950078129768372,
+      "center_x": 970.5,
+      "center_y": 1664.0
+    },
+    {
+      "text": "10",
+      "bbox": [
+        265.0,
+        1714.0,
+        381.0,
+        1788.0
+      ],
+      "confidence": 0.9999479651451111,
+      "center_x": 323.0,
+      "center_y": 1751.0
+    },
+    {
+      "text": "5.Orientation: Horizon",
+      "bbox": [
+        578.0,
+        1703.0,
+        1364.0,
+        1813.0
+      ],
+      "confidence": 0.9697250127792358,
+      "center_x": 971.0,
+      "center_y": 1758.0
+    },
+    {
+      "text": "11",
+      "bbox": [
+        258.0,
+        1805.0,
+        369.0,
+        1878.0
+      ],
+      "confidence": 0.9998729228973389,
+      "center_x": 313.5,
+      "center_y": 1841.5
+    },
+    {
+      "text": "6. Cooling curve for s",
+      "bbox": [
+        577.0,
+        1798.0,
+        1364.0,
+        1905.0
+      ],
+      "confidence": 0.9689045548439026,
+      "center_x": 970.5,
+      "center_y": 1851.5
+    }
+  ],
+  "layout_regions": null,
+  "full_text": "汉兴能源\nHanxing Energy\nP.O. No.:\n1\nClient:\nWasteFuel\n2\nProcess uni1 31 Unit\n3\nJob No.:\n4\nNOTES:\n5\n1.The sheet shows th\n9\nrating case.\n7\n2.The design margin\n8\n3.Max flowrate of tube\n6\n4.Design case hydrog\n10\n5.Orientation: Horizon\n11\n6. Cooling curve for s",
+  "average_confidence": 0.9931318255571219
+}

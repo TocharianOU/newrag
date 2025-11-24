@@ -1,0 +1,423 @@
+{
+  "file": "page_002_300dpi.png",
+  "image_size": {
+    "width": 2481,
+    "height": 3508
+  },
+  "status": "success",
+  "text_blocks_count": 34,
+  "layout_regions_count": 0,
+  "text_blocks": [
+    {
+      "text": "1．构建和维护企业级大数据平台（Kafka +Nifi +ES)",
+      "bbox": [
+        86.0,
+        96.0,
+        1174.0,
+        185.0
+      ],
+      "confidence": 0.9430677890777588,
+      "center_x": 630.0,
+      "center_y": 140.5
+    },
+    {
+      "text": "2.开发数据采集、清洗、转换的ETL流程",
+      "bbox": [
+        88.0,
+        192.0,
+        937.0,
+        272.0
+      ],
+      "confidence": 0.9777036905288696,
+      "center_x": 512.5,
+      "center_y": 232.0
+    },
+    {
+      "text": "3.设计流式数据处理架构，保证数据实时性和准确性",
+      "bbox": [
+        90.0,
+        296.0,
+        1180.0,
+        374.0
+      ],
+      "confidence": 0.979476273059845,
+      "center_x": 635.0,
+      "center_y": 335.0
+    },
+    {
+      "text": "4.集成多数据源（SQLDB、MQTT、API、文件等)",
+      "bbox": [
+        95.0,
+        388.0,
+        1141.0,
+        464.0
+      ],
+      "confidence": 0.9545760750770569,
+      "center_x": 618.0,
+      "center_y": 426.0
+    },
+    {
+      "text": "5.编写平台监控、告警和运维工具",
+      "bbox": [
+        96.0,
+        484.0,
+        822.0,
+        550.0
+      ],
+      "confidence": 0.9842144250869751,
+      "center_x": 459.0,
+      "center_y": 517.0
+    },
+    {
+      "text": "任职要求",
+      "bbox": [
+        47.0,
+        594.0,
+        256.0,
+        653.0
+      ],
+      "confidence": 0.9995524883270264,
+      "center_x": 151.5,
+      "center_y": 623.5
+    },
+    {
+      "text": "2年以上大数据平台开发经验",
+      "bbox": [
+        158.0,
+        704.0,
+        758.0,
+        766.0
+      ],
+      "confidence": 0.9995003938674927,
+      "center_x": 458.0,
+      "center_y": 735.0
+    },
+    {
+      "text": "熟悉Apache Kafka：Topic设计、Producer/Consumer开发、性能调优",
+      "bbox": [
+        156.0,
+        793.0,
+        1620.0,
+        869.0
+      ],
+      "confidence": 0.9830604791641235,
+      "center_x": 888.0,
+      "center_y": 831.0
+    },
+    {
+      "text": "熟悉Apache Nifi或类似工具 (Apache Airflow、StreamSets)",
+      "bbox": [
+        154.0,
+        888.0,
+        1416.0,
+        962.0
+      ],
+      "confidence": 0.976837158203125,
+      "center_x": 785.0,
+      "center_y": 925.0
+    },
+    {
+      "text": "具备数据建模能力，理解维度建模和数据仓库理论",
+      "bbox": [
+        152.0,
+        988.0,
+        1183.0,
+        1056.0
+      ],
+      "confidence": 0.9989530444145203,
+      "center_x": 667.5,
+      "center_y": 1022.0
+    },
+    {
+      "text": "熟练使用Python/Java，有Shell脚本编写能力",
+      "bbox": [
+        143.0,
+        1079.0,
+        1085.0,
+        1155.0
+      ],
+      "confidence": 0.9492554068565369,
+      "center_x": 614.0,
+      "center_y": 1117.0
+    },
+    {
+      "text": "加分项",
+      "bbox": [
+        11.0,
+        1181.0,
+        192.0,
+        1251.0
+      ],
+      "confidence": 0.9995639324188232,
+      "center_x": 101.5,
+      "center_y": 1216.0
+    },
+    {
+      "text": "有实时数据处理经验 （Flink/Spark Streaming）",
+      "bbox": [
+        220.0,
+        1301.0,
+        1193.0,
+        1373.0
+      ],
+      "confidence": 0.9459611177444458,
+      "center_x": 706.5,
+      "center_y": 1337.0
+    },
+    {
+      "text": "熟悉工业物联网数据采集（MQTT、OPC-UA)",
+      "bbox": [
+        217.0,
+        1396.0,
+        1160.0,
+        1465.0
+      ],
+      "confidence": 0.9845123291015625,
+      "center_x": 688.5,
+      "center_y": 1430.5
+    },
+    {
+      "text": "了解数据治理和数据质量管理",
+      "bbox": [
+        223.0,
+        1496.0,
+        840.0,
+        1551.0
+      ],
+      "confidence": 0.9991970062255859,
+      "center_x": 531.5,
+      "center_y": 1523.5
+    },
+    {
+      "text": "有Kubernetes环境部署大数据组件经验",
+      "bbox": [
+        218.0,
+        1592.0,
+        1045.0,
+        1645.0
+      ],
+      "confidence": 0.9977768063545227,
+      "center_x": 631.5,
+      "center_y": 1618.5
+    },
+    {
+      "text": "薪资范围：",
+      "bbox": [
+        2.0,
+        1700.0,
+        246.0,
+        1758.0
+      ],
+      "confidence": 0.9936702847480774,
+      "center_x": 124.0,
+      "center_y": 1729.0
+    },
+    {
+      "text": "岗位2：AI应用工程师",
+      "bbox": [
+        128.0,
+        1894.0,
+        824.0,
+        1970.0
+      ],
+      "confidence": 0.9862090945243835,
+      "center_x": 476.0,
+      "center_y": 1932.0
+    },
+    {
+      "text": "(LLM方向）",
+      "bbox": [
+        860.0,
+        1896.0,
+        1207.0,
+        1975.0
+      ],
+      "confidence": 0.9030442833900452,
+      "center_x": 1033.5,
+      "center_y": 1935.5
+    },
+    {
+      "text": "岗位职责",
+      "bbox": [
+        0.0,
+        2030.0,
+        216.0,
+        2081.0
+      ],
+      "confidence": 0.9997391700744629,
+      "center_x": 108.0,
+      "center_y": 2055.5
+    },
+    {
+      "text": "1．开发基于大语言模型的智能分析Agent",
+      "bbox": [
+        44.0,
+        2134.0,
+        933.0,
+        2190.0
+      ],
+      "confidence": 0.9964379668235779,
+      "center_x": 488.5,
+      "center_y": 2162.0
+    },
+    {
+      "text": "2．设计Prompt工程和RAG",
+      "bbox": [
+        32.0,
+        2230.0,
+        642.0,
+        2287.0
+      ],
+      "confidence": 0.9695227146148682,
+      "center_x": 337.0,
+      "center_y": 2258.5
+    },
+    {
+      "text": "(检索增强生成）系统",
+      "bbox": [
+        665.0,
+        2232.0,
+        1114.0,
+        2286.0
+      ],
+      "confidence": 0.9451311230659485,
+      "center_x": 889.5,
+      "center_y": 2259.0
+    },
+    {
+      "text": "3．部署和优化本地大模型 （LM Studio、Ollama、vLLM)",
+      "bbox": [
+        26.0,
+        2332.0,
+        1271.0,
+        2392.0
+      ],
+      "confidence": 0.94782954454422,
+      "center_x": 648.5,
+      "center_y": 2362.0
+    },
+    {
+      "text": "4.开发MCPServer，实现AI工具调用能力",
+      "bbox": [
+        27.0,
+        2431.0,
+        957.0,
+        2489.0
+      ],
+      "confidence": 0.9522643089294434,
+      "center_x": 492.0,
+      "center_y": 2460.0
+    },
+    {
+      "text": "5．将AI能力集成到数据分析和安全运营流程中",
+      "bbox": [
+        28.0,
+        2523.0,
+        1039.0,
+        2585.0
+      ],
+      "confidence": 0.9949586987495422,
+      "center_x": 533.5,
+      "center_y": 2554.0
+    },
+    {
+      "text": "任职要求",
+      "bbox": [
+        0.0,
+        2638.0,
+        205.0,
+        2691.0
+      ],
+      "confidence": 0.9892635345458984,
+      "center_x": 102.5,
+      "center_y": 2664.5
+    },
+    {
+      "text": "1年以上LLM应用开发经验（商业项目或个人项目均可）",
+      "bbox": [
+        100.0,
+        2739.0,
+        1277.0,
+        2814.0
+      ],
+      "confidence": 0.9797109961509705,
+      "center_x": 688.5,
+      "center_y": 2776.5
+    },
+    {
+      "text": "熟悉LangChain、Llamalndex等Agent开发框架",
+      "bbox": [
+        101.0,
+        2838.0,
+        1140.0,
+        2913.0
+      ],
+      "confidence": 0.9940328598022461,
+      "center_x": 620.5,
+      "center_y": 2875.5
+    },
+    {
+      "text": "理解Prompt Engineering、Function Calling、RAG原理",
+      "bbox": [
+        99.0,
+        2933.0,
+        1315.0,
+        3015.0
+      ],
+      "confidence": 0.9848949313163757,
+      "center_x": 707.0,
+      "center_y": 2974.0
+    },
+    {
+      "text": "Python编程能力强，熟悉FastAPl/Flask",
+      "bbox": [
+        109.0,
+        3041.0,
+        966.0,
+        3106.0
+      ],
+      "confidence": 0.9818938970565796,
+      "center_x": 537.5,
+      "center_y": 3073.5
+    },
+    {
+      "text": "对新技术有热情，能快速学习和实践",
+      "bbox": [
+        111.0,
+        3137.0,
+        897.0,
+        3200.0
+      ],
+      "confidence": 0.9985150694847107,
+      "center_x": 504.0,
+      "center_y": 3168.5
+    },
+    {
+      "text": "加分项",
+      "bbox": [
+        0.0,
+        3243.0,
+        159.0,
+        3304.0
+      ],
+      "confidence": 0.9996328949928284,
+      "center_x": 79.5,
+      "center_y": 3273.5
+    },
+    {
+      "text": "有安全、运维或数据分析行业背景",
+      "bbox": [
+        200.0,
+        3365.0,
+        924.0,
+        3415.0
+      ],
+      "confidence": 0.9992043375968933,
+      "center_x": 562.0,
+      "center_y": 3390.0
+    }
+  ],
+  "layout_regions": null,
+  "full_text": "1．构建和维护企业级大数据平台（Kafka +Nifi +ES)\n2.开发数据采集、清洗、转换的ETL流程\n3.设计流式数据处理架构，保证数据实时性和准确性\n4.集成多数据源（SQLDB、MQTT、API、文件等)\n5.编写平台监控、告警和运维工具\n任职要求\n2年以上大数据平台开发经验\n熟悉Apache Kafka：Topic设计、Producer/Consumer开发、性能调优\n熟悉Apache Nifi或类似工具 (Apache Airflow、StreamSets)\n具备数据建模能力，理解维度建模和数据仓库理论\n熟练使用Python/Java，有Shell脚本编写能力\n加分项\n有实时数据处理经验 （Flink/Spark Streaming）\n熟悉工业物联网数据采集（MQTT、OPC-UA)\n了解数据治理和数据质量管理\n有Kubernetes环境部署大数据组件经验\n薪资范围：\n岗位2：AI应用工程师\n(LLM方向）\n岗位职责\n1．开发基于大语言模型的智能分析Agent\n2．设计Prompt工程和RAG\n(检索增强生成）系统\n3．部署和优化本地大模型 （LM Studio、Ollama、vLLM)\n4.开发MCPServer，实现AI工具调用能力\n5．将AI能力集成到数据分析和安全运营流程中\n任职要求\n1年以上LLM应用开发经验（商业项目或个人项目均可）\n熟悉LangChain、Llamalndex等Agent开发框架\n理解Prompt Engineering、Function Calling、RAG原理\nPython编程能力强，熟悉FastAPl/Flask\n对新技术有热情，能快速学习和实践\n加分项\n有安全、运维或数据分析行业背景",
+  "average_confidence": 0.9790930625270394
+}

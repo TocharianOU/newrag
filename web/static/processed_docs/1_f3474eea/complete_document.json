@@ -1,0 +1,2020 @@
+[
+  {
+    "page_number": 1,
+    "image_path": "/Users/ablatazmat/Downloads/SmartResume/招聘信息__Join_Our_Team_adaptive/page_001_300dpi.png",
+    "image_filename": "page_001_300dpi.png",
+    "page_analysis": {
+      "page_type": "text_content",
+      "page_description": "This page is a recruitment advertisement from a technology company specializing in big data and AI. The layout is clean, using headings and bullet points to organize information. A prominent title '招聘信息 | Join Our Team' is at the top, followed by a company introduction. The core technologies are listed under '核心技术栈', categorized into layers: 数据基础设施层, 容器编排层, and AI与自动化层. The bottom section announces '招聘岗位' (Recruitment Positions) with a single listed position: 大数据平台工程师. The overall design is professional and aims to attract technical talent.",
+      "visual_elements": [
+        "bullet points",
+        "headings",
+        "text blocks"
+      ],
+      "layout_structure": "The page is structured with a clear hierarchy. Title at the top, followed by company introduction, technology stack (categorized), and finally recruitment positions. Uses bullet points for lists."
+    },
+    "content": {
+      "full_text_raw": "招聘信息\nI Join\nOur\nTeam\n公司简介\n我们是一家专注于企业级大数据与AI智能分析的科技公司，为客户提供从数据基础设施到智能应用的全栈解\n决方案。我们的核心业务包括：\n大数据平台架构：基于Kubernetes、Elasticsearch、Kafka的企业级数据中台\nAI安全分析平台：融合大模型的智能安全运营与日志分析系统\n流程自动化：基于工作流引擎的企业数据处理自动化\n欢迎志同道合的技术专家加入！\n核心技术栈\n数据基础设施层\nElasticsearch 集群 (存储、搜索、分析)\nApache Kafka (流式数据处理)\nApache Nifi(数据流编排)\n容器编排层\nKubernetes (MicroK8s/原生K8s)\nDocker、Helm Charts\nArgoCD (GitOps)\nAI与自动化层\n本地大语言模型（Qwen/LLaMA)\nn8n/NewFlow工作流引擎\nMCP (Model Context Protocol)\n监控与运维\nPrometheus + Grafana\nELK Stack\n自研Dashboard平台\n招聘岗位\n大数据平台工程师\n岗位1：\n岗位职责",
+      "full_text_cleaned": "招聘信息\nJoin Our Team\n公司简介\n我们是一家专注于企业级大数据与AI智能分析的科技公司，为客户提供从数据基础设施到智能应用的全栈解决方案。我们的核心业务包括：\n大数据平台架构：基于Kubernetes、Elasticsearch、Kafka的企业级数据中台\nAI安全分析平台：融合大模型的智能安全运营与日志分析系统\n流程自动化：基于工作流引擎的企业数据处理自动化\n欢迎志同道合的技术专家加入！\n核心技术栈\n数据基础设施层\nElasticsearch 集群 (存储、搜索、分析)\nApache Kafka (流式数据处理)\nApache Nifi(数据流编排)\n容器编排层\nKubernetes (MicroK8s/原生K8s)\nDocker、Helm Charts\nArgoCD (GitOps)\nAI与自动化层\n本地大语言模型（Qwen/LLaMA)\nn8n/NewFlow工作流引擎\nMCP (Model Context Protocol)\n监控与运维\nPrometheus + Grafana\nELK Stack\n自研Dashboard平台\n招聘岗位\n大数据平台工程师\n岗位1：\n岗位职责",
+      "key_fields": [
+        {
+          "field": "Company Focus",
+          "value": "Enterprise-level Big Data and AI Intelligent Analysis"
+        },
+        {
+          "field": "Core Technologies",
+          "value": "Kubernetes, Elasticsearch, Kafka, Docker, ArgoCD, Qwen/LLaMA"
+        },
+        {
+          "field": "Recruitment Position",
+          "value": "Big Data Platform Engineer"
+        }
+      ],
+      "tables": [
+        {
+          "description": "Technology Stack",
+          "rows": 9,
+          "cols": 1
+        }
+      ]
+    },
+    "ocr_data": {
+      "text_blocks": [
+        {
+          "text": "招聘信息",
+          "bbox": [
+            46.0,
+            13.0,
+            497.0,
+            158.0
+          ],
+          "confidence": 0.9991509318351746,
+          "center_x": 271.5,
+          "center_y": 85.5
+        },
+        {
+          "text": "I Join",
+          "bbox": [
+            522.0,
+            36.0,
+            817.0,
+            168.0
+          ],
+          "confidence": 0.9054455757141113,
+          "center_x": 669.5,
+          "center_y": 102.0
+        },
+        {
+          "text": "Our",
+          "bbox": [
+            824.0,
+            43.0,
+            1049.0,
+            161.0
+          ],
+          "confidence": 0.9950839877128601,
+          "center_x": 936.5,
+          "center_y": 102.0
+        },
+        {
+          "text": "Team",
+          "bbox": [
+            1050.0,
+            55.0,
+            1358.0,
+            174.0
+          ],
+          "confidence": 0.9993908405303955,
+          "center_x": 1204.0,
+          "center_y": 114.5
+        },
+        {
+          "text": "公司简介",
+          "bbox": [
+            124.0,
+            209.0,
+            327.0,
+            275.0
+          ],
+          "confidence": 0.9988325834274292,
+          "center_x": 225.5,
+          "center_y": 242.0
+        },
+        {
+          "text": "我们是一家专注于企业级大数据与AI智能分析的科技公司，为客户提供从数据基础设施到智能应用的全栈解",
+          "bbox": [
+            126.0,
+            286.0,
+            2308.0,
+            410.0
+          ],
+          "confidence": 0.9978275299072266,
+          "center_x": 1217.0,
+          "center_y": 348.0
+        },
+        {
+          "text": "决方案。我们的核心业务包括：",
+          "bbox": [
+            127.0,
+            363.0,
+            771.0,
+            439.0
+          ],
+          "confidence": 0.9929893612861633,
+          "center_x": 449.0,
+          "center_y": 401.0
+        },
+        {
+          "text": "大数据平台架构：基于Kubernetes、Elasticsearch、Kafka的企业级数据中台",
+          "bbox": [
+            311.0,
+            481.0,
+            1891.0,
+            581.0
+          ],
+          "confidence": 0.9861443638801575,
+          "center_x": 1101.0,
+          "center_y": 531.0
+        },
+        {
+          "text": "AI安全分析平台：融合大模型的智能安全运营与日志分析系统",
+          "bbox": [
+            313.0,
+            589.0,
+            1574.0,
+            670.0
+          ],
+          "confidence": 0.9975405931472778,
+          "center_x": 943.5,
+          "center_y": 629.5
+        },
+        {
+          "text": "流程自动化：基于工作流引擎的企业数据处理自动化",
+          "bbox": [
+            314.0,
+            688.0,
+            1389.0,
+            763.0
+          ],
+          "confidence": 0.999458909034729,
+          "center_x": 851.5,
+          "center_y": 725.5
+        },
+        {
+          "text": "欢迎志同道合的技术专家加入！",
+          "bbox": [
+            126.0,
+            792.0,
+            758.0,
+            866.0
+          ],
+          "confidence": 0.9910551309585571,
+          "center_x": 442.0,
+          "center_y": 829.0
+        },
+        {
+          "text": "核心技术栈",
+          "bbox": [
+            156.0,
+            979.0,
+            586.0,
+            1094.0
+          ],
+          "confidence": 0.9987503290176392,
+          "center_x": 371.0,
+          "center_y": 1036.5
+        },
+        {
+          "text": "数据基础设施层",
+          "bbox": [
+            43.0,
+            1134.0,
+            390.0,
+            1200.0
+          ],
+          "confidence": 0.9994626045227051,
+          "center_x": 216.5,
+          "center_y": 1167.0
+        },
+        {
+          "text": "Elasticsearch 集群 (存储、搜索、分析)",
+          "bbox": [
+            155.0,
+            1252.0,
+            990.0,
+            1334.0
+          ],
+          "confidence": 0.9623410701751709,
+          "center_x": 572.5,
+          "center_y": 1293.0
+        },
+        {
+          "text": "Apache Kafka (流式数据处理)",
+          "bbox": [
+            154.0,
+            1362.0,
+            802.0,
+            1428.0
+          ],
+          "confidence": 0.9454734325408936,
+          "center_x": 478.0,
+          "center_y": 1395.0
+        },
+        {
+          "text": "Apache Nifi(数据流编排)",
+          "bbox": [
+            151.0,
+            1466.0,
+            709.0,
+            1529.0
+          ],
+          "confidence": 0.9316383004188538,
+          "center_x": 430.0,
+          "center_y": 1497.5
+        },
+        {
+          "text": "容器编排层",
+          "bbox": [
+            34.0,
+            1581.0,
+            293.0,
+            1646.0
+          ],
+          "confidence": 0.9993129968643188,
+          "center_x": 163.5,
+          "center_y": 1613.5
+        },
+        {
+          "text": "Kubernetes (MicroK8s/原生K8s)",
+          "bbox": [
+            147.0,
+            1703.0,
+            863.0,
+            1768.0
+          ],
+          "confidence": 0.9583545923233032,
+          "center_x": 505.0,
+          "center_y": 1735.5
+        },
+        {
+          "text": "Docker、Helm Charts",
+          "bbox": [
+            146.0,
+            1801.0,
+            633.0,
+            1871.0
+          ],
+          "confidence": 0.9710099697113037,
+          "center_x": 389.5,
+          "center_y": 1836.0
+        },
+        {
+          "text": "ArgoCD (GitOps)",
+          "bbox": [
+            142.0,
+            1901.0,
+            540.0,
+            1972.0
+          ],
+          "confidence": 0.9391411542892456,
+          "center_x": 341.0,
+          "center_y": 1936.5
+        },
+        {
+          "text": "AI与自动化层",
+          "bbox": [
+            26.0,
+            2014.0,
+            331.0,
+            2081.0
+          ],
+          "confidence": 0.9899061918258667,
+          "center_x": 178.5,
+          "center_y": 2047.5
+        },
+        {
+          "text": "本地大语言模型（Qwen/LLaMA)",
+          "bbox": [
+            145.0,
+            2127.0,
+            839.0,
+            2202.0
+          ],
+          "confidence": 0.9744040966033936,
+          "center_x": 492.0,
+          "center_y": 2164.5
+        },
+        {
+          "text": "n8n/NewFlow工作流引擎",
+          "bbox": [
+            144.0,
+            2233.0,
+            700.0,
+            2298.0
+          ],
+          "confidence": 0.9988084435462952,
+          "center_x": 422.0,
+          "center_y": 2265.5
+        },
+        {
+          "text": "MCP (Model Context Protocol)",
+          "bbox": [
+            143.0,
+            2338.0,
+            831.0,
+            2404.0
+          ],
+          "confidence": 0.9814156889915466,
+          "center_x": 487.0,
+          "center_y": 2371.0
+        },
+        {
+          "text": "监控与运维",
+          "bbox": [
+            29.0,
+            2448.0,
+            283.0,
+            2515.0
+          ],
+          "confidence": 0.9989669919013977,
+          "center_x": 156.0,
+          "center_y": 2481.5
+        },
+        {
+          "text": "Prometheus + Grafana",
+          "bbox": [
+            142.0,
+            2569.0,
+            647.0,
+            2629.0
+          ],
+          "confidence": 0.9896539449691772,
+          "center_x": 394.5,
+          "center_y": 2599.0
+        },
+        {
+          "text": "ELK Stack",
+          "bbox": [
+            140.0,
+            2670.0,
+            357.0,
+            2728.0
+          ],
+          "confidence": 0.9649322032928467,
+          "center_x": 248.5,
+          "center_y": 2699.0
+        },
+        {
+          "text": "自研Dashboard平台",
+          "bbox": [
+            141.0,
+            2775.0,
+            580.0,
+            2836.0
+          ],
+          "confidence": 0.9982309937477112,
+          "center_x": 360.5,
+          "center_y": 2805.5
+        },
+        {
+          "text": "招聘岗位",
+          "bbox": [
+            129.0,
+            2969.0,
+            487.0,
+            3073.0
+          ],
+          "confidence": 0.9994319677352905,
+          "center_x": 308.0,
+          "center_y": 3021.0
+        },
+        {
+          "text": "大数据平台工程师",
+          "bbox": [
+            366.0,
+            3200.0,
+            964.0,
+            3283.0
+          ],
+          "confidence": 0.9990733861923218,
+          "center_x": 665.0,
+          "center_y": 3241.5
+        },
+        {
+          "text": "岗位1：",
+          "bbox": [
+            132.0,
+            3210.0,
+            382.0,
+            3285.0
+          ],
+          "confidence": 0.9893472790718079,
+          "center_x": 257.0,
+          "center_y": 3247.5
+        },
+        {
+          "text": "岗位职责",
+          "bbox": [
+            12.0,
+            3347.0,
+            226.0,
+            3408.0
+          ],
+          "confidence": 0.9994409084320068,
+          "center_x": 119.0,
+          "center_y": 3377.5
+        }
+      ],
+      "text_blocks_count": 32,
+      "average_confidence": 0.9828755110502243,
+      "image_size": {
+        "width": 2481,
+        "height": 3508
+      },
+      "layout_regions": null
+    },
+    "metadata": {
+      "document_id": null,
+      "document_type": "Recruitment Advertisement",
+      "revision": null,
+      "title": "招聘信息 | Join Our Team"
+    },
+    "domain_data": {
+      "project": null,
+      "equipment": null,
+      "revisions": null
+    },
+    "keywords": [
+      "Big Data",
+      "AI",
+      "Kubernetes",
+      "Elasticsearch",
+      "Kafka",
+      "Docker",
+      "ArgoCD",
+      "LLaMA",
+      "Recruitment"
+    ],
+    "vlm_metadata": {
+      "confidence": 0.98,
+      "extraction_notes": [
+        "The document is in Chinese. The OCR quality is very good."
+      ]
+    },
+    "source_file": "/Users/ablatazmat/Downloads/SmartResume/uploads/招聘信息  Join Our Team.pdf",
+    "source_file_name": "招聘信息  Join Our Team.pdf",
+    "output_directory": "/Users/ablatazmat/Downloads/SmartResume/招聘信息__Join_Our_Team_adaptive",
+    "total_pages": 5,
+    "ocr_engine": "paddle",
+    "ocr_confidence_threshold": 0.7
+  },
+  {
+    "page_number": 2,
+    "image_path": "/Users/ablatazmat/Downloads/SmartResume/招聘信息__Join_Our_Team_adaptive/page_002_300dpi.png",
+    "image_filename": "page_002_300dpi.png",
+    "page_analysis": {
+      "page_type": "text_content",
+      "page_description": "This page presents job descriptions for two roles: 'Senior Data Engineer' and 'AI Application Engineer (LLM Focus)'. The layout is structured with clear headings for each role, followed by 'Job Responsibilities' and 'Requirements'.  There are also sections listing 'Bonus Points'. The page uses a simple, clean font and formatting. No tables or diagrams are present; it's primarily text-based with bullet points to delineate responsibilities and requirements. The overall visual impression is professional and organized, resembling a typical job posting or internal role definition document.",
+      "visual_elements": [
+        "bullet points",
+        "headings"
+      ],
+      "layout_structure": "Two distinct sections (one for each role) with headings, followed by bulleted lists of responsibilities and requirements. 'Bonus Points' are listed separately for each role."
+    },
+    "content": {
+      "full_text_raw": "1．构建和维护企业级大数据平台（Kafka +Nifi +ES)\n2.开发数据采集、清洗、转换的ETL流程\n3.设计流式数据处理架构，保证数据实时性和准确性\n4.集成多数据源（SQLDB、MQTT、API、文件等)\n5.编写平台监控、告警和运维工具\n任职要求\n2年以上大数据平台开发经验\n熟悉Apache Kafka：Topic设计、Producer/Consumer开发、性能调优\n熟悉Apache Nifi或类似工具 (Apache Airflow、StreamSets)\n具备数据建模能力，理解维度建模和数据仓库理论\n熟练使用Python/Java，有Shell脚本编写能力\n加分项\n有实时数据处理经验 （Flink/Spark Streaming）\n熟悉工业物联网数据采集（MQTT、OPC-UA)\n了解数据治理和数据质量管理\n有Kubernetes环境部署大数据组件经验\n薪资范围：\n岗位2：AI应用工程师\n(LLM方向）\n岗位职责\n1．开发基于大语言模型的智能分析Agent\n2．设计Prompt工程和RAG\n(检索增强生成）系统\n3．部署和优化本地大模型 （LM Studio、Ollama、vLLM)\n4.开发MCPServer，实现AI工具调用能力\n5．将AI能力集成到数据分析和安全运营流程中\n任职要求\n1年以上LLM应用开发经验（商业项目或个人项目均可）\n熟悉LangChain、Llamalndex等Agent开发框架\n理解Prompt Engineering、Function Calling、RAG原理\nPython编程能力强，熟悉FastAPl/Flask\n对新技术有热情，能快速学习和实践\n加分项\n有安全、运维或数据分析行业背景",
+      "full_text_cleaned": "1．构建和维护企业级大数据平台（Kafka +Nifi +ES)\n2.开发数据采集、清洗、转换的ETL流程\n3.设计流式数据处理架构，保证数据实时性和准确性\n4.集成多数据源（SQLDB、MQTT、API、文件等)\n5.编写平台监控、告警和运维工具\n任职要求\n2年以上大数据平台开发经验\n熟悉Apache Kafka：Topic设计、Producer/Consumer开发、性能调优\n熟悉Apache Nifi或类似工具 (Apache Airflow、StreamSets)\n具备数据建模能力，理解维度建模和数据仓库理论\n熟练使用Python/Java，有Shell脚本编写能力\n加分项\n有实时数据处理经验 （Flink/Spark Streaming）\n熟悉工业物联网数据采集（MQTT、OPC-UA)\n了解数据治理和数据质量管理\n有Kubernetes环境部署大数据组件经验\n薪资范围：\n岗位2：AI应用工程师\n(LLM方向）\n岗位职责\n1．开发基于大语言模型的智能分析Agent\n2．设计Prompt工程和RAG (检索增强生成）系统\n3．部署和优化本地大模型 （LM Studio、Ollama、vLLM)\n4.开发MCPServer，实现AI工具调用能力\n5．将AI能力集成到数据分析和安全运营流程中\n任职要求\n1年以上LLM应用开发经验（商业项目或个人项目均可）\n熟悉LangChain、Llamalndex等Agent开发框架\n理解Prompt Engineering、Function Calling、RAG原理\nPython编程能力强，熟悉FastAPl/Flask\n对新技术有热情，能快速学习和实践\n加分项\n有安全、运维或数据分析行业背景",
+      "key_fields": [
+        {
+          "field": "Role 1 Title",
+          "value": "Senior Data Engineer"
+        },
+        {
+          "field": "Role 2 Title",
+          "value": "AI Application Engineer (LLM Focus)"
+        },
+        {
+          "field": "Role 1 Experience",
+          "value": "2+ years of big data platform development"
+        },
+        {
+          "field": "Role 2 Experience",
+          "value": "1+ year of LLM application development"
+        },
+        {
+          "field": "Key Technologies (Role 1)",
+          "value": "Kafka, Nifi, Python/Java"
+        },
+        {
+          "field": "Key Technologies (Role 2)",
+          "value": "LLM, LangChain, Python"
+        }
+      ],
+      "tables": [
+        {
+          "description": "Job responsibilities and requirements for Senior Data Engineer",
+          "rows": 10,
+          "cols": 1
+        },
+        {
+          "description": "Job responsibilities and requirements for AI Application Engineer",
+          "rows": 10,
+          "cols": 1
+        }
+      ]
+    },
+    "ocr_data": {
+      "text_blocks": [
+        {
+          "text": "1．构建和维护企业级大数据平台（Kafka +Nifi +ES)",
+          "bbox": [
+            86.0,
+            96.0,
+            1174.0,
+            185.0
+          ],
+          "confidence": 0.9430677890777588,
+          "center_x": 630.0,
+          "center_y": 140.5
+        },
+        {
+          "text": "2.开发数据采集、清洗、转换的ETL流程",
+          "bbox": [
+            88.0,
+            192.0,
+            937.0,
+            272.0
+          ],
+          "confidence": 0.9777036905288696,
+          "center_x": 512.5,
+          "center_y": 232.0
+        },
+        {
+          "text": "3.设计流式数据处理架构，保证数据实时性和准确性",
+          "bbox": [
+            90.0,
+            296.0,
+            1180.0,
+            374.0
+          ],
+          "confidence": 0.979476273059845,
+          "center_x": 635.0,
+          "center_y": 335.0
+        },
+        {
+          "text": "4.集成多数据源（SQLDB、MQTT、API、文件等)",
+          "bbox": [
+            95.0,
+            388.0,
+            1141.0,
+            464.0
+          ],
+          "confidence": 0.9545760750770569,
+          "center_x": 618.0,
+          "center_y": 426.0
+        },
+        {
+          "text": "5.编写平台监控、告警和运维工具",
+          "bbox": [
+            96.0,
+            484.0,
+            822.0,
+            550.0
+          ],
+          "confidence": 0.9842144250869751,
+          "center_x": 459.0,
+          "center_y": 517.0
+        },
+        {
+          "text": "任职要求",
+          "bbox": [
+            47.0,
+            594.0,
+            256.0,
+            653.0
+          ],
+          "confidence": 0.9995524883270264,
+          "center_x": 151.5,
+          "center_y": 623.5
+        },
+        {
+          "text": "2年以上大数据平台开发经验",
+          "bbox": [
+            158.0,
+            704.0,
+            758.0,
+            766.0
+          ],
+          "confidence": 0.9995003938674927,
+          "center_x": 458.0,
+          "center_y": 735.0
+        },
+        {
+          "text": "熟悉Apache Kafka：Topic设计、Producer/Consumer开发、性能调优",
+          "bbox": [
+            156.0,
+            793.0,
+            1620.0,
+            869.0
+          ],
+          "confidence": 0.9830604791641235,
+          "center_x": 888.0,
+          "center_y": 831.0
+        },
+        {
+          "text": "熟悉Apache Nifi或类似工具 (Apache Airflow、StreamSets)",
+          "bbox": [
+            154.0,
+            888.0,
+            1416.0,
+            962.0
+          ],
+          "confidence": 0.976837158203125,
+          "center_x": 785.0,
+          "center_y": 925.0
+        },
+        {
+          "text": "具备数据建模能力，理解维度建模和数据仓库理论",
+          "bbox": [
+            152.0,
+            988.0,
+            1183.0,
+            1056.0
+          ],
+          "confidence": 0.9989530444145203,
+          "center_x": 667.5,
+          "center_y": 1022.0
+        },
+        {
+          "text": "熟练使用Python/Java，有Shell脚本编写能力",
+          "bbox": [
+            143.0,
+            1079.0,
+            1085.0,
+            1155.0
+          ],
+          "confidence": 0.9492554068565369,
+          "center_x": 614.0,
+          "center_y": 1117.0
+        },
+        {
+          "text": "加分项",
+          "bbox": [
+            11.0,
+            1181.0,
+            192.0,
+            1251.0
+          ],
+          "confidence": 0.9995639324188232,
+          "center_x": 101.5,
+          "center_y": 1216.0
+        },
+        {
+          "text": "有实时数据处理经验 （Flink/Spark Streaming）",
+          "bbox": [
+            220.0,
+            1301.0,
+            1193.0,
+            1373.0
+          ],
+          "confidence": 0.9459611177444458,
+          "center_x": 706.5,
+          "center_y": 1337.0
+        },
+        {
+          "text": "熟悉工业物联网数据采集（MQTT、OPC-UA)",
+          "bbox": [
+            217.0,
+            1396.0,
+            1160.0,
+            1465.0
+          ],
+          "confidence": 0.9845123291015625,
+          "center_x": 688.5,
+          "center_y": 1430.5
+        },
+        {
+          "text": "了解数据治理和数据质量管理",
+          "bbox": [
+            223.0,
+            1496.0,
+            840.0,
+            1551.0
+          ],
+          "confidence": 0.9991970062255859,
+          "center_x": 531.5,
+          "center_y": 1523.5
+        },
+        {
+          "text": "有Kubernetes环境部署大数据组件经验",
+          "bbox": [
+            218.0,
+            1592.0,
+            1045.0,
+            1645.0
+          ],
+          "confidence": 0.9977768063545227,
+          "center_x": 631.5,
+          "center_y": 1618.5
+        },
+        {
+          "text": "薪资范围：",
+          "bbox": [
+            2.0,
+            1700.0,
+            246.0,
+            1758.0
+          ],
+          "confidence": 0.9936702847480774,
+          "center_x": 124.0,
+          "center_y": 1729.0
+        },
+        {
+          "text": "岗位2：AI应用工程师",
+          "bbox": [
+            128.0,
+            1894.0,
+            824.0,
+            1970.0
+          ],
+          "confidence": 0.9862090945243835,
+          "center_x": 476.0,
+          "center_y": 1932.0
+        },
+        {
+          "text": "(LLM方向）",
+          "bbox": [
+            860.0,
+            1896.0,
+            1207.0,
+            1975.0
+          ],
+          "confidence": 0.9030442833900452,
+          "center_x": 1033.5,
+          "center_y": 1935.5
+        },
+        {
+          "text": "岗位职责",
+          "bbox": [
+            0.0,
+            2030.0,
+            216.0,
+            2081.0
+          ],
+          "confidence": 0.9997391700744629,
+          "center_x": 108.0,
+          "center_y": 2055.5
+        },
+        {
+          "text": "1．开发基于大语言模型的智能分析Agent",
+          "bbox": [
+            44.0,
+            2134.0,
+            933.0,
+            2190.0
+          ],
+          "confidence": 0.9964379668235779,
+          "center_x": 488.5,
+          "center_y": 2162.0
+        },
+        {
+          "text": "2．设计Prompt工程和RAG",
+          "bbox": [
+            32.0,
+            2230.0,
+            642.0,
+            2287.0
+          ],
+          "confidence": 0.9695227146148682,
+          "center_x": 337.0,
+          "center_y": 2258.5
+        },
+        {
+          "text": "(检索增强生成）系统",
+          "bbox": [
+            665.0,
+            2232.0,
+            1114.0,
+            2286.0
+          ],
+          "confidence": 0.9451311230659485,
+          "center_x": 889.5,
+          "center_y": 2259.0
+        },
+        {
+          "text": "3．部署和优化本地大模型 （LM Studio、Ollama、vLLM)",
+          "bbox": [
+            26.0,
+            2332.0,
+            1271.0,
+            2392.0
+          ],
+          "confidence": 0.94782954454422,
+          "center_x": 648.5,
+          "center_y": 2362.0
+        },
+        {
+          "text": "4.开发MCPServer，实现AI工具调用能力",
+          "bbox": [
+            27.0,
+            2431.0,
+            957.0,
+            2489.0
+          ],
+          "confidence": 0.9522643089294434,
+          "center_x": 492.0,
+          "center_y": 2460.0
+        },
+        {
+          "text": "5．将AI能力集成到数据分析和安全运营流程中",
+          "bbox": [
+            28.0,
+            2523.0,
+            1039.0,
+            2585.0
+          ],
+          "confidence": 0.9949586987495422,
+          "center_x": 533.5,
+          "center_y": 2554.0
+        },
+        {
+          "text": "任职要求",
+          "bbox": [
+            0.0,
+            2638.0,
+            205.0,
+            2691.0
+          ],
+          "confidence": 0.9892635345458984,
+          "center_x": 102.5,
+          "center_y": 2664.5
+        },
+        {
+          "text": "1年以上LLM应用开发经验（商业项目或个人项目均可）",
+          "bbox": [
+            100.0,
+            2739.0,
+            1277.0,
+            2814.0
+          ],
+          "confidence": 0.9797109961509705,
+          "center_x": 688.5,
+          "center_y": 2776.5
+        },
+        {
+          "text": "熟悉LangChain、Llamalndex等Agent开发框架",
+          "bbox": [
+            101.0,
+            2838.0,
+            1140.0,
+            2913.0
+          ],
+          "confidence": 0.9940328598022461,
+          "center_x": 620.5,
+          "center_y": 2875.5
+        },
+        {
+          "text": "理解Prompt Engineering、Function Calling、RAG原理",
+          "bbox": [
+            99.0,
+            2933.0,
+            1315.0,
+            3015.0
+          ],
+          "confidence": 0.9848949313163757,
+          "center_x": 707.0,
+          "center_y": 2974.0
+        },
+        {
+          "text": "Python编程能力强，熟悉FastAPl/Flask",
+          "bbox": [
+            109.0,
+            3041.0,
+            966.0,
+            3106.0
+          ],
+          "confidence": 0.9818938970565796,
+          "center_x": 537.5,
+          "center_y": 3073.5
+        },
+        {
+          "text": "对新技术有热情，能快速学习和实践",
+          "bbox": [
+            111.0,
+            3137.0,
+            897.0,
+            3200.0
+          ],
+          "confidence": 0.9985150694847107,
+          "center_x": 504.0,
+          "center_y": 3168.5
+        },
+        {
+          "text": "加分项",
+          "bbox": [
+            0.0,
+            3243.0,
+            159.0,
+            3304.0
+          ],
+          "confidence": 0.9996328949928284,
+          "center_x": 79.5,
+          "center_y": 3273.5
+        },
+        {
+          "text": "有安全、运维或数据分析行业背景",
+          "bbox": [
+            200.0,
+            3365.0,
+            924.0,
+            3415.0
+          ],
+          "confidence": 0.9992043375968933,
+          "center_x": 562.0,
+          "center_y": 3390.0
+        }
+      ],
+      "text_blocks_count": 34,
+      "average_confidence": 0.9790930625270394,
+      "image_size": {
+        "width": 2481,
+        "height": 3508
+      },
+      "layout_regions": null
+    },
+    "metadata": {
+      "document_id": null,
+      "document_type": "Job Description",
+      "revision": null,
+      "title": "Senior Data Engineer & AI Application Engineer Job Descriptions"
+    },
+    "domain_data": {
+      "project": null,
+      "equipment": null,
+      "revisions": []
+    },
+    "keywords": [
+      "Kafka",
+      "Nifi",
+      "LLM",
+      "Python",
+      "Java",
+      "Data Engineering",
+      "AI Application",
+      "Big Data",
+      "Machine Learning"
+    ],
+    "vlm_metadata": {
+      "confidence": 0.98,
+      "extraction_notes": [
+        "The text is primarily in Chinese with some English abbreviations (e.g., LLM)."
+      ]
+    },
+    "source_file": "/Users/ablatazmat/Downloads/SmartResume/uploads/招聘信息  Join Our Team.pdf",
+    "source_file_name": "招聘信息  Join Our Team.pdf",
+    "output_directory": "/Users/ablatazmat/Downloads/SmartResume/招聘信息__Join_Our_Team_adaptive",
+    "total_pages": 5,
+    "ocr_engine": "paddle",
+    "ocr_confidence_threshold": 0.7
+  },
+  {
+    "page_number": 3,
+    "image_path": "/Users/ablatazmat/Downloads/SmartResume/招聘信息__Join_Our_Team_adaptive/page_003_300dpi.png",
+    "image_filename": "page_003_300dpi.png",
+    "page_analysis": {
+      "page_type": "text_content",
+      "page_description": "This page appears to be a job description for a 'Workflow Automation Engineer'. The layout is structured with clear headings and bullet points. It's primarily text-based, organized into sections like 'Job Responsibilities', 'Requirements', and 'Benefits'. There's a distinct hierarchy of information, using bold text for headings. The page is visually clean and easy to scan. No tables or diagrams are present, but bullet points create a list-like structure within each section. The overall design is professional and focuses on conveying information efficiently.",
+      "visual_elements": [
+        "bullet points",
+        "bold text"
+      ],
+      "layout_structure": "Hierarchical with headings, subheadings, and bullet points. Sections are clearly delineated."
+    },
+    "content": {
+      "full_text_raw": "熟悉模型量化和推理优化（GGUF、AWQ、vLLM）\n了解MCP（ModelContextProtocol）协议\n参与过AI Agent、Copilot类产品开发\n有Hugging Face、OpenAI API使用经验\n薪资范围：\n岗位3：工作流自动化工程师\n岗位职责\n1．开发和维护企业工作流平台 （n8n/NewFlow/Apache Airflow)\n2．设计复杂业务流程的自动化方案\n3．集成各类API和系统(ES、数据库、监控系统、IM工具)\n4．开发自定义工作流节点和功能插件\n5.编写工作流最佳实践文档和模板\n任职要求\n1年以上工作流/自动化平台经验 （n8n、Zapier、Airflow、Temporal)\n熟悉Node.js/TypeScript或Python\n理解RESTful APl、Webhook、OAuth等集成技术\n有事件驱动架构和消息队列（Kafka/RabbitMQ）经验\n能够将复杂业务流程抽象为工作流逻辑\n加分项\n有RPA（机器人流程自动化）项目经验\n熟悉n8n开发和自定义节点开发\n了解安全运营（SOC）或IT运维流程\n有低代码平台开发经验\n熟悉Docker网络和容器间通信\n薪资范围：\n福利待遇\n薪酬福利\n极具竞争力的薪资：顶尖人才顶尖待遇，上不封顶\n股权激励：核心员工享有期权/股权计划",
+      "full_text_cleaned": "熟悉模型量化和推理优化（GGUF、AWQ、vLLM）\n了解MCP（ModelContextProtocol）协议\n参与过AI Agent、Copilot类产品开发\n有Hugging Face、OpenAI API使用经验\n薪资范围：\n岗位3：工作流自动化工程师\n岗位职责\n1．开发和维护企业工作流平台 （n8n/NewFlow/Apache Airflow)\n2．设计复杂业务流程的自动化方案\n3．集成各类API和系统(ES、数据库、监控系统、IM工具)\n4．开发自定义工作流节点和功能插件\n5.编写工作流最佳实践文档和模板\n任职要求\n1年以上工作流/自动化平台经验 （n8n、Zapier、Airflow、Temporal)\n熟悉Node.js/TypeScript或Python\n理解RESTful APl、Webhook、OAuth等集成技术\n有事件驱动架构和消息队列（Kafka/RabbitMQ）经验\n能够将复杂业务流程抽象为工作流逻辑\n加分项\n有RPA（机器人流程自动化）项目经验\n熟悉n8n开发和自定义节点开发\n了解安全运营（SOC）或IT运维流程\n有低代码平台开发经验\n熟悉Docker网络和容器间通信\n薪资范围：\n福利待遇\n薪酬福利\n极具竞争力的薪资：顶尖人才顶尖待遇，上不封顶\n股权激励：核心员工享有期权/股权计划",
+      "key_fields": [
+        {
+          "field": "Job Title",
+          "value": "Workflow Automation Engineer"
+        },
+        {
+          "field": "Skills Required",
+          "value": "GGUF, AWQ, vLLM, MCP, AI Agent development, Hugging Face, OpenAI API, Node.js/TypeScript, Python, RESTful APIs, Webhooks, OAuth, Kafka/RabbitMQ, Docker"
+        },
+        {
+          "field": "Experience",
+          "value": "1+ year of workflow/automation platform experience"
+        },
+        {
+          "field": "Platforms",
+          "value": "n8n, NewFlow, Apache Airflow, Zapier, Temporal"
+        },
+        {
+          "field": "Benefits",
+          "value": "Competitive salary, Equity incentives"
+        }
+      ],
+      "tables": []
+    },
+    "ocr_data": {
+      "text_blocks": [
+        {
+          "text": "熟悉模型量化和推理优化（GGUF、AWQ、vLLM）",
+          "bbox": [
+            206.0,
+            37.0,
+            1302.0,
+            170.0
+          ],
+          "confidence": 0.9660896062850952,
+          "center_x": 754.0,
+          "center_y": 103.5
+        },
+        {
+          "text": "了解MCP（ModelContextProtocol）协议",
+          "bbox": [
+            218.0,
+            149.0,
+            1174.0,
+            268.0
+          ],
+          "confidence": 0.9936714172363281,
+          "center_x": 696.0,
+          "center_y": 208.5
+        },
+        {
+          "text": "参与过AI Agent、Copilot类产品开发",
+          "bbox": [
+            227.0,
+            262.0,
+            1035.0,
+            376.0
+          ],
+          "confidence": 0.9786216616630554,
+          "center_x": 631.0,
+          "center_y": 319.0
+        },
+        {
+          "text": "有Hugging Face、OpenAI API使用经验",
+          "bbox": [
+            233.0,
+            366.0,
+            1101.0,
+            486.0
+          ],
+          "confidence": 0.963858425617218,
+          "center_x": 667.0,
+          "center_y": 426.0
+        },
+        {
+          "text": "薪资范围：",
+          "bbox": [
+            40.0,
+            477.0,
+            288.0,
+            560.0
+          ],
+          "confidence": 0.984917938709259,
+          "center_x": 164.0,
+          "center_y": 518.5
+        },
+        {
+          "text": "岗位3：工作流自动化工程师",
+          "bbox": [
+            177.0,
+            822.0,
+            1088.0,
+            959.0
+          ],
+          "confidence": 0.9934857487678528,
+          "center_x": 632.5,
+          "center_y": 890.5
+        },
+        {
+          "text": "岗位职责",
+          "bbox": [
+            63.0,
+            965.0,
+            279.0,
+            1033.0
+          ],
+          "confidence": 0.9992167949676514,
+          "center_x": 171.0,
+          "center_y": 999.0
+        },
+        {
+          "text": "1．开发和维护企业工作流平台 （n8n/NewFlow/Apache Airflow)",
+          "bbox": [
+            96.0,
+            1076.0,
+            1467.0,
+            1174.0
+          ],
+          "confidence": 0.9621816277503967,
+          "center_x": 781.5,
+          "center_y": 1125.0
+        },
+        {
+          "text": "2．设计复杂业务流程的自动化方案",
+          "bbox": [
+            87.0,
+            1175.0,
+            852.0,
+            1262.0
+          ],
+          "confidence": 0.982789158821106,
+          "center_x": 469.5,
+          "center_y": 1218.5
+        },
+        {
+          "text": "3．集成各类API和系统(ES、数据库、监控系统、IM工具)",
+          "bbox": [
+            76.0,
+            1270.0,
+            1326.0,
+            1365.0
+          ],
+          "confidence": 0.9666000008583069,
+          "center_x": 701.0,
+          "center_y": 1317.5
+        },
+        {
+          "text": "4．开发自定义工作流节点和功能插件",
+          "bbox": [
+            76.0,
+            1380.0,
+            887.0,
+            1456.0
+          ],
+          "confidence": 0.9784989953041077,
+          "center_x": 481.5,
+          "center_y": 1418.0
+        },
+        {
+          "text": "5.编写工作流最佳实践文档和模板",
+          "bbox": [
+            77.0,
+            1476.0,
+            839.0,
+            1551.0
+          ],
+          "confidence": 0.9844708442687988,
+          "center_x": 458.0,
+          "center_y": 1513.5
+        },
+        {
+          "text": "任职要求",
+          "bbox": [
+            27.0,
+            1585.0,
+            255.0,
+            1652.0
+          ],
+          "confidence": 0.9996922016143799,
+          "center_x": 141.0,
+          "center_y": 1618.5
+        },
+        {
+          "text": "1年以上工作流/自动化平台经验 （n8n、Zapier、Airflow、Temporal)",
+          "bbox": [
+            152.0,
+            1701.0,
+            1631.0,
+            1772.0
+          ],
+          "confidence": 0.9780337810516357,
+          "center_x": 891.5,
+          "center_y": 1736.5
+        },
+        {
+          "text": "熟悉Node.js/TypeScript或Python",
+          "bbox": [
+            147.0,
+            1793.0,
+            880.0,
+            1869.0
+          ],
+          "confidence": 0.9989635944366455,
+          "center_x": 513.5,
+          "center_y": 1831.0
+        },
+        {
+          "text": "理解RESTful APl、Webhook、OAuth等集成技术",
+          "bbox": [
+            144.0,
+            1890.0,
+            1187.0,
+            1961.0
+          ],
+          "confidence": 0.9746413230895996,
+          "center_x": 665.5,
+          "center_y": 1925.5
+        },
+        {
+          "text": "有事件驱动架构和消息队列（Kafka/RabbitMQ）经验",
+          "bbox": [
+            145.0,
+            1987.0,
+            1283.0,
+            2058.0
+          ],
+          "confidence": 0.980930745601654,
+          "center_x": 714.0,
+          "center_y": 2022.5
+        },
+        {
+          "text": "能够将复杂业务流程抽象为工作流逻辑",
+          "bbox": [
+            146.0,
+            2083.0,
+            967.0,
+            2150.0
+          ],
+          "confidence": 0.999661922454834,
+          "center_x": 556.5,
+          "center_y": 2116.5
+        },
+        {
+          "text": "加分项",
+          "bbox": [
+            15.0,
+            2186.0,
+            194.0,
+            2253.0
+          ],
+          "confidence": 0.999644935131073,
+          "center_x": 104.5,
+          "center_y": 2219.5
+        },
+        {
+          "text": "有RPA（机器人流程自动化）项目经验",
+          "bbox": [
+            229.0,
+            2306.0,
+            1037.0,
+            2369.0
+          ],
+          "confidence": 0.9975870847702026,
+          "center_x": 633.0,
+          "center_y": 2337.5
+        },
+        {
+          "text": "熟悉n8n开发和自定义节点开发",
+          "bbox": [
+            230.0,
+            2407.0,
+            895.0,
+            2465.0
+          ],
+          "confidence": 0.9991517663002014,
+          "center_x": 562.5,
+          "center_y": 2436.0
+        },
+        {
+          "text": "了解安全运营（SOC）或IT运维流程",
+          "bbox": [
+            236.0,
+            2503.0,
+            991.0,
+            2559.0
+          ],
+          "confidence": 0.964410126209259,
+          "center_x": 613.5,
+          "center_y": 2531.0
+        },
+        {
+          "text": "有低代码平台开发经验",
+          "bbox": [
+            239.0,
+            2598.0,
+            722.0,
+            2652.0
+          ],
+          "confidence": 0.9989235997200012,
+          "center_x": 480.5,
+          "center_y": 2625.0
+        },
+        {
+          "text": "熟悉Docker网络和容器间通信",
+          "bbox": [
+            242.0,
+            2687.0,
+            878.0,
+            2751.0
+          ],
+          "confidence": 0.998160719871521,
+          "center_x": 560.0,
+          "center_y": 2719.0
+        },
+        {
+          "text": "薪资范围：",
+          "bbox": [
+            46.0,
+            2798.0,
+            278.0,
+            2860.0
+          ],
+          "confidence": 0.994391918182373,
+          "center_x": 162.0,
+          "center_y": 2829.0
+        },
+        {
+          "text": "福利待遇",
+          "bbox": [
+            166.0,
+            2991.0,
+            511.0,
+            3082.0
+          ],
+          "confidence": 0.9996192455291748,
+          "center_x": 338.5,
+          "center_y": 3036.5
+        },
+        {
+          "text": "薪酬福利",
+          "bbox": [
+            33.0,
+            3141.0,
+            342.0,
+            3225.0
+          ],
+          "confidence": 0.9994569420814514,
+          "center_x": 187.5,
+          "center_y": 3183.0
+        },
+        {
+          "text": "极具竞争力的薪资：顶尖人才顶尖待遇，上不封顶",
+          "bbox": [
+            222.0,
+            3287.0,
+            1277.0,
+            3347.0
+          ],
+          "confidence": 0.9984955191612244,
+          "center_x": 749.5,
+          "center_y": 3317.0
+        },
+        {
+          "text": "股权激励：核心员工享有期权/股权计划",
+          "bbox": [
+            215.0,
+            3388.0,
+            1053.0,
+            3445.0
+          ],
+          "confidence": 0.9992355704307556,
+          "center_x": 634.0,
+          "center_y": 3416.5
+        }
+      ],
+      "text_blocks_count": 29,
+      "average_confidence": 0.9874276970994884,
+      "image_size": {
+        "width": 2481,
+        "height": 3508
+      },
+      "layout_regions": null
+    },
+    "metadata": {
+      "document_id": null,
+      "document_type": "Job Description",
+      "revision": null,
+      "title": "Workflow Automation Engineer Job Posting"
+    },
+    "domain_data": {
+      "project": null,
+      "equipment": null,
+      "revisions": []
+    },
+    "keywords": [
+      "workflow automation",
+      "AI Agent",
+      "Hugging Face",
+      "OpenAI API",
+      "n8n",
+      "Apache Airflow",
+      "Docker",
+      "Kafka",
+      "RabbitMQ"
+    ],
+    "vlm_metadata": {
+      "confidence": 0.98,
+      "extraction_notes": [
+        "The OCR quality is very good with minimal errors."
+      ]
+    },
+    "source_file": "/Users/ablatazmat/Downloads/SmartResume/uploads/招聘信息  Join Our Team.pdf",
+    "source_file_name": "招聘信息  Join Our Team.pdf",
+    "output_directory": "/Users/ablatazmat/Downloads/SmartResume/招聘信息__Join_Our_Team_adaptive",
+    "total_pages": 5,
+    "ocr_engine": "paddle",
+    "ocr_confidence_threshold": 0.7
+  },
+  {
+    "page_number": 4,
+    "image_path": "/Users/ablatazmat/Downloads/SmartResume/招聘信息__Join_Our_Team_adaptive/page_004_300dpi.png",
+    "image_filename": "page_004_300dpi.png",
+    "page_analysis": {
+      "page_type": "text_content",
+      "page_description": "This page appears to be a job posting or recruitment information sheet. It's structured with clear headings and bullet points, using a simple layout to convey key details about the role. The page is visually divided into sections: Salary & Benefits (13-16薪, 绩效奖金), Growth Opportunities (成长机会), Work Location (工作地点), Application Process (应聘方式), and Interview Flow (面试流程). The use of icons or small symbols next to headings adds visual clarity. There's a consistent font style and size throughout, making it easy to read. The overall design is clean and professional.",
+      "visual_elements": [
+        "bullet points",
+        "headings",
+        "icons"
+      ],
+      "layout_structure": "The page uses a hierarchical structure with headings followed by bullet points. Sections are clearly delineated, and the information is presented in a logical order from benefits to application process."
+    },
+    "content": {
+      "full_text_raw": "13-16薪：根据岗位和绩效\n绩效奖金：项目奖金、季度奖金、年终奖\n成长机会\n技术成长：参与前沿技术（AI、大数据、云原生）实践\n学习资源：提供技术书籍、在线课程、认证考试支持\n行业交流：参加技术会议、开源社区活动\n晋升通道：扁平化管理，能力者快速晋升\n工作地点\n主要办公地点\n-\n上海\n远程办公\n部分岗位支持远程或混合办公\n研发岗位优先考虑本地或能够定期到岗\n应聘方式\n投递简历\n邮箱：\nE\nluke@newmindtech.cn\n主题格式：\n日\n【应聘】\n岗位名称－姓名－工作年限\n简历内容建议\n请在简历中重点体现：\n1．技术栈：列出精通的技术和工具\n2．项目经验：重点项目的架构、规模、您的职责\n3.技术博客/GitHub：如有请附上链接\n4.认证证书：如Elastic认证、K8sCKA/CKAD等\n面试流程\n1.简历筛选\n-\n(3个工作日内反馈）\n2.技术初面\n1\n(1小时，技术能力评估）\n3.技术终面 (1-2小时，架构设计或实操题)\n4.Offer发放 (面试通过后3个工作日内)",
+      "full_text_cleaned": "13-16薪：根据岗位和绩效\n绩效奖金：项目奖金、季度奖金、年终奖\n成长机会\n技术成长：参与前沿技术（AI、大数据、云原生）实践\n学习资源：提供技术书籍、在线课程、认证考试支持\n行业交流：参加技术会议、开源社区活动\n晋升通道：扁平化管理，能力者快速晋升\n工作地点\n主要办公地点\n-\n上海\n远程办公\n部分岗位支持远程或混合办公\n研发岗位优先考虑本地或能够定期到岗\n应聘方式\n投递简历\n邮箱：luke@newmindtech.cn\n主题格式：【应聘】岗位名称－姓名－工作年限\n简历内容建议\n请在简历中重点体现：\n1．技术栈：列出精通的技术和工具\n2．项目经验：重点项目的架构、规模、您的职责\n3.技术博客/GitHub：如有请附上链接\n4.认证证书：如Elastic认证、K8sCKA/CKAD等\n面试流程\n1.简历筛选 (3个工作日内反馈)\n2.技术初面 (1小时，技术能力评估)\n3.技术终面 (1-2小时，架构设计或实操题)\n4.Offer发放 (面试通过后3个工作日内)",
+      "key_fields": [
+        {
+          "field": "Email",
+          "value": "luke@newmindtech.cn"
+        },
+        {
+          "field": "Location",
+          "value": "Shanghai"
+        },
+        {
+          "field": "Resume Subject Format",
+          "value": "[应聘] 岗位名称－姓名－工作年限"
+        }
+      ],
+      "tables": [
+        {
+          "description": "Interview Process",
+          "rows": 4,
+          "cols": 2
+        }
+      ]
+    },
+    "ocr_data": {
+      "text_blocks": [
+        {
+          "text": "13-16薪：根据岗位和绩效",
+          "bbox": [
+            221.0,
+            78.0,
+            790.0,
+            162.0
+          ],
+          "confidence": 0.9925793409347534,
+          "center_x": 505.5,
+          "center_y": 120.0
+        },
+        {
+          "text": "绩效奖金：项目奖金、季度奖金、年终奖",
+          "bbox": [
+            224.0,
+            180.0,
+            1085.0,
+            288.0
+          ],
+          "confidence": 0.998392641544342,
+          "center_x": 654.5,
+          "center_y": 234.0
+        },
+        {
+          "text": "成长机会",
+          "bbox": [
+            21.0,
+            303.0,
+            357.0,
+            413.0
+          ],
+          "confidence": 0.9004881381988525,
+          "center_x": 189.0,
+          "center_y": 358.0
+        },
+        {
+          "text": "技术成长：参与前沿技术（AI、大数据、云原生）实践",
+          "bbox": [
+            234.0,
+            463.0,
+            1356.0,
+            563.0
+          ],
+          "confidence": 0.9923409819602966,
+          "center_x": 795.0,
+          "center_y": 513.0
+        },
+        {
+          "text": "学习资源：提供技术书籍、在线课程、认证考试支持",
+          "bbox": [
+            236.0,
+            563.0,
+            1317.0,
+            655.0
+          ],
+          "confidence": 0.9980989694595337,
+          "center_x": 776.5,
+          "center_y": 609.0
+        },
+        {
+          "text": "行业交流：参加技术会议、开源社区活动",
+          "bbox": [
+            236.0,
+            665.0,
+            1089.0,
+            748.0
+          ],
+          "confidence": 0.9992275238037109,
+          "center_x": 662.5,
+          "center_y": 706.5
+        },
+        {
+          "text": "晋升通道：扁平化管理，能力者快速晋升",
+          "bbox": [
+            235.0,
+            760.0,
+            1090.0,
+            836.0
+          ],
+          "confidence": 0.9805886745452881,
+          "center_x": 662.5,
+          "center_y": 798.0
+        },
+        {
+          "text": "工作地点",
+          "bbox": [
+            152.0,
+            1055.0,
+            505.0,
+            1151.0
+          ],
+          "confidence": 0.9995136260986328,
+          "center_x": 328.5,
+          "center_y": 1103.0
+        },
+        {
+          "text": "主要办公地点",
+          "bbox": [
+            22.0,
+            1200.0,
+            340.0,
+            1260.0
+          ],
+          "confidence": 0.9994981288909912,
+          "center_x": 181.0,
+          "center_y": 1230.0
+        },
+        {
+          "text": "-",
+          "bbox": [
+            152.0,
+            1319.0,
+            193.0,
+            1352.0
+          ],
+          "confidence": 0.29616934061050415,
+          "center_x": 172.5,
+          "center_y": 1335.5
+        },
+        {
+          "text": "上海",
+          "bbox": [
+            228.0,
+            1313.0,
+            336.0,
+            1368.0
+          ],
+          "confidence": 0.9999776482582092,
+          "center_x": 282.0,
+          "center_y": 1340.5
+        },
+        {
+          "text": "远程办公",
+          "bbox": [
+            13.0,
+            1418.0,
+            238.0,
+            1471.0
+          ],
+          "confidence": 0.9997721910476685,
+          "center_x": 125.5,
+          "center_y": 1444.5
+        },
+        {
+          "text": "部分岗位支持远程或混合办公",
+          "bbox": [
+            138.0,
+            1522.0,
+            777.0,
+            1586.0
+          ],
+          "confidence": 0.9995559453964233,
+          "center_x": 457.5,
+          "center_y": 1554.0
+        },
+        {
+          "text": "研发岗位优先考虑本地或能够定期到岗",
+          "bbox": [
+            134.0,
+            1620.0,
+            960.0,
+            1682.0
+          ],
+          "confidence": 0.9994140863418579,
+          "center_x": 547.0,
+          "center_y": 1651.0
+        },
+        {
+          "text": "应聘方式",
+          "bbox": [
+            134.0,
+            1807.0,
+            494.0,
+            1901.0
+          ],
+          "confidence": 0.999800443649292,
+          "center_x": 314.0,
+          "center_y": 1854.0
+        },
+        {
+          "text": "投递简历",
+          "bbox": [
+            8.0,
+            1949.0,
+            331.0,
+            2036.0
+          ],
+          "confidence": 0.9988804459571838,
+          "center_x": 169.5,
+          "center_y": 1992.5
+        },
+        {
+          "text": "邮箱：",
+          "bbox": [
+            101.0,
+            2082.0,
+            265.0,
+            2141.0
+          ],
+          "confidence": 0.9983229637145996,
+          "center_x": 183.0,
+          "center_y": 2111.5
+        },
+        {
+          "text": "E",
+          "bbox": [
+            38.0,
+            2097.0,
+            65.0,
+            2128.0
+          ],
+          "confidence": 0.9335570931434631,
+          "center_x": 51.5,
+          "center_y": 2112.5
+        },
+        {
+          "text": "luke@newmindtech.cn",
+          "bbox": [
+            254.0,
+            2090.0,
+            759.0,
+            2138.0
+          ],
+          "confidence": 0.9995425343513489,
+          "center_x": 506.5,
+          "center_y": 2114.0
+        },
+        {
+          "text": "主题格式：",
+          "bbox": [
+            102.0,
+            2152.0,
+            328.0,
+            2209.0
+          ],
+          "confidence": 0.9054070711135864,
+          "center_x": 215.0,
+          "center_y": 2180.5
+        },
+        {
+          "text": "日",
+          "bbox": [
+            39.0,
+            2167.0,
+            66.0,
+            2196.0
+          ],
+          "confidence": 0.6118803024291992,
+          "center_x": 52.5,
+          "center_y": 2181.5
+        },
+        {
+          "text": "【应聘】",
+          "bbox": [
+            378.0,
+            2155.0,
+            521.0,
+            2208.0
+          ],
+          "confidence": 0.9985632300376892,
+          "center_x": 449.5,
+          "center_y": 2181.5
+        },
+        {
+          "text": "岗位名称－姓名－工作年限",
+          "bbox": [
+            541.0,
+            2156.0,
+            1095.0,
+            2213.0
+          ],
+          "confidence": 0.970884382724762,
+          "center_x": 818.0,
+          "center_y": 2184.5
+        },
+        {
+          "text": "简历内容建议",
+          "bbox": [
+            11.0,
+            2274.0,
+            470.0,
+            2356.0
+          ],
+          "confidence": 0.9987914562225342,
+          "center_x": 240.5,
+          "center_y": 2315.0
+        },
+        {
+          "text": "请在简历中重点体现：",
+          "bbox": [
+            3.0,
+            2413.0,
+            485.0,
+            2471.0
+          ],
+          "confidence": 0.9540901184082031,
+          "center_x": 244.0,
+          "center_y": 2442.0
+        },
+        {
+          "text": "1．技术栈：列出精通的技术和工具",
+          "bbox": [
+            53.0,
+            2524.0,
+            805.0,
+            2582.0
+          ],
+          "confidence": 0.9970111846923828,
+          "center_x": 429.0,
+          "center_y": 2553.0
+        },
+        {
+          "text": "2．项目经验：重点项目的架构、规模、您的职责",
+          "bbox": [
+            51.0,
+            2621.0,
+            1087.0,
+            2675.0
+          ],
+          "confidence": 0.9828997254371643,
+          "center_x": 569.0,
+          "center_y": 2648.0
+        },
+        {
+          "text": "3.技术博客/GitHub：如有请附上链接",
+          "bbox": [
+            50.0,
+            2713.0,
+            896.0,
+            2773.0
+          ],
+          "confidence": 0.981303870677948,
+          "center_x": 473.0,
+          "center_y": 2743.0
+        },
+        {
+          "text": "4.认证证书：如Elastic认证、K8sCKA/CKAD等",
+          "bbox": [
+            59.0,
+            2810.0,
+            1071.0,
+            2870.0
+          ],
+          "confidence": 0.9756148457527161,
+          "center_x": 565.0,
+          "center_y": 2840.0
+        },
+        {
+          "text": "面试流程",
+          "bbox": [
+            11.0,
+            2921.0,
+            328.0,
+            3007.0
+          ],
+          "confidence": 0.9983251690864563,
+          "center_x": 169.5,
+          "center_y": 2964.0
+        },
+        {
+          "text": "1.简历筛选",
+          "bbox": [
+            65.0,
+            3058.0,
+            347.0,
+            3121.0
+          ],
+          "confidence": 0.9628161787986755,
+          "center_x": 206.0,
+          "center_y": 3089.5
+        },
+        {
+          "text": "-",
+          "bbox": [
+            330.0,
+            3082.0,
+            350.0,
+            3101.0
+          ],
+          "confidence": 0.14762836694717407,
+          "center_x": 340.0,
+          "center_y": 3091.5
+        },
+        {
+          "text": "(3个工作日内反馈）",
+          "bbox": [
+            341.0,
+            3065.0,
+            766.0,
+            3126.0
+          ],
+          "confidence": 0.9236845970153809,
+          "center_x": 553.5,
+          "center_y": 3095.5
+        },
+        {
+          "text": "2.技术初面",
+          "bbox": [
+            64.0,
+            3160.0,
+            345.0,
+            3212.0
+          ],
+          "confidence": 0.9868664741516113,
+          "center_x": 204.5,
+          "center_y": 3186.0
+        },
+        {
+          "text": "1",
+          "bbox": [
+            327.0,
+            3175.0,
+            358.0,
+            3200.0
+          ],
+          "confidence": 0.42774203419685364,
+          "center_x": 342.5,
+          "center_y": 3187.5
+        },
+        {
+          "text": "(1小时，技术能力评估）",
+          "bbox": [
+            341.0,
+            3160.0,
+            846.0,
+            3222.0
+          ],
+          "confidence": 0.933755099773407,
+          "center_x": 593.5,
+          "center_y": 3191.0
+        },
+        {
+          "text": "3.技术终面 (1-2小时，架构设计或实操题)",
+          "bbox": [
+            59.0,
+            3245.0,
+            981.0,
+            3320.0
+          ],
+          "confidence": 0.9468644857406616,
+          "center_x": 520.0,
+          "center_y": 3282.5
+        },
+        {
+          "text": "4.Offer发放 (面试通过后3个工作日内)",
+          "bbox": [
+            58.0,
+            3335.0,
+            920.0,
+            3412.0
+          ],
+          "confidence": 0.9805740714073181,
+          "center_x": 489.0,
+          "center_y": 3373.5
+        }
+      ],
+      "text_blocks_count": 38,
+      "average_confidence": 0.915011141645281,
+      "image_size": {
+        "width": 2481,
+        "height": 3508
+      },
+      "layout_regions": null
+    },
+    "metadata": {
+      "document_id": null,
+      "document_type": "Job Posting",
+      "revision": null,
+      "title": null
+    },
+    "domain_data": {
+      "project": null,
+      "equipment": null,
+      "revisions": null
+    },
+    "keywords": [
+      "AI",
+      "大数据",
+      "云原生",
+      "技术栈",
+      "架构设计",
+      "K8sCKA",
+      "CKAD",
+      "Elastic认证"
+    ],
+    "vlm_metadata": {
+      "confidence": 0.95,
+      "extraction_notes": [
+        "The text is generally clear and well-formatted. The use of Chinese characters requires accurate OCR for full understanding."
+      ]
+    },
+    "source_file": "/Users/ablatazmat/Downloads/SmartResume/uploads/招聘信息  Join Our Team.pdf",
+    "source_file_name": "招聘信息  Join Our Team.pdf",
+    "output_directory": "/Users/ablatazmat/Downloads/SmartResume/招聘信息__Join_Our_Team_adaptive",
+    "total_pages": 5,
+    "ocr_engine": "paddle",
+    "ocr_confidence_threshold": 0.7
+  },
+  {
+    "page_number": 5,
+    "image_path": "/Users/ablatazmat/Downloads/SmartResume/招聘信息__Join_Our_Team_adaptive/page_005_300dpi.png",
+    "image_filename": "page_005_300dpi.png",
+    "page_analysis": {
+      "page_type": "form",
+      "page_description": "This page appears to be a maintenance or inspection form, likely related to electrical equipment. The layout is structured with several sections for recording data points and observations. There are multiple handwritten entries, suggesting it's a completed form. The top section contains spaces for equipment details and date information. Below that, there are rows with columns for recording readings or test results. A prominent stamp is visible on the right side, likely indicating approval or completion date. The form has a clear border and uses lines to separate different data fields. There are also some pre-printed labels for specific measurements or tests.",
+      "visual_elements": [
+        "form",
+        "stamp",
+        "handwritten text",
+        "lines",
+        "borders"
+      ],
+      "layout_structure": "The page is divided into sections with clear headings and rows for data entry. The top section contains equipment details, followed by a table-like structure for recording measurements or test results. A stamp is located on the right side."
+    },
+    "content": {
+      "full_text_raw": "",
+      "full_text_cleaned": "Unable to reliably clean text due to extremely low OCR confidence. The image contains handwritten entries that are not accurately transcribed.",
+      "key_fields": [],
+      "tables": [
+        {
+          "description": "Table for recording readings or test results. The exact content is unreadable due to poor OCR quality.",
+          "rows": 0,
+          "cols": 0
+        }
+      ]
+    },
+    "ocr_data": {
+      "text_blocks": [],
+      "text_blocks_count": 0,
+      "average_confidence": 0,
+      "image_size": {},
+      "layout_regions": []
+    },
+    "metadata": {
+      "document_id": null,
+      "document_type": "Maintenance Form",
+      "revision": null,
+      "title": null
+    },
+    "domain_data": {
+      "project": null,
+      "equipment": null,
+      "revisions": []
+    },
+    "keywords": [
+      "maintenance",
+      "inspection",
+      "electrical",
+      "form",
+      "equipment"
+    ],
+    "vlm_metadata": {
+      "confidence": 0.1,
+      "extraction_notes": [
+        "The OCR quality is extremely poor, making accurate text extraction impossible. The analysis relies heavily on visual interpretation of the page layout and structure."
+      ]
+    },
+    "source_file": "/Users/ablatazmat/Downloads/SmartResume/uploads/招聘信息  Join Our Team.pdf",
+    "source_file_name": "招聘信息  Join Our Team.pdf",
+    "output_directory": "/Users/ablatazmat/Downloads/SmartResume/招聘信息__Join_Our_Team_adaptive",
+    "total_pages": 5,
+    "ocr_engine": "paddle",
+    "ocr_confidence_threshold": 0.7
+  }
+]

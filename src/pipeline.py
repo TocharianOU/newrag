@@ -93,7 +93,8 @@ class ProcessingPipeline:
     def process_file(
         self,
         file_path: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        processed_json_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Process single file synchronously
@@ -101,6 +102,7 @@ class ProcessingPipeline:
         Args:
             file_path: Path to file
             metadata: Additional metadata
+            processed_json_dir: Optional path to pre-processed JSON directory
         
         Returns:
             Processing result
@@ -108,10 +110,10 @@ class ProcessingPipeline:
         try:
             logger.info("file_processing_started", file_path=file_path, has_metadata=bool(metadata))
             
-            # Process document
-            logger.info("calling_document_processor", file_path=file_path)
-            chunks = self.processor.process_document(file_path, metadata)
-            logger.info("document_processor_returned", num_chunks=len(chunks))
+            # Process document (will use pre-processed JSON if available)
+            logger.info("📝 Processing document...", file_path=file_path, has_processed_json=bool(processed_json_dir))
+            chunks = self.processor.process_document(file_path, metadata, processed_json_dir=processed_json_dir)
+            logger.info("✅ Document processed successfully", num_chunks=len(chunks))
             
             if not chunks:
                 logger.warning("no_chunks_generated", file_path=file_path)
@@ -124,9 +126,25 @@ class ProcessingPipeline:
                 }
             
             # Add to vector store
-            logger.info("calling_vector_store_add_documents", num_chunks=len(chunks))
+            logger.info("🔄 Generating embeddings and writing to Elasticsearch...", num_chunks=len(chunks))
             doc_ids = self.vector_store.add_documents(chunks)
-            logger.info("vector_store_returned", num_doc_ids=len(doc_ids))
+            
+            # Verify ES write success
+            if not doc_ids:
+                error_msg = f"Failed to write {len(chunks)} chunks to Elasticsearch - no documents indexed"
+                logger.error("❌ ES_WRITE_VERIFICATION_FAILED", 
+                           num_chunks=len(chunks), 
+                           num_indexed=0)
+                raise RuntimeError(error_msg)
+            elif len(doc_ids) < len(chunks):
+                logger.warning("⚠️  PARTIAL_ES_WRITE", 
+                              num_chunks=len(chunks), 
+                              num_indexed=len(doc_ids),
+                              success_rate=f"{len(doc_ids)/len(chunks)*100:.1f}%")
+            
+            logger.info("✅ Successfully written to Elasticsearch!", 
+                       num_doc_ids=len(doc_ids), 
+                       es_document_ids=doc_ids[:3] if doc_ids else [])
             
             result = {
                 "file_path": file_path,
@@ -135,12 +153,15 @@ class ProcessingPipeline:
                 "status": "completed"
             }
             
+            logger.info("=" * 80)
             logger.info(
-                "file_processing_completed",
+                "🎉 FILE PROCESSING COMPLETED SUCCESSFULLY!",
                 file_path=file_path,
                 num_chunks=len(chunks),
-                num_indexed=len(doc_ids)
+                num_indexed=len(doc_ids),
+                status="✅ COMPLETED"
             )
+            logger.info("=" * 80)
             
             return result
         

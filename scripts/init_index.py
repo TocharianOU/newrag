@@ -54,7 +54,28 @@ def main():
         with open(mapping_file, 'r', encoding='utf-8') as f:
             mapping = json.load(f)
         
-        print("✅ Loaded index mapping from file\n")
+        print("✅ Loaded index mapping from file")
+        
+        # Validate vector dimensions match config
+        embedding_config = config.embedding_config
+        config_dims = embedding_config.get('dimensions', 1536)
+        mapping_dims = mapping.get('mappings', {}).get('properties', {}).get('content_vector', {}).get('dims', 0)
+        
+        if config_dims != mapping_dims:
+            print(f"\n⚠️  WARNING: Dimension mismatch detected!")
+            print(f"  Config (config.yaml): {config_dims}")
+            print(f"  Mapping (elasticsearch_mapping.json): {mapping_dims}")
+            print(f"\n  This will cause indexing errors!")
+            response = input("\nDo you want to update mapping to match config? (yes/no): ")
+            
+            if response.lower() in ['yes', 'y']:
+                mapping['mappings']['properties']['content_vector']['dims'] = config_dims
+                print(f"✅ Updated mapping dims to {config_dims}\n")
+            else:
+                print("❌ Please manually fix the dimension mismatch")
+                return 1
+        else:
+            print(f"✅ Vector dimensions validated: {config_dims}\n")
     
     except Exception as e:
         print(f"❌ Failed to load mapping file: {e}")

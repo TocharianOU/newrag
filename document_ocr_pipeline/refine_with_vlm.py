@@ -176,13 +176,43 @@ Respond with ONLY the JSON, no additional text."""
             content = response.choices[0].message.content
             print("✓ Model response received")
             
-            # 解析JSON响应
+            # 解析JSON响应（增强鲁棒性）
             json_start = content.find("{")
             json_end = content.rfind("}") + 1
             
             if json_start != -1 and json_end > json_start:
                 json_str = content[json_start:json_end]
-                refined_data = json.loads(json_str)
+                
+                # 尝试多种解析策略
+                for attempt in range(3):
+                    try:
+                        if attempt == 0:
+                            # 直接解析
+                            refined_data = json.loads(json_str)
+                        elif attempt == 1:
+                            # 修复常见的转义问题：将单个反斜杠替换为双反斜杠（除了已经正确转义的）
+                            import re
+                            # 保护已经正确转义的字符
+                            fixed_json = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', json_str)
+                            refined_data = json.loads(fixed_json)
+                            print("   ℹ️  Fixed invalid escape sequences")
+                        elif attempt == 2:
+                            # 使用strict=False模式
+                            refined_data = json.loads(json_str, strict=False)
+                            print("   ℹ️  Parsed with strict=False mode")
+                        
+                        # 解析成功
+                        return refined_data
+                        
+                    except json.JSONDecodeError as e:
+                        if attempt < 2:
+                            continue  # 尝试下一个策略
+                        else:
+                            # 所有策略都失败，记录详细错误
+                            print(f"⚠️  JSON parse failed after {attempt+1} attempts: {e}")
+                            print(f"   Error position: line {e.lineno}, column {e.colno}")
+                            print(f"   Problematic section: ...{json_str[max(0,e.pos-50):e.pos+50]}...")
+                            raise ValueError(f"Failed to parse VLM JSON response: {e}")
             else:
                 raise ValueError("No valid JSON found in model response")
             
@@ -218,20 +248,39 @@ Respond with ONLY the JSON, no additional text."""
             
             content = response.choices[0].message.content
             
-            # 解析JSON
+            # 解析JSON（使用增强的鲁棒性解析）
             json_start = content.find("{")
             json_end = content.rfind("}") + 1
             
             if json_start != -1 and json_end > json_start:
                 json_str = content[json_start:json_end]
-                refined_data = json.loads(json_str)
+                
+                # 尝试多种解析策略
+                for attempt in range(3):
+                    try:
+                        if attempt == 0:
+                            refined_data = json.loads(json_str)
+                        elif attempt == 1:
+                            import re
+                            fixed_json = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', json_str)
+                            refined_data = json.loads(fixed_json)
+                            print("   ℹ️  Fixed invalid escape sequences (text-only mode)")
+                        elif attempt == 2:
+                            refined_data = json.loads(json_str, strict=False)
+                            print("   ℹ️  Parsed with strict=False mode (text-only)")
+                        
+                        return refined_data
+                        
+                    except json.JSONDecodeError as e:
+                        if attempt < 2:
+                            continue
+                        else:
+                            raise ValueError(f"Failed to parse JSON after {attempt+1} attempts: {e}")
             else:
                 raise ValueError("No valid JSON found in model response")
             
-            return refined_data
-            
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"❌ Text-only refinement failed: {e}")
             # 返回基础结构
             return {
                 "document_metadata": {},
@@ -316,6 +365,22 @@ Respond with ONLY the JSON, no additional text."""
 
 
 def main():
+    # Load default configuration from config.yaml
+    try:
+        import sys
+        from pathlib import Path
+        # Add parent directory to path to import config
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from src.config import config
+        vision_cfg = config.vision_config
+        default_api_base = vision_cfg.get('api_url', 'http://localhost:1234/v1')
+        default_model = vision_cfg.get('model_name', 'google/gemma-3-27b')
+        config_loaded = True
+    except ImportError:
+        default_api_base = 'http://localhost:1234/v1'
+        default_model = 'google/gemma-3-27b'
+        config_loaded = False
+    
     parser = argparse.ArgumentParser(
         description="使用VLM模型优化OCR结果，生成ES友好的JSON"
     )
@@ -324,10 +389,10 @@ def main():
     parser.add_argument("-o", "--output", help="输出JSON路径（默认：xxx_vlm.json）")
     parser.add_argument("-p", "--page-number", type=int, default=1, 
                        help="页码（用于VLM理解，默认：1）")
-    parser.add_argument("--api-base", default="http://localhost:1234/v1",
-                       help="LM Studio API地址（默认：http://localhost:1234/v1）")
-    parser.add_argument("--model", default="google/gemma-3-27b",
-                       help="模型名称（默认: google/gemma-3-27b）")
+    parser.add_argument("--api-base", default=default_api_base,
+                       help=f"LM Studio API地址（默认从config: {default_api_base}）")
+    parser.add_argument("--model", default=default_model,
+                       help=f"模型名称（默认从config: {default_model}）")
     parser.add_argument("--text-only", action="store_true",
                        help="仅使用文本模式（不发送图片）")
     parser.add_argument("--pretty", action="store_true",
@@ -355,6 +420,13 @@ def main():
     
     print("="*80)
     print(f"🚀 VLM Page Analysis (Page {args.page_number})")
+    print("="*80)
+    if config_loaded:
+        print(f"✓ Configuration loaded from config.yaml")
+    else:
+        print(f"⚠ Using default configuration (config.yaml not found)")
+    print(f"Model: {args.model}")
+    print(f"API: {args.api_base}")
     print("="*80)
     
     try:

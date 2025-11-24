@@ -33,8 +33,18 @@ class Document(Base):
     num_chunks = Column(Integer, default=0)
     error_message = Column(Text)
     
+    # Progress tracking
+    progress_percentage = Column(Integer, default=0)  # 0-100
+    progress_message = Column(String(500))  # Current step description
+    total_pages = Column(Integer, default=0)
+    processed_pages = Column(Integer, default=0)
+    
     # ES info
     es_document_ids = Column(Text)  # JSON string of document IDs
+    
+    # OCR Processing info
+    ocr_engine = Column(String(20))  # easy, paddle, vision
+    pages_data = Column(Text)  # JSON string of pages info (image paths, ocr data, etc.)
     
     # Timestamps
     uploaded_at = Column(DateTime, default=datetime.utcnow)
@@ -42,6 +52,7 @@ class Document(Base):
     
     def to_dict(self):
         """Convert to dictionary"""
+        import json
         return {
             'id': self.id,
             'filename': self.filename,
@@ -53,8 +64,14 @@ class Document(Base):
             'status': self.status,
             'num_chunks': self.num_chunks,
             'error_message': self.error_message,
+            'ocr_engine': self.ocr_engine,
+            'pages_data': json.loads(self.pages_data) if self.pages_data else None,
             'uploaded_at': self.uploaded_at.isoformat() if self.uploaded_at else None,
-            'processed_at': self.processed_at.isoformat() if self.processed_at else None
+            'processed_at': self.processed_at.isoformat() if self.processed_at else None,
+            'progress_percentage': self.progress_percentage or 0,
+            'progress_message': self.progress_message or '',
+            'total_pages': self.total_pages or 0,
+            'processed_pages': self.processed_pages or 0
         }
 
 
@@ -84,7 +101,8 @@ class DatabaseManager:
         category: Optional[str] = None,
         tags: Optional[List[str]] = None,
         author: Optional[str] = None,
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        ocr_engine: Optional[str] = None
     ) -> Document:
         """Create new document record"""
         session = self.get_session()
@@ -99,6 +117,7 @@ class DatabaseManager:
                 tags=','.join(tags) if tags else '',
                 author=author,
                 description=description,
+                ocr_engine=ocr_engine,
                 status='pending'
             )
             session.add(doc)
@@ -114,7 +133,8 @@ class DatabaseManager:
         status: str,
         num_chunks: Optional[int] = None,
         es_document_ids: Optional[str] = None,
-        error_message: Optional[str] = None
+        error_message: Optional[str] = None,
+        pages_data: Optional[str] = None
     ):
         """Update document processing status"""
         session = self.get_session()
@@ -128,9 +148,43 @@ class DatabaseManager:
                     doc.es_document_ids = es_document_ids
                 if error_message:
                     doc.error_message = error_message
+                if pages_data:
+                    doc.pages_data = pages_data
                 if status == 'completed':
                     doc.processed_at = datetime.utcnow()
+                    doc.progress_percentage = 100
                 session.commit()
+        finally:
+            session.close()
+    
+    def update_document_progress(
+        self,
+        doc_id: int,
+        progress_percentage: int,
+        progress_message: str,
+        processed_pages: Optional[int] = None,
+        total_pages: Optional[int] = None
+    ):
+        """Update document processing progress"""
+        session = self.get_session()
+        try:
+            doc = session.query(Document).filter(Document.id == doc_id).first()
+            if doc:
+                doc.progress_percentage = min(100, max(0, progress_percentage))
+                doc.progress_message = progress_message
+                if processed_pages is not None:
+                    doc.processed_pages = processed_pages
+                if total_pages is not None:
+                    doc.total_pages = total_pages
+                session.commit()
+        finally:
+            session.close()
+    
+    def get_document(self, doc_id: int) -> Optional[Document]:
+        """Get document by ID"""
+        session = self.get_session()
+        try:
+            return session.query(Document).filter(Document.id == doc_id).first()
         finally:
             session.close()
     

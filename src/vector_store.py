@@ -97,6 +97,13 @@ class VectorStore:
                 # Add indexed_at timestamp
                 doc.metadata['indexed_at'] = datetime.utcnow().isoformat()
                 
+                # Remove page_json and ocr_data from metadata before indexing to avoid mapping conflicts
+                # (ES tries to dynamically map nested fields even with enabled:false)
+                if 'page_json' in doc.metadata:
+                    del doc.metadata['page_json']
+                if 'ocr_data' in doc.metadata:
+                    del doc.metadata['ocr_data']
+                
                 valid_documents.append(doc)
                 logger.debug(
                     "document_validated",
@@ -108,11 +115,54 @@ class VectorStore:
                 logger.warning("no_valid_documents_to_index")
                 return []
             
-            logger.info("validation_complete", valid_documents=len(valid_documents), skipped=len(documents) - len(valid_documents))
+            logger.info("✅ Document validation complete", valid_documents=len(valid_documents), skipped=len(documents) - len(valid_documents))
+            
+            # Verify ES connection and ensure index exists (auto-create if needed)
+            try:
+                es_client = self.store.client
+                es_info = es_client.info()
+                index_exists = es_client.indices.exists(index=self.index_name)
+                
+                if not index_exists:
+                    logger.warning(f"⚠️  Index '{self.index_name}' does not exist, creating automatically...")
+                    # Load mapping from file and create index
+                    from pathlib import Path
+                    import json
+                    mapping_file = Path(__file__).parent.parent / "schemas" / "elasticsearch_mapping.json"
+                    with open(mapping_file, 'r') as f:
+                        mapping = json.load(f)
+                    es_client.indices.create(index=self.index_name, body=mapping)
+                    logger.info(f"✅ Index '{self.index_name}' created successfully")
+                
+                logger.info(
+                    "✅ Elasticsearch connection verified",
+                    es_version=es_info.get('version', {}).get('number'),
+                    index_name=self.index_name,
+                    index_exists=index_exists
+                )
+                    
+            except Exception as es_check_error:
+                logger.error(
+                    "❌ Elasticsearch connection or index check failed",
+                    error=str(es_check_error),
+                    error_type=type(es_check_error).__name__
+                )
+                raise
             
             # Add documents in batches
             ids = []
-            logger.info("starting_batch_indexing", total_batches=(len(valid_documents) + batch_size - 1) // batch_size)
+            total_batches = (len(valid_documents) + batch_size - 1) // batch_size
+            logger.info(f"🔄 Starting batch indexing to Elasticsearch ({total_batches} batches)", total_batches=total_batches, batch_size=batch_size)
+            
+            # Log first document sample for debugging
+            if valid_documents:
+                sample_doc = valid_documents[0]
+                logger.info(
+                    "📋 Sample document to be indexed:",
+                    content_length=len(sample_doc.page_content),
+                    content_preview=sample_doc.page_content[:150],
+                    metadata_keys=list(sample_doc.metadata.keys()) if hasattr(sample_doc, 'metadata') else []
+                )
             
             for i in range(0, len(valid_documents), batch_size):
                 batch = valid_documents[i:i + batch_size]
@@ -136,43 +186,131 @@ class VectorStore:
                     )
                     
                     # Try to add the batch
-                    logger.info("calling_langchain_add_documents", batch_size=len(batch))
+                    logger.info(f"📤 Indexing batch {batch_num}...", batch_size=len(batch))
                     batch_ids = self.store.add_documents(batch)
                     ids.extend(batch_ids)
                     
                     logger.info(
-                        "batch_indexed_successfully",
+                        f"✅ Batch {batch_num} indexed successfully",
                         batch_num=batch_num,
                         batch_size=len(batch),
                         num_ids=len(batch_ids),
-                        sample_ids=batch_ids[:3] if batch_ids else []
+                        sample_ids=batch_ids[:2] if batch_ids else []
                     )
                 except Exception as batch_error:
                     # If batch fails, try adding documents one by one
-                    logger.error(
-                        "batch_indexing_failed",
-                        batch_num=batch_num,
-                        error=str(batch_error),
-                        error_type=type(batch_error).__name__
-                    )
-                    logger.warning("retrying_documents_individually", batch_size=len(batch))
+                    import traceback
+                    error_details = {
+                        'error_type': type(batch_error).__name__,
+                        'error_message': str(batch_error),
+                    }
+                    
+                    # Extract detailed ES errors from BulkIndexError
+                    if hasattr(batch_error, 'errors') and batch_error.errors:
+                        # BulkIndexError.errors is a list of error details
+                        error_details['num_errors'] = len(batch_error.errors)
+                        # Show first 3 errors with full details
+                        error_details['es_error_details'] = []
+                        for i, err in enumerate(batch_error.errors[:3]):
+                            if isinstance(err, dict):
+                                # Extract the actual error reason from ES response
+                                error_info = {
+                                    'doc_index': i,
+                                    'error': err
+                                }
+                                error_details['es_error_details'].append(error_info)
+                        
+                        logger.error(
+                            "🚨 BATCH INDEXING FAILED - ES REJECTED ALL DOCUMENTS",
+                            batch_num=batch_num,
+                            **error_details
+                        )
+                    else:
+                        # Fallback if errors not in expected format
+                        if hasattr(batch_error, 'args') and len(batch_error.args) > 1:
+                            error_details['error_args'] = str(batch_error.args)
+                        error_details['traceback'] = traceback.format_exc()
+                        logger.error(
+                            "🚨 BATCH INDEXING FAILED - ES REJECTED ALL DOCUMENTS",
+                            batch_num=batch_num,
+                            **error_details
+                        )
+                    logger.warning("⚠️  Retrying documents individually to find problematic ones...", batch_size=len(batch))
                     
                     for doc_idx, doc in enumerate(batch):
                         try:
-                            logger.debug("indexing_single_document", doc_index=doc_idx, content_length=len(doc.page_content))
+                            logger.info(f"🔍 Trying document {doc_idx+1}/{len(batch)}", doc_index=doc_idx, content_length=len(doc.page_content))
                             doc_ids = self.store.add_documents([doc])
                             ids.extend(doc_ids)
-                            logger.debug("single_document_indexed", doc_index=doc_idx, doc_ids=doc_ids)
+                            logger.info(f"✅ Document {doc_idx+1} indexed successfully", doc_index=doc_idx, doc_ids=doc_ids)
                         except Exception as doc_error:
-                            logger.error(
-                                "single_document_indexing_failed",
-                                doc_index=doc_idx,
-                                error=str(doc_error),
-                                error_type=type(doc_error).__name__,
-                                content_preview=doc.page_content[:100]
-                            )
+                            import traceback
+                            error_details = {
+                                'error_type': type(doc_error).__name__,
+                                'error_message': str(doc_error),
+                                'content_preview': doc.page_content[:200] if doc.page_content else "(empty)",
+                                'metadata_keys': list(doc.metadata.keys()) if hasattr(doc, 'metadata') else [],
+                            }
+                            
+                            # Extract detailed ES errors from BulkIndexError
+                            if hasattr(doc_error, 'errors') and doc_error.errors:
+                                error_details['es_error_details'] = doc_error.errors[0] if doc_error.errors else {}
+                                logger.error(
+                                    f"❌ Document {doc_idx+1} FAILED TO INDEX - ES ERROR DETAILS:",
+                                    doc_index=doc_idx,
+                                    **error_details
+                                )
+                            else:
+                                # Fallback
+                                if hasattr(doc_error, 'args') and len(doc_error.args) > 1:
+                                    error_details['error_args'] = str(doc_error.args)
+                                error_details['traceback'] = traceback.format_exc()[:500]  # Limit traceback
+                                logger.error(
+                                    f"❌ Document {doc_idx+1} FAILED TO INDEX",
+                                    doc_index=doc_idx,
+                                    **error_details
+                                )
             
-            logger.info("documents_added", total_docs=len(ids), attempted=len(valid_documents))
+            # Verify ES write success by checking actual indexed documents
+            # Query ES to confirm documents are actually there
+            try:
+                es_client = self.store.client
+                es_client.indices.refresh(index=self.index_name)  # Refresh to make docs searchable
+                
+                # Count documents that were just added (by checking the document IDs)
+                if ids:
+                    # Verify a sample of documents actually exist in ES
+                    sample_ids = ids[:min(3, len(ids))]
+                    for doc_id in sample_ids:
+                        try:
+                            es_client.get(index=self.index_name, id=doc_id)
+                        except Exception as e:
+                            logger.error(f"❌ Document {doc_id} NOT FOUND in ES after indexing!", error=str(e))
+                            raise RuntimeError(f"ES write verification failed: document {doc_id} not found")
+            except Exception as verify_error:
+                logger.error("❌ ES WRITE VERIFICATION FAILED", error=str(verify_error))
+                raise RuntimeError(f"Failed to verify ES write: {verify_error}")
+            
+            # Check if any documents were successfully indexed
+            if len(ids) == 0 and len(valid_documents) > 0:
+                error_msg = f"Failed to index all {len(valid_documents)} documents to Elasticsearch"
+                logger.error("❌ ALL DOCUMENTS FAILED TO INDEX", 
+                            attempted=len(valid_documents), 
+                            successful=0)
+                raise RuntimeError(error_msg)
+            elif len(ids) < len(valid_documents):
+                logger.warning("⚠️  PARTIAL SUCCESS", 
+                              successful=len(ids), 
+                              attempted=len(valid_documents),
+                              failed=len(valid_documents) - len(ids))
+            
+            logger.info("=" * 60)
+            logger.info("✅ DOCUMENTS WRITTEN & VERIFIED IN ELASTICSEARCH", 
+                       total_docs=len(ids), 
+                       attempted=len(valid_documents),
+                       verified_sample=min(3, len(ids)),
+                       success_rate=f"{len(ids)/len(valid_documents)*100:.1f}%" if valid_documents else "N/A")
+            logger.info("=" * 60)
             
             return ids
         
@@ -241,7 +379,7 @@ class VectorStore:
             # Get vector search results
             vector_query = self.embedding_model.embed_text(query)
             
-            # Build ES query
+            # Build ES query with enhanced BM25 fields
             query_body = {
                 "size": k,
                 "query": {
@@ -259,9 +397,21 @@ class VectorStore:
                             {
                                 "multi_match": {
                                     "query": query,
-                                    "fields": ["text^2", "metadata.description"],  # LangChain uses 'text' field
+                                    "fields": [
+                                        "text^3",  # Main content (highest priority)
+                                        "metadata.filename^2.5",  # Filename (high priority)
+                                        "metadata.description^2",
+                                        "metadata.filepath^1.5",  # File path
+                                        "document_name^2",
+                                        "drawing_number^2",
+                                        "project_name^1.5",
+                                        "equipment_tags^1.2",
+                                        "component_details"
+                                    ],
                                     "type": "best_fields",
-                                    "boost": bm25_weight
+                                    "boost": bm25_weight,
+                                    "operator": "or",
+                                    "fuzziness": "AUTO"
                                 }
                             }
                         ]
@@ -275,13 +425,44 @@ class VectorStore:
                             "pre_tags": ["<mark>"],
                             "post_tags": ["</mark>"]
                         },
+                        "metadata.filename": {
+                            "fragment_size": 200,
+                            "number_of_fragments": 1,
+                            "pre_tags": ["<mark>"],
+                            "post_tags": ["</mark>"]
+                        },
                         "metadata.description": {
                             "fragment_size": 150,
                             "number_of_fragments": 1,
                             "pre_tags": ["<mark>"],
                             "post_tags": ["</mark>"]
+                        },
+                        "metadata.filepath": {
+                            "fragment_size": 200,
+                            "number_of_fragments": 1,
+                            "pre_tags": ["<mark>"],
+                            "post_tags": ["</mark>"]
+                        },
+                        "document_name": {
+                            "fragment_size": 150,
+                            "number_of_fragments": 1,
+                            "pre_tags": ["<mark>"],
+                            "post_tags": ["</mark>"]
+                        },
+                        "drawing_number": {
+                            "fragment_size": 100,
+                            "number_of_fragments": 1,
+                            "pre_tags": ["<mark>"],
+                            "post_tags": ["</mark>"]
+                        },
+                        "project_name": {
+                            "fragment_size": 150,
+                            "number_of_fragments": 1,
+                            "pre_tags": ["<mark>"],
+                            "post_tags": ["</mark>"]
                         }
-                    }
+                    },
+                    "require_field_match": False
                 }
             }
             
@@ -300,15 +481,29 @@ class VectorStore:
             # Parse results
             results = []
             for hit in response['hits']['hits']:
-                # Get highlighted text if available
-                highlighted_text = None
+                # Merge ALL highlighted text from all fields
+                highlighted_parts = []
                 if 'highlight' in hit:
-                    if 'text' in hit['highlight']:
-                        highlighted_text = ' ... '.join(hit['highlight']['text'])
-                    elif 'metadata.description' in hit['highlight']:
-                        highlighted_text = ' ... '.join(hit['highlight']['metadata.description'])
+                    # Priority order for highlights
+                    highlight_fields = [
+                        'metadata.filename',
+                        'metadata.filepath', 
+                        'text',
+                        'metadata.description',
+                        'document_name',
+                        'drawing_number',
+                        'project_name',
+                        'equipment_tags',
+                        'component_details'
+                    ]
+                    for field in highlight_fields:
+                        if field in hit['highlight']:
+                            highlighted_parts.extend(hit['highlight'][field])
+                
+                highlighted_text = ' ... '.join(highlighted_parts) if highlighted_parts else None
                 
                 source = hit['_source']
+                
                 results.append({
                     'id': hit['_id'],
                     'score': hit['_score'],

@@ -1,0 +1,51 @@
+{
+  "file": "page_001_region_01_600dpi.png",
+  "image_size": {
+    "width": 1364,
+    "height": 2104
+  },
+  "status": "success",
+  "text_blocks_count": 3,
+  "layout_regions_count": 0,
+  "text_blocks": [
+    {
+      "text": "日",
+      "bbox": [
+        1147.0,
+        1492.0,
+        1201.0,
+        1552.0
+      ],
+      "confidence": 0.7087516188621521,
+      "center_x": 1174.0,
+      "center_y": 1522.0
+    },
+    {
+      "text": "3",
+      "bbox": [
+        1151.0,
+        1731.0,
+        1204.0,
+        1788.0
+      ],
+      "confidence": 0.2810475528240204,
+      "center_x": 1177.5,
+      "center_y": 1759.5
+    },
+    {
+      "text": "Accep",
+      "bbox": [
+        1175.0,
+        2033.0,
+        1351.0,
+        2085.0
+      ],
+      "confidence": 0.8978315591812134,
+      "center_x": 1263.0,
+      "center_y": 2059.0
+    }
+  ],
+  "layout_regions": null,
+  "full_text": "日\n3\nAccep",
+  "average_confidence": 0.6292102436224619
+}

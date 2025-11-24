@@ -1,0 +1,147 @@
+{
+  "file": "page_004_region_03_600dpi.png",
+  "image_size": {
+    "width": 1488,
+    "height": 1929
+  },
+  "status": "success",
+  "text_blocks_count": 11,
+  "layout_regions_count": 0,
+  "text_blocks": [
+    {
+      "text": "TF",
+      "bbox": [
+        1380.0,
+        440.0,
+        1488.0,
+        522.0
+      ],
+      "confidence": 0.884818434715271,
+      "center_x": 1434.0,
+      "center_y": 481.0
+    },
+    {
+      "text": "Project No.:",
+      "bbox": [
+        852.0,
+        439.0,
+        1380.0,
+        558.0
+      ],
+      "confidence": 0.9864030480384827,
+      "center_x": 1116.0,
+      "center_y": 498.5
+    },
+    {
+      "text": "3137ReformedGas",
+      "bbox": [
+        0.0,
+        510.0,
+        774.0,
+        613.0
+      ],
+      "confidence": 0.9513413310050964,
+      "center_x": 387.0,
+      "center_y": 561.5
+    },
+    {
+      "text": "Doc. No.: TR1D-HX",
+      "bbox": [
+        858.0,
+        555.0,
+        1488.0,
+        655.0
+      ],
+      "confidence": 0.830409049987793,
+      "center_x": 1173.0,
+      "center_y": 605.0
+    },
+    {
+      "text": "oler",
+      "bbox": [
+        0.0,
+        631.0,
+        149.0,
+        722.0
+      ],
+      "confidence": 0.9911209940910339,
+      "center_x": 74.5,
+      "center_y": 676.5
+    },
+    {
+      "text": "4",
+      "bbox": [
+        1341.0,
+        654.0,
+        1469.0,
+        737.0
+      ],
+      "confidence": 0.967409610748291,
+      "center_x": 1405.0,
+      "center_y": 695.5
+    },
+    {
+      "text": "Page",
+      "bbox": [
+        1180.0,
+        660.0,
+        1386.0,
+        755.0
+      ],
+      "confidence": 0.9971511960029602,
+      "center_x": 1283.0,
+      "center_y": 707.5
+    },
+    {
+      "text": "Location:",
+      "bbox": [
+        0.0,
+        889.0,
+        291.0,
+        974.0
+      ],
+      "confidence": 0.9998032450675964,
+      "center_x": 145.5,
+      "center_y": 931.5
+    },
+    {
+      "text": "Item No.: ES-3137",
+      "bbox": [
+        0.0,
+        984.0,
+        585.0,
+        1072.0
+      ],
+      "confidence": 0.9819020628929138,
+      "center_x": 292.5,
+      "center_y": 1028.0
+    },
+    {
+      "text": "Fabricator:",
+      "bbox": [
+        0.0,
+        1084.0,
+        340.0,
+        1171.0
+      ],
+      "confidence": 0.9982544183731079,
+      "center_x": 170.0,
+      "center_y": 1127.5
+    },
+    {
+      "text": "tch",
+      "bbox": [
+        0.0,
+        1175.0,
+        119.0,
+        1257.0
+      ],
+      "confidence": 0.9996487498283386,
+      "center_x": 59.5,
+      "center_y": 1216.0
+    }
+  ],
+  "layout_regions": null,
+  "full_text": "TF\nProject No.:\n3137ReformedGas\nDoc. No.: TR1D-HX\noler\n4\nPage\nLocation:\nItem No.: ES-3137\nFabricator:\ntch",
+  "average_confidence": 0.9625692855228077
+}

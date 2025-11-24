@@ -1,6 +1,7 @@
 """Document processing module with LangChain integration"""
 
 import hashlib
+import json
 import os
 import tempfile
 import zipfile
@@ -29,7 +30,7 @@ except ImportError:
 
 from src.config import config
 from src.models import VisionModel
-from src.glm_extractor import GLMPageExtractor
+from src.vlm_extractor import VLMPageExtractor
 
 logger = structlog.get_logger(__name__)
 
@@ -100,22 +101,23 @@ class DocumentProcessor:
             except Exception as e:
                 logger.warning("vision_model_init_failed", error=str(e))
         
-        # Initialize GLM page extractor
-        self.glm_extractor = None
+        # Initialize VLM page extractor
+        self.vlm_extractor = None
         try:
-            self.glm_extractor = GLMPageExtractor()
-            logger.info("glm_extractor_initialized")
+            self.vlm_extractor = VLMPageExtractor()
+            logger.info("vlm_extractor_initialized")
         except Exception as e:
-            logger.warning("glm_extractor_init_failed", error=str(e))
+            logger.warning("vlm_extractor_init_failed", error=str(e))
         
         logger.info("document_processor_initialized")
     
-    def load_document(self, file_path: str) -> List[Document]:
+    def load_document(self, file_path: str, processed_json_dir: Optional[str] = None) -> List[Document]:
         """
         Load document using appropriate loader
         
         Args:
             file_path: Path to document file
+            processed_json_dir: Optional path to directory containing complete_document.json
         
         Returns:
             List of LangChain Document objects
@@ -125,6 +127,14 @@ class DocumentProcessor:
         
         try:
             if file_ext == '.pdf':
+                # Check if we have pre-processed JSON (from adaptive OCR pipeline)
+                if processed_json_dir:
+                    complete_json = Path(processed_json_dir) / "complete_document.json"
+                    if complete_json.exists():
+                        logger.info("loading_from_preprocessed_json", json_path=str(complete_json))
+                        return self._load_from_complete_json(complete_json)
+                    else:
+                        logger.debug("complete_json_not_found", expected_path=str(complete_json))
                 loader = PyPDFLoader(str(file_path))
                 documents = loader.load()
                 
@@ -146,7 +156,7 @@ class DocumentProcessor:
                         is_garbled, garbled_ratio = detect_garbled_text(doc.page_content) if doc.page_content else (False, 0.0)
                         content_len = len(doc.page_content.strip()) if doc.page_content else 0
                         
-                        # Use GLM if:
+                        # Use VLM if:
                         # 1. Garbled text
                         # 2. Very short content (< 50 chars)
                         # 3. Drawing (ALWAYS use vision for drawings to capture spatial layout)
@@ -154,7 +164,7 @@ class DocumentProcessor:
                         # 5. Explicitly configured to convert tables
                         is_rich_text = content_len > 800
                         
-                        needs_glm = (
+                        needs_vlm = (
                             is_garbled or 
                             content_len < 50 or
                             page_type == 'drawing' or  # Always use vision for drawings
@@ -167,30 +177,30 @@ class DocumentProcessor:
                             page_type=page_type,
                             is_garbled=is_garbled,
                             garbled_ratio=f"{garbled_ratio:.2%}",
-                            needs_glm=needs_glm,
+                            needs_vlm=needs_vlm,
                             content_length=content_len
                         )
                         
-                        # Use GLM extraction if needed
-                        if needs_glm and self.glm_extractor and PDF2IMAGE_AVAILABLE:
+                        # Use VLM extraction if needed
+                        if needs_vlm and self.vlm_extractor and PDF2IMAGE_AVAILABLE:
                             try:
-                                logger.info("using_glm_for_page", page=idx + 1)
+                                logger.info("using_vlm_for_page", page=idx + 1)
                                 
                                 # Convert page to image
                                 image_path = self._convert_pdf_page_to_image(file_path, idx)
                                 
                                 try:
-                                    # Extract with GLM
-                                    page_json = self.glm_extractor.extract_page_content(image_path, page_type)
+                                    # Extract with VLM
+                                    page_json = self.vlm_extractor.extract_page_content(image_path, page_type)
                                     
                                     # Convert JSON to searchable text
                                     doc.page_content = self._flatten_to_searchable_text(page_json)
                                     doc.metadata['page_json'] = page_json
                                     doc.metadata['page_type'] = page_type
-                                    doc.metadata['extraction_method'] = 'glm'
+                                    doc.metadata['extraction_method'] = 'vlm'
                                     
                                     logger.info(
-                                        "glm_extraction_success",
+                                        "vlm_extraction_success",
                                         page=idx + 1,
                                         num_equipment=len(page_json.get('equipment', [])),
                                         num_components=len(page_json.get('components', []))
@@ -204,7 +214,7 @@ class DocumentProcessor:
                             
                             except Exception as e:
                                 logger.error(
-                                    "glm_extraction_failed",
+                                    "vlm_extraction_failed",
                                     page=idx + 1,
                                     error=str(e)
                                 )
@@ -308,6 +318,59 @@ class DocumentProcessor:
         
         except Exception as e:
             logger.error("document_load_failed", error=str(e), file_path=str(file_path))
+            raise
+    
+    def _load_from_complete_json(self, json_path: Path) -> List[Document]:
+        """
+        Load document from pre-processed complete_document.json
+        This avoids redundant VLM calls since OCR pipeline already extracted everything
+        
+        Args:
+            json_path: Path to complete_document.json
+        
+        Returns:
+            List of LangChain Document objects
+        """
+        try:
+            logger.info("📖 Reading pre-processed JSON (skipping VLM)", json_path=str(json_path))
+            
+            with open(json_path, 'r', encoding='utf-8') as f:
+                pages_data = json.load(f)
+            
+            logger.info("✅ Successfully loaded complete_document.json", num_pages=len(pages_data))
+            
+            documents = []
+            for page_data in pages_data:
+                page_num = page_data.get('page_number', len(documents) + 1)
+                
+                # Convert VLM JSON to searchable text
+                page_content = self._flatten_to_searchable_text(page_data)
+                
+                # Create Document with metadata (OCR bbox data will be loaded on-demand during search)
+                doc = Document(
+                    page_content=page_content,
+                    metadata={
+                        'page': page_num,
+                        'page_number': page_num,
+                        'page_json': page_data,
+                        'page_type': page_data.get('document_info', {}).get('document_type', 'drawing'),
+                        'extraction_method': 'vlm_refined'
+                    }
+                )
+                
+                documents.append(doc)
+                
+                logger.info(
+                    f"✅ Page {page_num} converted to searchable text",
+                    page_number=page_num,
+                    content_length=len(page_content),
+                    has_content=bool(page_content.strip())
+                )
+            
+            return documents
+        
+        except Exception as e:
+            logger.error("failed_to_load_complete_json", error=str(e), json_path=str(json_path))
             raise
     
     def _load_image_document(self, image_path: Path) -> List[Document]:
@@ -493,111 +556,187 @@ class DocumentProcessor:
     def _flatten_page_json(self, page_json: Dict[str, Any]) -> Dict[str, Any]:
         """
         Flatten page JSON for searchable fields
+        Supports both refine_with_vlm.py and vlm_extractor.py formats
         
         Args:
-            page_json: Page data from GLM extraction
+            page_json: Page data from VLM extraction
         
         Returns:
             Flattened data dictionary
         """
         flattened = {}
         
-        # Document info
-        doc_info = page_json.get('document_info', {})
-        flattened['drawing_number'] = doc_info.get('drawing_number', '')
-        flattened['project_name'] = doc_info.get('project_name', '')
-        
-        # Equipment tags (exact match)
-        equipment = page_json.get('equipment', [])
-        flattened['equipment_tags'] = [e.get('tag') or e.get('id') for e in equipment if e.get('tag') or e.get('id')]
-        flattened['equipment_names'] = [e.get('name') for e in equipment if e.get('name')]
-        
-        # All components (for search)
-        components = page_json.get('components', [])
-        component_ids = [c.get('id') for c in components if c.get('id')]
-        
-        # Also get from all_components_list if available
-        if 'all_components_list' in page_json:
-            component_ids.extend(page_json['all_components_list'])
-        
-        # Remove duplicates
-        component_ids = list(set(component_ids))
-        flattened['all_components'] = ' '.join(component_ids)
-        
-        # Component details (nested)
-        flattened['component_details'] = [
-            {
-                'id': c.get('id', ''),
-                'type': c.get('type', ''),
-                'value': c.get('value', ''),
-                'reference': c.get('id', ''),
-                'position': c.get('position', '')
-            }
-            for c in components
-        ]
-        
-        # Flatten tables
-        tables = page_json.get('tables', [])
-        table_cells = []
-        for table in tables:
-            # Add headers
-            headers = table.get('headers', [])
-            table_cells.extend([str(h) for h in headers])
+        # Check format and extract accordingly
+        if 'content' in page_json:
+            # refine_with_vlm.py format
+            content = page_json.get('content', {})
+            metadata = page_json.get('metadata', {})
             
-            # Add all cells from rows
-            for row in table.get('rows', []):
-                table_cells.extend([str(cell) for cell in row])
+            # Basic info from metadata
+            flattened['drawing_number'] = metadata.get('document_id', '')
+            flattened['project_name'] = metadata.get('title', '')
+            
+            # Extract from key_fields
+            key_fields = content.get('key_fields', [])
+            for field in key_fields:
+                field_name = field.get('field', '')
+                field_value = field.get('value', '')
+                if 'number' in field_name.lower() or 'id' in field_name.lower():
+                    if not flattened['drawing_number']:
+                        flattened['drawing_number'] = field_value
+            
+            # Equipment and components (empty for non-industrial docs)
+            flattened['equipment_tags'] = []
+            flattened['equipment_names'] = []
+            flattened['all_components'] = ''
+            flattened['component_details'] = []
+            
+            # Table cells from tables
+            table_cells = []
+            for table in content.get('tables', []):
+                if isinstance(table, dict):
+                    # Add description if available
+                    if 'description' in table:
+                        table_cells.append(table['description'])
+            flattened['table_cells'] = table_cells
+            
+            # All text tokens
+            full_text = content.get('full_text_cleaned', '') or content.get('full_text_raw', '')
+            flattened['all_text_tokens'] = full_text
         
-        flattened['table_cells'] = table_cells
-        
-        # All text tokens
-        all_texts = page_json.get('all_text', [])
-        flattened['all_text_tokens'] = ' '.join(all_texts)
+        else:
+            # Original vlm_extractor.py format
+            # Document info
+            doc_info = page_json.get('document_info', {})
+            flattened['drawing_number'] = doc_info.get('drawing_number', '')
+            flattened['project_name'] = doc_info.get('project_name', '')
+            
+            # Equipment tags (exact match)
+            equipment = page_json.get('equipment', []) or []
+            flattened['equipment_tags'] = [e.get('tag') or e.get('id') for e in equipment if e.get('tag') or e.get('id')]
+            flattened['equipment_names'] = [e.get('name') for e in equipment if e.get('name')]
+            
+            # All components (for search)
+            components = page_json.get('components', []) or []
+            component_ids = [c.get('id') for c in components if c.get('id')]
+            
+            # Also get from all_components_list if available
+            if 'all_components_list' in page_json:
+                component_ids.extend(page_json['all_components_list'])
+            
+            # Remove duplicates
+            component_ids = list(set(component_ids))
+            flattened['all_components'] = ' '.join(component_ids)
+            
+            # Component details (nested)
+            flattened['component_details'] = [
+                {
+                    'id': c.get('id', ''),
+                    'type': c.get('type', ''),
+                    'value': c.get('value', ''),
+                    'reference': c.get('id', ''),
+                    'position': c.get('position', '')
+                }
+                for c in components
+            ]
+            
+            # Flatten tables
+            tables = page_json.get('tables', []) or []
+            table_cells = []
+            for table in tables:
+                # Add headers
+                headers = table.get('headers', [])
+                table_cells.extend([str(h) for h in headers])
+                
+                # Add all cells from rows
+                for row in table.get('rows', []):
+                    table_cells.extend([str(cell) for cell in row])
+            
+            flattened['table_cells'] = table_cells
+            
+            # All text tokens
+            all_texts = page_json.get('all_text', []) or []
+            if isinstance(all_texts, list):
+                flattened['all_text_tokens'] = ' '.join(all_texts)
+            else:
+                flattened['all_text_tokens'] = str(all_texts)
         
         return flattened
     
     def _flatten_to_searchable_text(self, page_json: Dict[str, Any]) -> str:
         """
         Convert page JSON to searchable text
+        Supports two JSON formats:
+        1. refine_with_vlm.py format (content.full_text_cleaned)
+        2. vlm_extractor.py format (document_info, equipment, components)
         
         Args:
-            page_json: Page data from GLM extraction
+            page_json: Page data from VLM extraction
         
         Returns:
             Flattened text for content field
         """
         parts = []
         
-        # Document info
-        doc_info = page_json.get('document_info', {})
-        for key, value in doc_info.items():
-            if value:
-                parts.append(f"{key}: {value}")
+        # Check if this is refine_with_vlm.py format (has 'content' key)
+        if 'content' in page_json:
+            content = page_json['content']
+            
+            # Use full_text_cleaned as primary content
+            if 'full_text_cleaned' in content and content['full_text_cleaned']:
+                parts.append(content['full_text_cleaned'])
+            elif 'full_text_raw' in content and content['full_text_raw']:
+                parts.append(content['full_text_raw'])
+            
+            # Add key fields
+            for field in content.get('key_fields', []):
+                field_name = field.get('field', '')
+                field_value = field.get('value', '')
+                if field_name and field_value:
+                    parts.append(f"{field_name}: {field_value}")
+            
+            # Add page description
+            if 'page_analysis' in page_json:
+                page_desc = page_json['page_analysis'].get('page_description', '')
+                if page_desc:
+                    parts.append(f"Page Description: {page_desc}")
         
-        # Equipment
-        for equip in page_json.get('equipment', []):
-            tag = equip.get('tag') or equip.get('id')
-            name = equip.get('name')
-            if tag:
-                parts.append(f"Equipment {tag}: {name or ''}")
+        else:
+            # Original vlm_extractor.py format
+            # Document info
+            doc_info = page_json.get('document_info', {})
+            for key, value in doc_info.items():
+                if value:
+                    parts.append(f"{key}: {value}")
+            
+            # Equipment
+            for equip in page_json.get('equipment', []):
+                tag = equip.get('tag') or equip.get('id')
+                name = equip.get('name')
+                if tag:
+                    parts.append(f"Equipment {tag}: {name or ''}")
+            
+            # Components
+            for comp in page_json.get('components', []):
+                comp_id = comp.get('id')
+                comp_type = comp.get('type')
+                value = comp.get('value')
+                if comp_id:
+                    parts.append(f"Component {comp_id} ({comp_type}): {value or ''}")
+            
+            # All text
+            all_text = page_json.get('all_text', [])
+            if isinstance(all_text, list):
+                parts.extend(all_text)
+            elif isinstance(all_text, str):
+                parts.append(all_text)
+            
+            # Notes
+            notes = page_json.get('notes', [])
+            if isinstance(notes, list):
+                parts.extend(notes)
         
-        # Components
-        for comp in page_json.get('components', []):
-            comp_id = comp.get('id')
-            comp_type = comp.get('type')
-            value = comp.get('value')
-            if comp_id:
-                parts.append(f"Component {comp_id} ({comp_type}): {value or ''}")
-        
-        # All text
-        all_text = page_json.get('all_text', [])
-        parts.extend(all_text)
-        
-        # Notes
-        notes = page_json.get('notes', [])
-        parts.extend(notes)
-        
-        return '\n'.join(parts)
+        return '\n'.join(filter(None, parts))
     
     def _convert_pdf_page_to_image(self, pdf_path: Path, page_num: int) -> str:
         """
@@ -629,7 +768,8 @@ class DocumentProcessor:
     def process_document(
         self,
         file_path: str,
-        additional_metadata: Optional[Dict[str, Any]] = None
+        additional_metadata: Optional[Dict[str, Any]] = None,
+        processed_json_dir: Optional[str] = None
     ) -> List[Document]:
         """
         Process document: load, split, and add metadata
@@ -637,13 +777,14 @@ class DocumentProcessor:
         Args:
             file_path: Path to document file
             additional_metadata: Additional metadata to add
+            processed_json_dir: Optional path to directory with pre-processed JSON
         
         Returns:
             List of processed Document chunks
         """
-        # Load document
-        logger.info("loading_document", file_path=file_path)
-        documents = self.load_document(file_path)
+        # Load document (will use pre-processed JSON if available)
+        logger.info("loading_document", file_path=file_path, has_processed_json=bool(processed_json_dir))
+        documents = self.load_document(file_path, processed_json_dir=processed_json_dir)
         logger.info("document_loaded", num_raw_documents=len(documents))
         
         # Log raw document content

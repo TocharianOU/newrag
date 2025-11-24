@@ -3,6 +3,9 @@
 import os
 import shutil
 import json
+import subprocess
+import sys
+import threading
 from pathlib import Path
 from typing import List, Optional
 from datetime import datetime
@@ -19,26 +22,14 @@ from starlette.requests import Request
 from src.config import config
 from src.pipeline import ProcessingPipeline
 from src.database import DatabaseManager
+from src.logging_config import setup_logging
 
-# Initialize logging
-structlog.configure(
-    processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer()
-    ],
-    context_class=dict,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    cache_logger_on_first_use=True,
-)
-
+# Initialize logging with file output
+setup_logging(log_dir="logs", log_level="INFO")
 logger = structlog.get_logger(__name__)
+
+# Concurrent processing control (limit to 3 documents processing at the same time)
+processing_semaphore = threading.Semaphore(3)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -67,9 +58,12 @@ app.mount("/static", StaticFiles(directory="web/static"), name="static")
 pipeline = ProcessingPipeline()
 db = DatabaseManager()
 
-# Create upload folder
+# Create upload and processed folders
 upload_folder = Path(web_config.get('upload_folder', './uploads'))
 upload_folder.mkdir(parents=True, exist_ok=True)
+
+processed_folder = Path('web/static/processed_docs')
+processed_folder.mkdir(parents=True, exist_ok=True)
 
 
 # Pydantic models
@@ -99,13 +93,275 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+def extract_matched_bboxes_from_file(doc_id: int, checksum: str, page_number: int, query_text: str):
+    """
+    Extract matched bboxes from OCR JSON file for visualization
+    
+    Args:
+        doc_id: Document ID
+        checksum: Document checksum (first 8 chars used in folder name)
+        page_number: Page number to extract bboxes from
+        query_text: Query text to match against OCR text blocks
+        
+    Returns:
+        List of matched bbox dicts with text, bbox, confidence, matched_words
+    """
+    import re
+    
+    try:
+        # Build path to processed document folder
+        doc_folder = processed_folder / f"{doc_id}_{checksum[:8]}"
+        
+        if not doc_folder.exists():
+            logger.warning("doc_folder_not_found", doc_id=doc_id, folder=str(doc_folder))
+            return []
+        
+        # Load OCR JSON file for the specific page
+        ocr_json_file = doc_folder / f"page_{page_number:03d}_global_ocr.json"
+        if not ocr_json_file.exists():
+            logger.warning("ocr_json_not_found", page=page_number, file=str(ocr_json_file))
+            return []
+        
+        with open(ocr_json_file, 'r', encoding='utf-8') as f:
+            ocr_data = json.load(f)
+        
+        text_blocks = ocr_data.get('text_blocks', [])
+        if not text_blocks:
+            return []
+        
+        # Normalize query for matching
+        query_normalized = re.sub(r'\s+', ' ', query_text.lower().strip())
+        query_words = query_normalized.split()
+        
+        matched_bboxes = []
+        
+        # Match text blocks
+        for idx, block in enumerate(text_blocks):
+            text = block.get('text', '')
+            bbox = block.get('bbox', [])
+            confidence = block.get('confidence', 0.0)
+            
+            if not text or not bbox or len(bbox) != 4:
+                continue
+            
+            text_normalized = text.lower()
+            
+            # Check if any query word is in this text block
+            matched = False
+            matched_words = []
+            
+            for word in query_words:
+                if len(word) >= 2 and word in text_normalized:
+                    matched = True
+                    matched_words.append(word)
+            
+            # Also try partial matching for longer queries
+            if not matched and len(query_normalized) >= 4:
+                if query_normalized in text_normalized:
+                    matched = True
+                    matched_words.append(query_normalized)
+            
+            if matched:
+                matched_bboxes.append({
+                    'text': text,
+                    'bbox': bbox,  # [x1, y1, x2, y2]
+                    'confidence': confidence,
+                    'matched_words': matched_words,
+                    'block_index': idx
+                })
+        
+        # Sort by confidence (highest first)
+        matched_bboxes.sort(key=lambda x: x['confidence'], reverse=True)
+        
+        # Limit to top 20 matches
+        result = matched_bboxes[:20]
+        logger.info("extracted_matched_bboxes", page=page_number, count=len(result), total_matches=len(matched_bboxes))
+        return result
+        
+    except Exception as e:
+        logger.error("failed_to_extract_bboxes", error=str(e), doc_id=doc_id, page=page_number)
+        return []
+
+
+def process_document_background(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str):
+    """Background task to process document"""
+    # Wait for processing slot (max 3 concurrent documents)
+    with processing_semaphore:
+        try:
+            logger.info("background_processing_started", doc_id=doc_id, filename=file_path.name)
+            
+            # Update progress: Starting OCR
+            db.update_document_progress(doc_id, 10, "Starting OCR processing...")
+        
+            # Run adaptive OCR pipeline
+            adaptive_script = Path('document_ocr_pipeline/adaptive_ocr_pipeline.py')
+            subprocess.run([
+                sys.executable,
+                str(adaptive_script),
+                str(file_path),
+                '--ocr-engine', ocr_engine
+            ], check=True)
+        
+            # Update progress: OCR completed
+            db.update_document_progress(doc_id, 50, "OCR completed, processing pages...")
+        
+            # Find the generated output directory
+            temp_output_dir = Path(file_path.stem.replace(' ', '_') + "_adaptive")
+        
+            if not temp_output_dir.exists():
+                raise RuntimeError(f"OCR output directory not found: {temp_output_dir}")
+        
+            # Move to static folder with doc ID
+            doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
+            if doc_output_dir.exists():
+                shutil.rmtree(doc_output_dir)
+            shutil.move(str(temp_output_dir), str(doc_output_dir))
+        
+            # Update progress: Loading pages data
+            db.update_document_progress(doc_id, 60, "Loading pages data...")
+        
+            # Load pages data
+            complete_json = doc_output_dir / 'complete_adaptive_ocr.json'
+            pages_data_list = []
+            total_pages = 0
+        
+            if complete_json.exists():
+                with open(complete_json, 'r', encoding='utf-8') as f:
+                    complete_data = json.load(f)
+            
+                total_pages = len(complete_data.get('pages', []))
+                db.update_document_progress(doc_id, 65, f"Processing {total_pages} pages...", 
+                                           processed_pages=0, total_pages=total_pages)
+            
+                # Build pages data
+                for idx, page in enumerate(complete_data.get('pages', []), 1):
+                    page_num = page.get('page_number', idx)
+                
+                    # Update progress per page
+                    page_progress = 65 + (20 * idx / total_pages)  # 65-85% for page processing
+                    db.update_document_progress(
+                        doc_id, 
+                        int(page_progress), 
+                        f"Processing page {idx}/{total_pages}...",
+                        processed_pages=idx,
+                        total_pages=total_pages
+                    )
+                
+                    # Get text count from statistics
+                    stats = page.get('statistics', {})
+                    text_count = stats.get('total_text_blocks', 0)
+                
+                    # Get stage1 file paths
+                    stage1 = page.get('stage1_global', {})
+                    image_filename = stage1.get('image', f'page_{page_num:03d}_300dpi.png')
+                    visualized_filename = stage1.get('visualized', f'page_{page_num:03d}_global_visualized.png')
+                    ocr_json_filename = stage1.get('ocr_json', f'page_{page_num:03d}_global_ocr.json')
+                
+                    # Try to extract components from VLM JSON if available
+                    components = []
+                    stage3 = page.get('stage3_vlm', {})
+                    vlm_json_filename = stage3.get('vlm_json')
+                    if vlm_json_filename:
+                        vlm_json_path = doc_output_dir / vlm_json_filename
+                        if vlm_json_path.exists():
+                            try:
+                                with open(vlm_json_path, 'r', encoding='utf-8') as vf:
+                                    vlm_data = json.load(vf)
+                                    # Try different possible locations for components
+                                    if 'components' in vlm_data:
+                                        components = vlm_data['components']
+                                    elif 'domain_data' in vlm_data and isinstance(vlm_data['domain_data'], dict):
+                                        if 'components' in vlm_data['domain_data']:
+                                            components = vlm_data['domain_data']['components']
+                                        elif 'equipment' in vlm_data['domain_data']:
+                                            equipment = vlm_data['domain_data']['equipment']
+                                            if isinstance(equipment, list):
+                                                components = [e.get('id', '') for e in equipment if isinstance(e, dict) and 'id' in e]
+                            except Exception as e:
+                                logger.warning("failed_to_parse_vlm_json", error=str(e), file=vlm_json_filename)
+                
+                    page_info = {
+                        'page_num': page_num,
+                        'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{image_filename}",
+                        'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{visualized_filename}",
+                        'ocr_json_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{ocr_json_filename}",
+                        'text_count': text_count,
+                        'components': components[:20] if components else []
+                    }
+                    pages_data_list.append(page_info)
+        
+            # Update progress: Indexing to Elasticsearch
+            db.update_document_progress(doc_id, 85, "Indexing to Elasticsearch...")
+        
+            # Process with vector store
+            result = pipeline.process_file(str(file_path), metadata, processed_json_dir=str(doc_output_dir))
+        
+            # Update progress: Finalizing
+            db.update_document_progress(doc_id, 95, "Finalizing...")
+        
+            # Update database with result
+            if result.get('status') == 'completed':
+                if not result.get('document_ids'):
+                    logger.error("NO_DOCUMENTS_INDEXED", 
+                               num_chunks=result.get('num_chunks', 0), doc_id=doc_id)
+                    db.update_document_status(
+                        doc_id,
+                        'failed',
+                        error_message='Processing completed but no documents were indexed to Elasticsearch'
+                    )
+                else:
+                    db.update_document_status(
+                        doc_id,
+                        'completed',
+                        num_chunks=result.get('num_chunks', 0),
+                        es_document_ids=json.dumps(result.get('document_ids', [])),
+                        pages_data=json.dumps(pages_data_list)
+                    )
+                    logger.info("document_processing_completed", doc_id=doc_id, 
+                              num_chunks=result.get('num_chunks', 0))
+            else:
+                db.update_document_status(
+                    doc_id,
+                    'failed',
+                    error_message=result.get('error', 'Unknown error')
+                )
+    
+        except subprocess.CalledProcessError as e:
+            logger.error("adaptive_ocr_failed", error=str(e), doc_id=doc_id)
+            db.update_document_status(
+                doc_id,
+                'failed',
+                error_message=f"OCR processing failed: {str(e)}"
+            )
+        except (RuntimeError, ValueError) as e:
+            logger.error("elasticsearch_operation_failed", error=str(e), 
+                        error_type=type(e).__name__, doc_id=doc_id)
+            db.update_document_status(
+                doc_id,
+                'failed',
+                error_message=f"Elasticsearch operation failed: {str(e)}"
+            )
+        except Exception as e:
+            logger.error("background_processing_failed", error=str(e), doc_id=doc_id)
+            db.update_document_status(doc_id, 'failed', error_message=str(e))
+        finally:
+            # Clean up uploaded file
+            if file_path and file_path.exists():
+                try:
+                    os.remove(file_path)
+                    logger.info("cleaned_up_uploaded_file", file=str(file_path))
+                except Exception as e:
+                    logger.warning("failed_to_cleanup_file", error=str(e), file=str(file_path))
+
+
 @app.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
     category: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
     author: Optional[str] = Form(None),
-    description: Optional[str] = Form(None)
+    description: Optional[str] = Form(None),
+    ocr_engine: Optional[str] = Form('easy')
 ):
     """
     Upload and process single file
@@ -163,7 +419,8 @@ async def upload_file(
             category=category,
             tags=tags.split(',') if tags else None,
             author=author,
-            description=description
+            description=description,
+            ocr_engine=ocr_engine
         )
         doc_id = doc.id
         
@@ -181,33 +438,25 @@ async def upload_file(
         if description:
             metadata['description'] = description
         
-        # Process file
-        result = pipeline.process_file(str(file_path), metadata)
+        # Start background processing
+        logger.info("starting_background_processing", doc_id=doc_id, filename=file.filename)
         
-        # Update database with result
-        if result.get('status') == 'completed':
-            db.update_document_status(
-                doc_id,
-                'completed',
-                num_chunks=result.get('num_chunks', 0),
-                es_document_ids=json.dumps(result.get('document_ids', []))
-            )
-        else:
-            db.update_document_status(
-                doc_id,
-                'failed',
-                error_message=result.get('error', 'Unknown error')
-            )
+        # Start background thread
+        thread = threading.Thread(
+            target=process_document_background,
+            args=(doc_id, file_path, metadata, ocr_engine, checksum),
+            daemon=True
+        )
+        thread.start()
         
-        # Clean up file
-        if file_path and file_path.exists():
-            os.remove(file_path)
-        
-        # Add document info to result
-        result['document_id'] = doc_id
-        result['checksum'] = checksum
-        
-        return JSONResponse(content=result)
+        # Return immediately with task info
+        return JSONResponse(content={
+            'status': 'processing',
+            'message': 'Document uploaded and processing started',
+            'document_id': doc_id,
+            'checksum': checksum,
+            'filename': file.filename
+        })
     
     except Exception as e:
         logger.error("upload_failed", error=str(e))
@@ -221,8 +470,6 @@ async def upload_file(
             os.remove(file_path)
         
         raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.post("/upload_batch")
 async def upload_batch(
     files: List[UploadFile] = File(...),
@@ -330,6 +577,33 @@ async def search(request: SearchRequest):
             filters=request.filters,
             use_hybrid=request.use_hybrid
         )
+        
+        # Enrich results with pages_data and matched bboxes from database
+        for result in results:
+            metadata = result.get('metadata', {})
+            checksum = metadata.get('checksum')
+            
+            if checksum:
+                # Query database for document with this checksum
+                doc = db.get_document_by_checksum(checksum)
+                if doc and doc.pages_data:
+                    try:
+                        # Parse pages_data JSON and add to metadata
+                        pages_data = json.loads(doc.pages_data) if isinstance(doc.pages_data, str) else doc.pages_data
+                        metadata['pages_data'] = pages_data
+                        metadata['ocr_engine'] = doc.ocr_engine
+                        
+                        # Extract matched bboxes for this result
+                        matched_bboxes = extract_matched_bboxes_from_file(
+                            doc_id=doc.id,
+                            checksum=checksum,
+                            page_number=metadata.get('page_number', 1),
+                            query_text=request.query
+                        )
+                        result['matched_bboxes'] = matched_bboxes
+                        
+                    except json.JSONDecodeError:
+                        logger.warning("failed_to_parse_pages_data", checksum=checksum)
         
         return SearchResponse(results=results, total=len(results))
     
@@ -447,15 +721,60 @@ async def list_documents(limit: int = 50, offset: int = 0, status: Optional[str]
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/documents/{doc_id}/progress")
+async def get_document_progress(doc_id: int):
+    """Get processing progress for a document"""
+    try:
+        doc = db.get_document(doc_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        return JSONResponse(content={
+            "doc_id": doc.id,
+            "status": doc.status,
+            "progress_percentage": doc.progress_percentage or 0,
+            "progress_message": doc.progress_message or "",
+            "total_pages": doc.total_pages or 0,
+            "processed_pages": doc.processed_pages or 0,
+            "filename": doc.filename
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_progress_failed", error=str(e), doc_id=doc_id)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/documents/{doc_id}")
 async def delete_document(doc_id: int):
-    """Delete a specific document by ID"""
+    """Delete a specific document by ID (both SQLite and ES)"""
     try:
-        success = db.delete_document(doc_id)
-        if success:
-            return JSONResponse(content={"status": "success", "message": f"Document {doc_id} deleted"})
-        else:
+        # 1. Get document info before deletion
+        doc = db.get_document(doc_id)
+        if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
+        
+        checksum = doc.checksum
+        
+        # 2. Delete from SQLite
+        success = db.delete_document(doc_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Failed to delete from database")
+        
+        # 3. Delete from Elasticsearch by checksum (document_id)
+        try:
+            es_deleted = pipeline.vector_store.delete_by_metadata({"document_id": checksum})
+            logger.info("document_deleted", doc_id=doc_id, checksum=checksum, es_deleted=es_deleted)
+        except Exception as es_error:
+            logger.warning("es_deletion_failed", error=str(es_error), checksum=checksum)
+            # Continue even if ES deletion fails
+        
+        return JSONResponse(content={
+            "status": "success", 
+            "message": f"Document {doc_id} deleted",
+            "es_deleted_count": es_deleted if 'es_deleted' in locals() else 0
+        })
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -465,10 +784,32 @@ async def delete_document(doc_id: int):
 
 @app.delete("/documents")
 async def delete_all_documents():
-    """Delete all documents from database"""
+    """Delete all documents from both SQLite and Elasticsearch"""
     try:
+        # 1. Get all document checksums before deletion
+        all_docs = db.list_documents(limit=10000)
+        checksums = [doc['checksum'] for doc in all_docs if doc.get('checksum')]
+        
+        # 2. Delete from SQLite
         db.delete_all_documents()
-        return JSONResponse(content={"status": "success", "message": "All documents deleted"})
+        
+        # 3. Delete from Elasticsearch (all documents)
+        es_deleted_total = 0
+        for checksum in checksums:
+            try:
+                count = pipeline.vector_store.delete_by_metadata({"document_id": checksum})
+                es_deleted_total += count
+            except Exception as es_error:
+                logger.warning("es_deletion_failed", error=str(es_error), checksum=checksum)
+        
+        logger.info("all_documents_deleted", sqlite_count=len(checksums), es_deleted=es_deleted_total)
+        
+        return JSONResponse(content={
+            "status": "success", 
+            "message": "All documents deleted",
+            "sqlite_deleted": len(checksums),
+            "es_deleted": es_deleted_total
+        })
     except Exception as e:
         logger.error("delete_all_documents_failed", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))

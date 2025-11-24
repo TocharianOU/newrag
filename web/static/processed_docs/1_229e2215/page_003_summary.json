@@ -1,0 +1,19 @@
+{
+  "page_number": 3,
+  "stage1_global": {
+    "resolution": "300 DPI",
+    "image": "page_003_300dpi.png",
+    "ocr_json": "page_003_global_ocr.json",
+    "visualized": "page_003_global_visualized.png"
+  },
+  "stage2_refined_regions": [],
+  "total_refined_regions": 0,
+  "statistics": {
+    "total_text_blocks": 129,
+    "average_confidence": 0.9938078384066737,
+    "low_confidence_blocks": 0
+  },
+  "stage3_vlm": {
+    "vlm_json": "page_003_vlm.json"
+  }
+}
