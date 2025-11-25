@@ -74,6 +74,25 @@ class Config:
         # Logging
         if os.getenv('LOG_LEVEL'):
             self._config['logging']['level'] = os.getenv('LOG_LEVEL')
+        
+        # MinIO - ensure minio section exists before applying overrides
+        if 'minio' not in self._config:
+            self._config['minio'] = {}
+        
+        if os.getenv('MINIO_ENABLED'):
+            self._config['minio']['enabled'] = os.getenv('MINIO_ENABLED').lower() in ('true', '1', 'yes')
+        if os.getenv('MINIO_ENDPOINT'):
+            self._config['minio']['endpoint'] = os.getenv('MINIO_ENDPOINT')
+        if os.getenv('MINIO_ACCESS_KEY'):
+            self._config['minio']['access_key'] = os.getenv('MINIO_ACCESS_KEY')
+        if os.getenv('MINIO_SECRET_KEY'):
+            self._config['minio']['secret_key'] = os.getenv('MINIO_SECRET_KEY')
+        if os.getenv('MINIO_BUCKET'):
+            self._config['minio']['bucket_name'] = os.getenv('MINIO_BUCKET')
+        if os.getenv('MINIO_SECURE'):
+            self._config['minio']['secure'] = os.getenv('MINIO_SECURE').lower() in ('true', '1', 'yes')
+        if os.getenv('MINIO_PUBLIC_URL'):
+            self._config['minio']['public_url'] = os.getenv('MINIO_PUBLIC_URL')
     
     def get(self, key: str, default: Any = None) -> Any:
         """
@@ -141,6 +160,12 @@ class Config:
     def security_config(self) -> Dict[str, Any]:
         """Get security configuration"""
         return self.get('security', {})
+    
+    @property
+    def minio_config(self) -> Dict[str, Any]:
+        """Get MinIO configuration"""
+        return self.get('minio', {})
+    
 
 
 # Global config instance

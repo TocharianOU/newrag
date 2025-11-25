@@ -77,10 +77,6 @@
       "page_type": {
         "type": "keyword"
       },
-      "page_json": {
-        "type": "object",
-        "enabled": false
-      },
       "original_content": {
         "type": "object",
         "enabled": false
@@ -177,6 +173,24 @@
           "checksum": {
             "type": "keyword"
           },
+          "original_file_url": {
+            "type": "keyword",
+            "index": false
+          },
+          "page_image_url": {
+            "type": "keyword",
+            "index": false
+          },
+          "minio_bucket": {
+            "type": "keyword"
+          },
+          "minio_prefix": {
+            "type": "keyword"
+          },
+          "minio_base_url": {
+            "type": "keyword",
+            "index": false
+          },
           "author": {
             "type": "keyword"
           },
@@ -205,6 +219,18 @@
             "type": "keyword"
           },
           "source_system": {
+            "type": "keyword"
+          },
+          "page_image_url": {
+            "type": "keyword"
+          },
+          "minio_bucket": {
+            "type": "keyword"
+          },
+          "minio_prefix": {
+            "type": "keyword"
+          },
+          "minio_base_url": {
             "type": "keyword"
           }
         }

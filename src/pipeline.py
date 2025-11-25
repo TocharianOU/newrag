@@ -2,6 +2,7 @@
 
 import asyncio
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -9,6 +10,7 @@ import structlog
 
 from src.document_processor import DocumentProcessor
 from src.vector_store import VectorStore
+from src.minio_storage import minio_storage
 
 logger = structlog.get_logger(__name__)
 
@@ -37,9 +39,17 @@ class ProcessingPipeline:
     """Document processing pipeline with async support"""
 
     def __init__(self):
-        """Initialize processing pipeline"""
-        self.processor = DocumentProcessor()
-        self.vector_store = VectorStore()
+        """
+        Initialize processing pipeline
+        
+        所有组件都从 config.yaml 读取配置:
+        - DocumentProcessor: 使用 processing_config
+        - VectorStore: 使用 es_config 和 embedding_config
+        - MinIOStorage: 使用 minio_config
+        """
+        # 从 config.yaml 初始化所有组件
+        self.processor = DocumentProcessor()  # 读取 config.processing_config
+        self.vector_store = VectorStore()  # 读取 config.es_config
         self.tasks: Dict[str, ProcessingTask] = {}
         
         logger.info("processing_pipeline_initialized")
@@ -125,6 +135,117 @@ class ProcessingPipeline:
                     "message": "No valid chunks generated from document"
                 }
             
+            # Upload files to MinIO BEFORE adding to vector store
+            # This allows us to add MinIO URLs to the metadata
+            minio_urls = {}
+            original_file_url = None
+            
+            if minio_storage.enabled:
+                try:
+                    # Generate unique prefix for this document: filename_id_checksum
+                    filename = metadata.get('filename', 'document') if metadata else 'document'
+                    # Remove extension and sanitize filename for prefix
+                    filename_base = Path(filename).stem.replace(' ', '_').replace('/', '_')
+                    doc_id = metadata.get('document_id', metadata.get('doc_id', '0')) if metadata else '0'
+                    checksum = metadata.get('checksum', '')[:8] if metadata else ''
+                    prefix = f"{filename_base}_{doc_id}_{checksum}" if checksum else f"{filename_base}_{doc_id}"
+                    
+                    # Upload original file (PDF/DOCX/etc) - 使用原始文件名
+                    original_file_path = Path(file_path)
+                    if original_file_path.exists() and original_file_path.is_file():
+                        # 使用用户上传的原始文件名（保持扩展名）
+                        original_filename = filename  # 保持原始文件名
+                        original_object_name = f"{prefix}/{original_filename}"
+                        
+                        logger.info("📤 Uploading original file to MinIO...", 
+                                   file=str(original_file_path),
+                                   object_name=original_object_name)
+                        
+                        original_file_url = minio_storage.upload_file(
+                            local_path=original_file_path,
+                            object_name=original_object_name
+                        )
+                        
+                        if original_file_url:
+                            logger.info(f"✅ Original file uploaded to MinIO",
+                                       url=original_file_url,
+                                       filename=original_filename)
+                    
+                    # Upload processed images and JSONs
+                    if processed_json_dir:
+                        processed_dir = Path(processed_json_dir)
+                        if processed_dir.exists() and processed_dir.is_dir():
+                            logger.info("📤 Uploading processed files to MinIO...", 
+                                       prefix=prefix, 
+                                       dir=str(processed_dir))
+                            
+                            minio_urls = minio_storage.upload_directory(processed_dir, prefix)
+                            
+                            logger.info(f"✅ Uploaded {len(minio_urls)} processed files to MinIO",
+                                       count=len(minio_urls))
+                        else:
+                            logger.warning("Processed JSON directory not found, skipping processed files upload",
+                                          dir=str(processed_json_dir))
+                    
+                except Exception as e:
+                    logger.error("Failed to upload files to MinIO (non-fatal)",
+                               error=str(e),
+                               file_path=file_path)
+            
+            # Add MinIO metadata to ALL chunks (无论是否启用MinIO，都添加基本信息)
+            # 这样即使MinIO暂时不可用，ES中也有完整的元数据结构
+            try:
+                # 确定变量（如果MinIO未启用，使用空值）
+                if not minio_storage.enabled:
+                    filename = metadata.get('filename', 'document') if metadata else 'document'
+                    filename_base = Path(filename).stem.replace(' ', '_').replace('/', '_')
+                    doc_id = metadata.get('document_id', metadata.get('doc_id', '0')) if metadata else '0'
+                    checksum = metadata.get('checksum', '')[:8] if metadata else ''
+                    prefix = f"{filename_base}_{doc_id}_{checksum}" if checksum else f"{filename_base}_{doc_id}"
+                
+                for chunk in chunks:
+                    page_num = chunk.metadata.get('page_number', chunk.metadata.get('page', 1))
+                    
+                    # 基本标识信息（总是添加）
+                    try:
+                        chunk.metadata['document_id'] = int(doc_id) if metadata else 0
+                    except (ValueError, TypeError):
+                        chunk.metadata['document_id'] = doc_id if metadata else 0
+                    chunk.metadata['page_number'] = int(page_num) if page_num else 1
+                    
+                    # MinIO信息（如果启用）
+                    if minio_storage.enabled:
+                        # MinIO基本配置（总是添加）
+                        chunk.metadata['minio_bucket'] = minio_storage.bucket_name
+                        chunk.metadata['minio_prefix'] = prefix
+                        chunk.metadata['minio_base_url'] = minio_storage.public_url
+                        
+                        # 原始文件URL
+                        filename = metadata.get('filename', 'document') if metadata else 'document'
+                        if original_file_url:
+                            chunk.metadata['original_file_url'] = original_file_url
+                        else:
+                            # 即使上传失败，也构造预期的URL
+                            chunk.metadata['original_file_url'] = f"{minio_storage.public_url}/{minio_storage.bucket_name}/{prefix}/{filename}"
+                        
+                        # 页面图片URL
+                        page_png = f"page_{page_num:03d}_300dpi.png"
+                        if page_png in minio_urls:
+                            chunk.metadata['page_image_url'] = minio_urls[page_png]
+                        else:
+                            # 构造预期的URL
+                            chunk.metadata['page_image_url'] = f"{minio_storage.public_url}/{minio_storage.bucket_name}/{prefix}/{page_png}"
+                        
+                        logger.debug(f"Added MinIO metadata to chunk",
+                                   page=page_num,
+                                   bucket=minio_storage.bucket_name,
+                                   prefix=prefix,
+                                   has_original_url=bool(original_file_url),
+                                   has_page_image=page_png in minio_urls)
+            except Exception as e:
+                logger.error("Failed to add MinIO metadata (non-fatal)",
+                           error=str(e))
+            
             # Add to vector store
             logger.info("🔄 Generating embeddings and writing to Elasticsearch...", num_chunks=len(chunks))
             doc_ids = self.vector_store.add_documents(chunks)
@@ -150,7 +271,8 @@ class ProcessingPipeline:
                 "file_path": file_path,
                 "num_chunks": len(chunks),
                 "document_ids": doc_ids,
-                "status": "completed"
+                "status": "completed",
+                "minio_urls": minio_urls  # MinIO URLs added earlier
             }
             
             logger.info("=" * 80)

@@ -1,6 +1,24 @@
 # AIOps RAG Knowledge Base Configuration
 # 面向 IT 运维和安全场景的智能知识库系统配置
 
+# MinIO 对象存储配置
+# 可通过环境变量覆盖：MINIO_ENABLED, MINIO_ENDPOINT, MINIO_ACCESS_KEY, 
+# MINIO_SECRET_KEY, MINIO_BUCKET, MINIO_SECURE, MINIO_PUBLIC_URL
+minio:
+  enabled: true  # 是否启用MinIO存储（可用环境变量 MINIO_ENABLED=true/false 覆盖）
+  endpoint: localhost:9000  # MinIO API端点，不包含协议前缀 (例如: localhost:9000 或 minio.example.com:9000)
+  access_key: minioadmin  # MinIO访问密钥（默认值，生产环境请修改）
+  secret_key: minioadmin  # MinIO密钥（默认值，生产环境请修改）
+  bucket_name: rag-bucket  # 存储桶名称，会自动创建（如不存在）
+  secure: false  # 是否使用HTTPS连接（本地开发为false，生产环境建议true）
+  public_url: http://localhost:9000  # 公开访问URL前缀（用于生成文件下载链接）
+  upload_files:  # 需要上传到MinIO的文件类型（glob模式）
+    - "*.png"   # 图片文件
+    - "*.jpg"   # 图片文件
+    - "*.json"  # JSON数据文件
+    - "*.pdf"   # PDF文档
+  # 文件在MinIO中的路径模板: {doc_id}_{checksum}/{filename}
+
 # 模型配置
 models:
   # Embedding 模型配置
@@ -85,6 +103,24 @@ metadata:
     - log_level  # 日志级别: ERROR / WARN / INFO / DEBUG
     - event_type  # 事件类型: incident / alert / log / document
     - source_system  # 来源系统: prometheus / elk / splunk / custom
+
+# OCR 模型配置
+# 模型存储在系统默认目录: ~/.EasyOCR/, ~/.paddlex/
+# 首次运行前请执行: ./init_ocr_models.sh
+ocr:
+  # 默认OCR引擎: vision (Apple), easy (EasyOCR), paddle (PaddleOCR)
+  default_engine: easy
+  
+  # EasyOCR配置
+  easyocr:
+    languages: ['en', 'ch_sim']  # 英文 + 简体中文
+    gpu: false  # 是否使用GPU
+    quantize: true  # 量化加速
+  
+  # PaddleOCR/PaddleX配置（新版本使用PaddleX框架）
+  paddleocr:
+    lang: ch  # 中英混合
+    use_textline_orientation: true  # 多方向文字检测
 
 # 文档处理配置
 processing:
@@ -172,12 +208,15 @@ web:
 
 # 日志配置
 logging:
-  level: INFO  # DEBUG / INFO / WARNING / ERROR
-  format: json  # json / text
-  output: stdout  # stdout / file
-  file_path: ./logs/app.log
-  max_file_size: 10485760  # 10MB
-  backup_count: 5
+  level: INFO  # 日志级别: DEBUG / INFO / WARNING / ERROR / CRITICAL
+  format: json  # 输出格式: json (结构化日志) / text (人类可读)
+  output: stdout  # 输出目标: stdout (控制台) / file (文件)
+  file_path: ./logs/app.log  # 日志文件路径（仅在 output=file 时使用）
+  max_file_size: 10485760  # 单个日志文件最大大小（字节）10MB
+  backup_count: 5  # 保留的历史日志文件数量（轮转）
+  # 向量字段过滤：自动过滤日志中的 embedding/vector 字段，避免大量向量数据占用空间
+  # 支持的过滤字段: embedding, embeddings, vector, vectors, content_vector, etc.
+  # 过滤后显示为: <vector, dim=2560> 或 <5 vectors, dim=2560>
 
 # 安全配置
 security:

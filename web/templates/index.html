@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIOps RAG Knowledge Base</title>
+    <title>NewRAG - Intelligent Document Search</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -35,14 +35,14 @@
         }
     </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-slate-50 font-sans text-slate-900">
     <div class="min-h-screen flex">
         <!-- Sidebar -->
-        <div class="w-64 bg-gray-900 text-white p-6">
+        <div class="w-64 bg-slate-900 text-white p-6 shadow-xl z-10">
             <div class="flex items-center justify-between mb-8">
-                <h1 class="text-2xl font-bold">
-                    <i class="fas fa-database mr-2"></i>
-                    <span data-i18n="app.title">AIOps RAG KB</span>
+                <h1 class="text-2xl font-bold tracking-tight bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                    <i class="fas fa-brain mr-2 text-blue-400"></i>
+                    <span data-i18n="app.title">NewRAG</span>
                 </h1>
             </div>
             
@@ -77,20 +77,15 @@
                 <h2 class="text-3xl font-bold mb-6" data-i18n="upload.title">Upload Documents</h2>
                 
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="upload.type">Upload Type</label>
-                        <select id="upload-type" class="w-full px-4 py-2 border rounded-lg">
-                            <option value="single" data-i18n="upload.single">Single File</option>
-                            <option value="batch" data-i18n="upload.batch">Multiple Files</option>
-                            <option value="zip" data-i18n="upload.zip">ZIP Archive</option>
-                        </select>
-                    </div>
-
                     <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-blue-500 transition-colors cursor-pointer">
                         <i class="fas fa-cloud-upload-alt text-6xl text-gray-400 mb-4"></i>
-                        <p class="text-lg text-gray-600 mb-2" data-i18n="upload.dragDrop">Drag & drop files here</p>
-                        <p class="text-sm text-gray-500" data-i18n="upload.clickBrowse">or click to browse</p>
-                        <input type="file" id="file-input" class="hidden" multiple>
+                        <p class="text-lg text-gray-600 mb-2" data-i18n="upload.dragDrop">Drag & drop PDF or ZIP files here</p>
+                        <p class="text-sm text-gray-500 mb-1" data-i18n="upload.clickBrowse">or click to browse</p>
+                        <p class="text-xs text-gray-400 mt-2">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            <span data-i18n="upload.autoDetect">Auto-detects PDF and ZIP files. ZIP archives will be extracted automatically.</span>
+                        </p>
+                        <input type="file" id="file-input" class="hidden" accept=".pdf,.zip" multiple>
                     </div>
 
                     <!-- Selected Files Display -->
@@ -139,7 +134,7 @@
 
             <!-- Search Tab -->
             <div id="search-tab" class="tab-content hidden">
-                <h2 class="text-3xl font-bold mb-6" data-i18n="search.title">Search Knowledge Base</h2>
+                <h2 class="text-3xl font-bold mb-6" data-i18n="search.title">Search Documents</h2>
                 
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
                     <div class="flex gap-4">
@@ -177,7 +172,7 @@
 
             <!-- Statistics Tab -->
             <div id="stats-tab" class="tab-content hidden">
-                <h2 class="text-3xl font-bold mb-6" data-i18n="stats.title">Knowledge Base Statistics</h2>
+                <h2 class="text-3xl font-bold mb-6" data-i18n="stats.title">System Statistics</h2>
                 
                 <!-- ES Index Status -->
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
@@ -257,12 +252,22 @@
             });
             
             document.getElementById(`${tabName}-tab`).classList.remove('hidden');
-            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active', 'bg-gray-800');
+            const btn = document.querySelector(`[data-tab="${tabName}"]`);
+            if (btn) btn.classList.add('active', 'bg-gray-800');
+            
+            // Persist tab state
+            localStorage.setItem('currentTab', tabName);
             
             if (tabName === 'stats') {
                 loadStats();
             }
         }
+
+        // Initialize tab from storage
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedTab = localStorage.getItem('currentTab') || 'upload';
+            showTab(savedTab);
+        });
 
         // Drag and drop
         const dropZone = document.getElementById('drop-zone');
@@ -331,24 +336,30 @@
                 return;
             }
 
-            const uploadType = document.getElementById('upload-type').value;
             const category = document.getElementById('category').value;
             const author = document.getElementById('author').value;
             const tags = document.getElementById('tags').value;
             const description = document.getElementById('description').value;
             const ocrEngine = document.getElementById('ocr-engine').value;
 
-            const formData = new FormData();
+            // Auto-detect file type and upload each file separately
+            const uploadPromises = [];
             
-            if (uploadType === 'zip') {
-                formData.append('file', files[0]);
-            } else if (uploadType === 'batch') {
-                for (let file of files) {
-                    formData.append('files', file);
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileName = file.name.toLowerCase();
+                
+                // Validate file extension
+                if (!fileName.endsWith('.pdf') && !fileName.endsWith('.zip')) {
+                    const msg = currentLang === 'zh' 
+                        ? `跳过不支持的文件: ${file.name} (仅支持 PDF 和 ZIP)` 
+                        : `Skipping unsupported file: ${file.name} (only PDF and ZIP are supported)`;
+                    console.warn(msg);
+                    continue;
                 }
-            } else {
-                formData.append('file', files[0]);
-            }
+                
+                const formData = new FormData();
+                formData.append('file', file);
 
             if (category) formData.append('category', category);
             if (author) formData.append('author', author);
@@ -356,77 +367,125 @@
             if (description) formData.append('description', description);
             if (ocrEngine) formData.append('ocr_engine', ocrEngine);
 
-            const endpoint = uploadType === 'zip' ? '/upload_zip' : 
-                            uploadType === 'batch' ? '/upload_batch' : '/upload';
+                uploadPromises.push({
+                    file: file,
+                    formData: formData
+                });
+            }
+            
+            if (uploadPromises.length === 0) {
+                const msg = currentLang === 'zh' 
+                    ? '没有有效的文件可上传 (仅支持 PDF 和 ZIP 文件)' 
+                    : 'No valid files to upload (only PDF and ZIP files are supported)';
+                alert(msg);
+                return;
+            }
 
+            // Use single upload endpoint for all files
+            const endpoint = '/upload';
+
+            // Show upload status
             document.getElementById('upload-status').classList.remove('hidden');
-                   const processingTitle = currentLang === 'zh' ? '正在处理文件...' : 'Processing files...';
-                   const processingMsg = currentLang === 'zh' ? '请稍候，我们正在提取和索引您的文档' : 'Please wait while we extract and index your document';
+            const uploadingTitle = currentLang === 'zh' ? '正在上传文件...' : 'Uploading files...';
+            const uploadingMsg = currentLang === 'zh' 
+                ? `上传队列: ${uploadPromises.length} 个文件` 
+                : `Upload queue: ${uploadPromises.length} file(s)`;
                    
                    document.getElementById('status-content').innerHTML = `
                        <div class="flex items-center space-x-3 text-blue-600">
                            <i class="fas fa-spinner fa-spin text-2xl"></i>
                            <div>
-                               <div class="font-medium">${processingTitle}</div>
-                               <div class="text-sm text-gray-600">${processingMsg}</div>
+                        <div class="font-medium">${uploadingTitle}</div>
+                        <div class="text-sm text-gray-600">${uploadingMsg}</div>
                            </div>
                        </div>
                    `;
 
-            try {
-                console.log('Uploading to:', endpoint);
+            // Upload files sequentially to avoid overwhelming the server
+            let successCount = 0;
+            let failCount = 0;
+            let duplicateCount = 0;
+            const uploadedDocs = [];
+            
+            for (let i = 0; i < uploadPromises.length; i++) {
+                const {file, formData} = uploadPromises[i];
+                
+                try {
+                    const progressMsg = currentLang === 'zh' 
+                        ? `正在上传 ${i + 1}/${uploadPromises.length}: ${file.name}` 
+                        : `Uploading ${i + 1}/${uploadPromises.length}: ${file.name}`;
+                    
+                    document.getElementById('status-content').innerHTML = `
+                        <div class="flex items-center space-x-3 text-blue-600">
+                            <i class="fas fa-spinner fa-spin text-2xl"></i>
+                            <div>
+                                <div class="font-medium">${uploadingTitle}</div>
+                                <div class="text-sm text-gray-600">${progressMsg}</div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    console.log('Uploading to:', endpoint, 'File:', file.name);
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     body: formData
                 });
 
                 const result = await response.json();
-                console.log('Upload result:', result);
+                    console.log('Upload result for', file.name, ':', result);
+                    console.log('Response OK?:', response.ok, 'Result status:', result.status);
                 
-                       // Check both HTTP status AND result.status field
-                       if (response.ok && result.status !== 'failed') {
-                           // Check if duplicate
-                           if (result.status === 'duplicate') {
-                               const dupTitle = currentLang === 'zh' ? '检测到重复文件' : 'Duplicate File Detected';
-                               const msgLabel = currentLang === 'zh' ? '消息' : 'Message';
-                               const prevUpload = currentLang === 'zh' ? '之前的上传' : 'Previous Upload';
-                               const filenameLabel = currentLang === 'zh' ? '文件名' : 'Filename';
-                               const statusLabel = currentLang === 'zh' ? '状态' : 'Status';
-                               const uploadedLabel = currentLang === 'zh' ? '上传时间' : 'Uploaded';
-                               const chunksLabel = currentLang === 'zh' ? '块数' : 'Chunks';
-                               
-                               document.getElementById('status-content').innerHTML = `
-                                   <div class="text-yellow-600">
-                                       <div class="flex items-center space-x-2 mb-3">
-                                           <i class="fas fa-exclamation-triangle text-2xl"></i>
-                                           <div class="text-lg font-semibold">${dupTitle}</div>
-                                       </div>
-                                       <div class="mt-3 space-y-2 text-sm text-gray-700 bg-yellow-50 p-4 rounded">
-                                           <div><strong>${msgLabel}:</strong> ${result.message}</div>
-                                           ${result.document ? `
-                                               <div class="mt-3 pt-3 border-t border-yellow-200">
-                                                   <div class="font-medium mb-2">${prevUpload}:</div>
-                                                   <div><strong>${filenameLabel}:</strong> ${result.document.filename}</div>
-                                                   <div><strong>${statusLabel}:</strong> ${result.document.status}</div>
-                                                   <div><strong>${uploadedLabel}:</strong> ${result.document.uploaded_at ? new Date(result.document.uploaded_at).toLocaleString() : 'N/A'}</div>
-                                                   ${result.document.num_chunks ? `<div><strong>${chunksLabel}:</strong> ${result.document.num_chunks}</div>` : ''}
-                                               </div>
-                                           ` : ''}
-                                       </div>
-                                   </div>
-                               `;
-                           } else if (result.status === 'processing') {
-                               // Start polling for progress
-                               const docId = result.document_id;
-                               const filename = result.filename || 'Document';
-                               startProgressPolling(docId, filename);
+                    // Check both HTTP status AND result.status field
+                    if (response.ok && result.status !== 'failed') {
+                        // Check if duplicate
+                        if (result.status === 'duplicate') {
+                            console.log('Duplicate file detected:', file.name);
+                            duplicateCount++;
+                        } else if (result.status === 'processing') {
+                            // Add to uploaded docs for progress tracking
+                            uploadedDocs.push({
+                                docId: result.document_id,
+                                filename: result.filename || file.name
+                            });
+                            successCount++;
                            } else {
-                               // Successful upload (completed)
-                               const successTitle = currentLang === 'zh' ? '上传成功！' : 'Upload Successful!';
-                               const statusLabel = currentLang === 'zh' ? '状态' : 'Status';
-                               const docIdLabel = currentLang === 'zh' ? '文档 ID' : 'Document ID';
-                               const chunksLabel = currentLang === 'zh' ? '创建的块数' : 'Chunks Created';
-                               const msgLabel = currentLang === 'zh' ? '消息' : 'Message';
+                            // Completed immediately
+                            successCount++;
+                        }
+                    } else {
+                        // Handle failed status
+                        failCount++;
+                        console.error('Upload failed for', file.name, ':', result.error || result.detail);
+                    }
+                } catch (error) {
+                    console.error('Upload error for', file.name, ':', error);
+                    alert(`Upload error: ${file.name} - ${error.message}`);
+                    failCount++;
+                }
+            }
+            
+            // Clear file input and selected files display
+            fileInput.value = '';
+            selectedFilesDiv.classList.add('hidden');
+            
+            // Show final status
+            if (uploadedDocs.length > 0) {
+                // Start polling for all uploaded documents
+                uploadedDocs.forEach(doc => {
+                    startProgressPolling(doc.docId, doc.filename);
+                });
+            } else if (successCount > 0 || duplicateCount > 0) {
+                // All completed immediately
+                const successTitle = currentLang === 'zh' ? '上传完成！' : 'Upload Complete!';
+                let successMsg = currentLang === 'zh' 
+                    ? `成功上传 ${successCount} 个文件` 
+                    : `Successfully uploaded ${successCount} file(s)`;
+                
+                if (duplicateCount > 0) {
+                    successMsg += currentLang === 'zh'
+                        ? ` (${duplicateCount} 个重复文件已跳过)`
+                        : ` (${duplicateCount} duplicate file(s) skipped)`;
+                }
                                
                                document.getElementById('status-content').innerHTML = `
                                    <div class="text-green-600">
@@ -434,31 +493,17 @@
                                            <i class="fas fa-check-circle text-2xl"></i>
                                            <div class="text-lg font-semibold">${successTitle}</div>
                                        </div>
-                                       <div class="mt-3 space-y-2 text-sm text-gray-700 bg-green-50 p-4 rounded">
-                                           <div><strong>${statusLabel}:</strong> ${result.status || 'completed'}</div>
-                                           <div><strong>${docIdLabel}:</strong> ${result.document_id || 'N/A'}</div>
-                                           <div><strong>${chunksLabel}:</strong> ${result.num_chunks || 0}</div>
-                                           ${result.message ? `<div><strong>${msgLabel}:</strong> ${result.message}</div>` : ''}
+                        <div class="mt-3 text-sm text-gray-700 bg-green-50 p-4 rounded">
+                            ${successMsg}
                                        </div>
                                    </div>
                                `;
-                           }
-                    // Clear file input and selected files display
-                    fileInput.value = '';
-                    selectedFilesDiv.classList.add('hidden');
                 } else {
-                    // Handle failed status (ES write failure, etc.)
-                    const errorMsg = result.error || result.detail || result.message || 'Upload failed';
-                    throw new Error(errorMsg);
-                }
-            } catch (error) {
-                console.error('Upload error:', error);
+                // All failed
                 const failTitle = currentLang === 'zh' ? '❌ 上传失败' : '❌ Upload Failed';
-                const errorLabel = currentLang === 'zh' ? '错误详情' : 'Error Details';
-                const suggestionLabel = currentLang === 'zh' ? '建议' : 'Suggestion';
-                const suggestion = currentLang === 'zh' 
-                    ? '请检查日志文件 logs/smartresume_errors.log 获取详细信息' 
-                    : 'Please check logs/smartresume_errors.log for detailed information';
+                const failMsg = currentLang === 'zh' 
+                    ? `上传失败。请检查文件格式和网络连接。` 
+                    : `Upload failed. Please check file format and network connection.`;
                 
                 document.getElementById('status-content').innerHTML = `
                     <div class="text-red-600">
@@ -466,124 +511,192 @@
                             <i class="fas fa-exclamation-circle text-2xl"></i>
                             <div class="text-lg font-semibold">${failTitle}</div>
                         </div>
-                        <div class="mt-3 space-y-3 text-sm bg-red-50 p-4 rounded">
-                            <div>
-                                <strong>${errorLabel}:</strong>
-                                <div class="mt-1 text-gray-800 font-mono text-xs bg-white p-2 rounded border border-red-200">
-                                    ${error.message}
-                                </div>
-                            </div>
-                            <div class="pt-2 border-t border-red-200">
-                                <strong>${suggestionLabel}:</strong>
-                                <div class="mt-1 text-gray-700">${suggestion}</div>
-                            </div>
+                        <div class="mt-3 text-sm bg-red-50 p-4 rounded">
+                            ${failMsg}
                         </div>
                     </div>
                 `;
             }
         }
 
-        // Progress polling
-        let progressIntervalId = null;
+        // Progress polling - support multiple documents
+        let progressIntervals = {};
         
         function startProgressPolling(docId, filename) {
+            // If already polling this doc, skip
+            if (progressIntervals[docId]) {
+                return;
+            }
+            
             const processingTitle = currentLang === 'zh' ? '正在处理文档...' : 'Processing Document...';
             const filenameLabel = currentLang === 'zh' ? '文件名' : 'Filename';
             
-            // Initial progress display
-            document.getElementById('status-content').innerHTML = `
+            // Create or get progress container
+            let statusContent = document.getElementById('status-content');
+            let progressContainer = document.getElementById(`progress-container-${docId}`);
+            
+            if (!progressContainer) {
+                progressContainer = document.createElement('div');
+                progressContainer.id = `progress-container-${docId}`;
+                progressContainer.className = 'mb-4 border-b border-blue-200 pb-4 last:border-b-0';
+                statusContent.appendChild(progressContainer);
+            }
+            
+            // Initial progress display (without control buttons)
+            progressContainer.innerHTML = `
                 <div class="text-blue-600">
-                    <div class="flex items-center space-x-2 mb-3">
-                        <i class="fas fa-spinner fa-spin text-2xl"></i>
-                        <div class="text-lg font-semibold">${processingTitle}</div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <i id="task-status-icon-${docId}" class="fas fa-spinner fa-spin text-lg"></i>
+                        <div class="font-medium text-sm">${filename}</div>
                     </div>
-                    <div class="mt-3 space-y-3 text-sm text-gray-700 bg-blue-50 p-4 rounded">
-                        <div><strong>${filenameLabel}:</strong> ${filename}</div>
+                    <div class="space-y-2 text-xs text-gray-700 bg-blue-50 p-3 rounded">
+                        <div id="stage-info-${docId}" class="text-xs text-blue-700"></div>
                         <div>
                             <div class="flex justify-between mb-1">
-                                <span id="progress-message" class="text-xs font-medium">Starting...</span>
-                                <span id="progress-percentage" class="text-xs font-medium">0%</span>
+                                <span id="progress-message-${docId}" class="text-xs font-medium">Starting...</span>
+                                <span id="progress-percentage-${docId}" class="text-xs font-medium">0%</span>
                             </div>
-                            <div class="w-full bg-gray-200 rounded-full h-2.5">
-                                <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="progress-bar-${docId}" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
                             </div>
                         </div>
-                        <div id="page-progress" class="text-xs text-gray-600"></div>
+                        <div id="page-progress-${docId}" class="text-xs text-gray-600"></div>
                     </div>
                 </div>
             `;
             
             // Poll progress every 2 seconds
-            progressIntervalId = setInterval(async () => {
+            progressIntervals[docId] = setInterval(async () => {
                 try {
-                    const response = await fetch(`/documents/${docId}/progress`);
+                    const response = await fetch(`/documents/${docId}/progress?include_children=true`);
                     const progress = await response.json();
+                    
+                    // Update status icon
+                    const statusIcon = document.getElementById(`task-status-icon-${docId}`);
+                    if (statusIcon) {
+                        if (progress.status === 'paused') {
+                            statusIcon.className = 'fas fa-pause-circle text-lg';
+                        } else if (progress.status === 'running') {
+                            statusIcon.className = 'fas fa-spinner fa-spin text-lg';
+                        }
+                    }
                     
                     // Update progress bar
                     const percentage = progress.progress_percentage || 0;
-                    document.getElementById('progress-bar').style.width = `${percentage}%`;
-                    document.getElementById('progress-percentage').textContent = `${percentage}%`;
-                    document.getElementById('progress-message').textContent = progress.progress_message || 'Processing...';
+                    const progressBar = document.getElementById(`progress-bar-${docId}`);
+                    const progressPercentage = document.getElementById(`progress-percentage-${docId}`);
+                    const progressMessage = document.getElementById(`progress-message-${docId}`);
                     
-                    // Update page progress if available
-                    if (progress.total_pages > 0) {
+                    if (progressBar) progressBar.style.width = `${percentage}%`;
+                    if (progressPercentage) progressPercentage.textContent = `${percentage}%`;
+                    if (progressMessage) progressMessage.textContent = progress.message || progress.progress_message || 'Processing...';
+                    
+                    // Update stage info if available
+                    const stageInfo = document.getElementById(`stage-info-${docId}`);
+                    if (stageInfo && progress.stage) {
+                        const stageLabel = currentLang === 'zh' ? '阶段' : 'Stage';
+                        const stageNames = {
+                            'initializing': currentLang === 'zh' ? '初始化' : 'Initializing',
+                            'extracting_zip': currentLang === 'zh' ? '解压ZIP' : 'Extracting ZIP',
+                            'ocr_processing': currentLang === 'zh' ? 'OCR处理' : 'OCR Processing',
+                            'vlm_extraction': currentLang === 'zh' ? 'VLM提取' : 'VLM Extraction',
+                            'indexing': currentLang === 'zh' ? '索引中' : 'Indexing',
+                            'finalizing': currentLang === 'zh' ? '完成中' : 'Finalizing'
+                        };
+                        const stageDisplay = stageNames[progress.stage] || progress.stage;
+                        stageInfo.textContent = `${stageLabel}: ${stageDisplay}`;
+                    }
+                    
+                    // Update page progress
+                    const pageProgress = document.getElementById(`page-progress-${docId}`);
+                    if (pageProgress && progress.total_pages > 0) {
                         const pageProgressText = currentLang === 'zh' 
                             ? `页面 ${progress.processed_pages}/${progress.total_pages}`
                             : `Page ${progress.processed_pages}/${progress.total_pages}`;
-                        document.getElementById('page-progress').textContent = pageProgressText;
+                        pageProgress.textContent = pageProgressText;
                     }
                     
-                    // Check if completed or failed
+                    // Check if completed, failed, or cancelled
                     if (progress.status === 'completed') {
-                        stopProgressPolling();
-                        const successTitle = currentLang === 'zh' ? '✅ 处理完成！' : '✅ Processing Complete!';
-                        const docIdLabel = currentLang === 'zh' ? '文档 ID' : 'Document ID';
-                        const pagesLabel = currentLang === 'zh' ? '总页数' : 'Total Pages';
-                        
-                        document.getElementById('status-content').innerHTML = `
-                            <div class="text-green-600">
-                                <div class="flex items-center space-x-2 mb-3">
-                                    <i class="fas fa-check-circle text-2xl"></i>
-                                    <div class="text-lg font-semibold">${successTitle}</div>
+                        stopProgressPolling(docId);
+                        const container = document.getElementById(`progress-container-${docId}`);
+                        if (container) {
+                            container.innerHTML = `
+                                <div class="text-green-600">
+                                    <div class="flex items-center space-x-2 text-sm">
+                                        <i class="fas fa-check-circle"></i>
+                                        <span class="font-medium">${filename}</span>
+                                        <span class="text-xs">(${progress.total_pages || 0} ${currentLang === 'zh' ? '页' : 'pages'})</span>
+                                    </div>
                                 </div>
-                                <div class="mt-3 space-y-2 text-sm text-gray-700 bg-green-50 p-4 rounded">
-                                    <div><strong>${filenameLabel}:</strong> ${filename}</div>
-                                    <div><strong>${docIdLabel}:</strong> ${docId}</div>
-                                    <div><strong>${pagesLabel}:</strong> ${progress.total_pages || 0}</div>
+                            `;
+                        }
+                    } else if (progress.status === 'cancelled') {
+                        stopProgressPolling(docId);
+                        const container = document.getElementById(`progress-container-${docId}`);
+                        if (container) {
+                            container.innerHTML = `
+                                <div class="text-gray-600">
+                                    <div class="flex items-center space-x-2 text-sm">
+                                        <i class="fas fa-ban"></i>
+                                        <span class="font-medium">${filename}</span>
+                                        <span class="text-xs">(${currentLang === 'zh' ? '已取消' : 'Cancelled'})</span>
+                                    </div>
                                 </div>
-                            </div>
-                        `;
+                            `;
+                        }
                     } else if (progress.status === 'failed') {
-                        stopProgressPolling();
-                        const failTitle = currentLang === 'zh' ? '❌ 处理失败' : '❌ Processing Failed';
-                        const errorLabel = currentLang === 'zh' ? '错误' : 'Error';
-                        
-                        document.getElementById('status-content').innerHTML = `
-                            <div class="text-red-600">
-                                <div class="flex items-center space-x-2 mb-3">
-                                    <i class="fas fa-exclamation-circle text-2xl"></i>
-                                    <div class="text-lg font-semibold">${failTitle}</div>
+                        stopProgressPolling(docId);
+                        const container = document.getElementById(`progress-container-${docId}`);
+                        if (container) {
+                            const errorMsg = progress.error_message || 'Unknown error';
+                            container.innerHTML = `
+                                <div class="text-red-600">
+                                    <div class="flex items-center space-x-2 text-sm">
+                                        <i class="fas fa-exclamation-circle"></i>
+                                        <span class="font-medium">${filename}</span>
+                                        <span class="text-xs">(${currentLang === 'zh' ? '失败' : 'Failed'})</span>
+                                    </div>
+                                    <div class="text-xs text-gray-600 mt-1">${errorMsg}</div>
                                 </div>
-                                <div class="mt-3 space-y-2 text-sm text-gray-700 bg-red-50 p-4 rounded">
-                                    <div><strong>${filenameLabel}:</strong> ${filename}</div>
-                                    <div><strong>${docIdLabel}:</strong> ${docId}</div>
-                                    <div><strong>${errorLabel}:</strong> ${progress.progress_message || 'Unknown error'}</div>
-                                </div>
-                            </div>
-                        `;
+                            `;
+                        }
                     }
                 } catch (error) {
                     console.error('Progress polling error:', error);
-                    stopProgressPolling();
+                    stopProgressPolling(docId);
                 }
             }, 2000); // Poll every 2 seconds
         }
         
-        function stopProgressPolling() {
-            if (progressIntervalId) {
-                clearInterval(progressIntervalId);
-                progressIntervalId = null;
+        function stopProgressPolling(docId) {
+            if (progressIntervals[docId]) {
+                clearInterval(progressIntervals[docId]);
+                delete progressIntervals[docId];
             }
+        }
+
+        function displayZipChildren(children, parentDocId) {
+            // ZIP details shown in Stats tab, simple summary in upload tab
+            const pageProgress = document.getElementById(`page-progress-${parentDocId}`);
+            if (!pageProgress) return;
+            
+            const completedCount = children.filter(c => c.status === 'completed').length;
+            const totalCount = children.length;
+            const processingCount = children.filter(c => c.status === 'processing' || c.status === 'running').length;
+            const failedCount = children.filter(c => c.status === 'failed').length;
+            const filesLabel = currentLang === 'zh' ? '文件' : 'files';
+            
+            let statusText = `${completedCount}/${totalCount} ${filesLabel}`;
+            if (processingCount > 0) {
+                statusText += currentLang === 'zh' ? ` (${processingCount} 处理中)` : ` (${processingCount} processing)`;
+            }
+            if (failedCount > 0) {
+                statusText += currentLang === 'zh' ? ` (${failedCount} 失败)` : ` (${failedCount} failed)`;
+            }
+            
+            pageProgress.textContent = statusText;
+            return; // Don't show detailed children in upload tab
         }
 
         // Search
@@ -939,20 +1052,23 @@
                         }
                         
                         return `
-                            <div class="py-3 border-b hover:bg-gray-50" id="doc-${doc.id}">
+                            <div class="py-4 px-4 border-b border-slate-100 hover:bg-slate-50 transition-colors last:border-b-0" id="doc-${doc.id}">
                                 <div class="flex items-center justify-between">
                                     <div class="flex-1">
-                                        <div class="font-medium">${doc.filename}</div>
-                                        <div class="text-xs text-gray-500">
+                                        <div class="flex items-center space-x-2">
+                                            <i class="fas fa-file-alt text-slate-400"></i>
+                                            <div class="font-medium text-slate-900">${doc.filename}</div>
+                                        </div>
+                                        <div class="text-xs text-slate-500 mt-1 ml-6">
                                             ${doc.file_type} • ${(doc.file_size / 1024).toFixed(1)} KB
                                             ${doc.num_chunks ? ` • ${doc.num_chunks} chunks` : ''}
                                         </div>
                                         ${progressBar}
                                     </div>
                                     <div class="flex items-center space-x-2 ml-4">
-                                        <span class="px-2 py-1 rounded text-xs ${statusColor}">${doc.status}</span>
-                                        <button onclick="deleteDocument(${doc.id})" class="text-red-600 hover:text-red-800 text-sm">
-                                            <i class="fas fa-trash"></i>
+                                        <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}">${doc.status}</span>
+                                        <button onclick="deleteDocument(${doc.id})" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" title="${currentLang === 'zh' ? '删除' : 'Delete'}">
+                                            <i class="fas fa-trash-alt"></i>
                                         </button>
                                     </div>
                                 </div>
@@ -1055,9 +1171,9 @@
 
         // ========== i18n Support ==========
         const translations = {
-            zh: {
-                app: {
-                    title: 'AIOps RAG KB',
+                zh: {
+                    app: {
+                        title: 'NewRAG',
                     language: '语言'
                 },
                 nav: {
@@ -1067,12 +1183,9 @@
                 },
                 upload: {
                     title: '上传文档',
-                    type: '上传类型',
-                    single: '单个文件',
-                    batch: '多个文件',
-                    zip: 'ZIP 压缩包',
-                    dragDrop: '拖放文件到这里',
+                    dragDrop: '拖放 PDF 或 ZIP 文件到这里',
                     clickBrowse: '或点击浏览',
+                    autoDetect: '自动检测 PDF 和 ZIP 文件。ZIP 压缩包将自动解压。',
                     selectedFiles: '已选择的文件：',
                     category: '分类',
                     categoryPlaceholder: '例如：incident, log, alert',
@@ -1087,7 +1200,7 @@
                     status: '处理状态'
                 },
                 search: {
-                    title: '搜索知识库',
+                    title: '搜索文档',
                     queryPlaceholder: '输入您的搜索查询...',
                     button: '搜索',
                     categoryFilter: '分类过滤',
@@ -1098,7 +1211,7 @@
                     showImage: '显示图片'
                 },
                 stats: {
-                    title: '知识库统计',
+                    title: '系统统计',
                     esIndexStatus: 'Elasticsearch 索引状态',
                     indexName: '索引名称',
                     status: '状态',
@@ -1114,9 +1227,9 @@
                     refresh: '刷新统计'
                 }
             },
-            en: {
-                app: {
-                    title: 'AIOps RAG KB',
+                en: {
+                    app: {
+                        title: 'NewRAG',
                     language: 'Language'
                 },
                 nav: {
@@ -1126,12 +1239,9 @@
                 },
                 upload: {
                     title: 'Upload Documents',
-                    type: 'Upload Type',
-                    single: 'Single File',
-                    batch: 'Multiple Files',
-                    zip: 'ZIP Archive',
-                    dragDrop: 'Drag & drop files here',
+                    dragDrop: 'Drag & drop PDF or ZIP files here',
                     clickBrowse: 'or click to browse',
+                    autoDetect: 'Auto-detects PDF and ZIP files. ZIP archives will be extracted automatically.',
                     selectedFiles: 'Selected Files:',
                     category: 'Category',
                     categoryPlaceholder: 'e.g., incident, log, alert',
@@ -1146,7 +1256,7 @@
                     status: 'Processing Status'
                 },
                 search: {
-                    title: 'Search Knowledge Base',
+                    title: 'Search Documents',
                     queryPlaceholder: 'Enter your search query...',
                     button: 'Search',
                     categoryFilter: 'Category Filter',
@@ -1157,7 +1267,7 @@
                     showImage: 'Show'
                 },
                 stats: {
-                    title: 'Knowledge Base Statistics',
+                    title: 'System Statistics',
                     esIndexStatus: 'Elasticsearch Index Status',
                     indexName: 'Index Name',
                     status: 'Status',

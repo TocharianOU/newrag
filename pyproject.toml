@@ -38,6 +38,7 @@ dependencies = [
     "google-generativeai>=0.3.0",
     "easyocr>=1.7.0",
     "opencv-python>=4.8.0",
+    "minio>=7.2.19",
 ]
 
 [project.optional-dependencies]

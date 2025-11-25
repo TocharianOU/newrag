@@ -57,9 +57,6 @@ class DocumentExtractor:
             self.ocr_reader = PaddleOCR(
                 lang='ch',  # 中英混合
                 use_textline_orientation=True,  # 启用文本方向检测（识别倒立文字）
-                text_det_thresh=0.3,  # 文本检测阈值（降低以检测更多文字）
-                text_det_box_thresh=0.5,  # 文本框阈值
-                text_recognition_batch_size=6  # 识别批次大小
             )
             self.ocr_type = 'paddle'
             print("✓ PaddleOCR initialized (中英混合 + 多方向文字检测)")
@@ -83,12 +80,15 @@ class DocumentExtractor:
                 self.ocr_type = 'easy'
                 print("✓ EasyOCR initialized (fallback)")
             elif HAS_PADDLEOCR:
+                # 设置环境变量使用项目本地PaddleX模型
+                import os
+                paddlex_dir = get_project_root() / "models" / "paddlex"
+                if paddlex_dir.exists():
+                    os.environ['PADDLEX_HOME'] = str(paddlex_dir)
+                
                 self.ocr_reader = PaddleOCR(
                     lang='ch',
-                    use_textline_orientation=True,
-                    text_det_thresh=0.3,
-                    text_det_box_thresh=0.5,
-                    text_recognition_batch_size=6
+                    use_textline_orientation=True
                 )
                 self.ocr_type = 'paddle'
                 print("✓ PaddleOCR initialized (fallback + 多方向检测)")

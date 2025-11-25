@@ -23,9 +23,10 @@ from src.config import config
 from src.pipeline import ProcessingPipeline
 from src.database import DatabaseManager
 from src.logging_config import setup_logging
+from src.task_manager import task_manager, TaskStatus, TaskStage
 
-# Initialize logging with file output
-setup_logging(log_dir="logs", log_level="INFO")
+# Initialize logging with configuration from config.yaml
+setup_logging(log_config=config.logging_config)
 logger = structlog.get_logger(__name__)
 
 # Concurrent processing control (limit to 3 documents processing at the same time)
@@ -183,168 +184,407 @@ def extract_matched_bboxes_from_file(doc_id: int, checksum: str, page_number: in
         return []
 
 
-def process_document_background(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str):
-    """Background task to process document"""
-    # Wait for processing slot (max 3 concurrent documents)
-    with processing_semaphore:
-        try:
-            logger.info("background_processing_started", doc_id=doc_id, filename=file_path.name)
+def process_single_pdf(doc_id: int, pdf_path: Path, metadata: dict, ocr_engine: str, checksum: str, parent_task_id: Optional[int] = None):
+    """Process a single PDF file"""
+    try:
+        # Update task status
+        task_manager.update_task(
+            doc_id,
+            status=TaskStatus.RUNNING,
+            stage=TaskStage.OCR_PROCESSING,
+            progress_percentage=10,
+            message=f"Processing {pdf_path.name}...",
+            filename=pdf_path.name
+        )
+        db.update_document_progress(doc_id, 10, f"Starting OCR for {pdf_path.name}...")
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Run adaptive OCR pipeline
+        adaptive_script = Path('document_ocr_pipeline/adaptive_ocr_pipeline.py')
+        subprocess.run([
+            sys.executable,
+            str(adaptive_script),
+            str(pdf_path),
+            '--ocr-engine', ocr_engine
+        ], check=True)
+        
+        # Check for cancellation after OCR
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        task_manager.update_task(
+            doc_id,
+            progress_percentage=50,
+            message="OCR completed, processing pages..."
+        )
+        db.update_document_progress(doc_id, 50, "OCR completed, processing pages...")
+        
+        # Find the generated output directory
+        temp_output_dir = Path(pdf_path.stem.replace(' ', '_') + "_adaptive")
+        
+        if not temp_output_dir.exists():
+            raise RuntimeError(f"OCR output directory not found: {temp_output_dir}")
+        
+        # Check for cancellation before moving files
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Move to static folder with doc ID
+        doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
+        if doc_output_dir.exists():
+            shutil.rmtree(doc_output_dir)
+        shutil.move(str(temp_output_dir), str(doc_output_dir))
+        
+        # Update progress: Loading pages data
+        task_manager.update_task(
+            doc_id,
+            stage=TaskStage.VLM_EXTRACTION,
+            progress_percentage=60,
+            message="Loading pages data..."
+        )
+        db.update_document_progress(doc_id, 60, "Loading pages data...")
+        
+        # Load pages data
+        complete_json = doc_output_dir / 'complete_adaptive_ocr.json'
+        pages_data_list = []
+        total_pages = 0
+        
+        if complete_json.exists():
+            with open(complete_json, 'r', encoding='utf-8') as f:
+                complete_data = json.load(f)
             
-            # Update progress: Starting OCR
-            db.update_document_progress(doc_id, 10, "Starting OCR processing...")
-        
-            # Run adaptive OCR pipeline
-            adaptive_script = Path('document_ocr_pipeline/adaptive_ocr_pipeline.py')
-            subprocess.run([
-                sys.executable,
-                str(adaptive_script),
-                str(file_path),
-                '--ocr-engine', ocr_engine
-            ], check=True)
-        
-            # Update progress: OCR completed
-            db.update_document_progress(doc_id, 50, "OCR completed, processing pages...")
-        
-            # Find the generated output directory
-            temp_output_dir = Path(file_path.stem.replace(' ', '_') + "_adaptive")
-        
-            if not temp_output_dir.exists():
-                raise RuntimeError(f"OCR output directory not found: {temp_output_dir}")
-        
-            # Move to static folder with doc ID
-            doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
-            if doc_output_dir.exists():
-                shutil.rmtree(doc_output_dir)
-            shutil.move(str(temp_output_dir), str(doc_output_dir))
-        
-            # Update progress: Loading pages data
-            db.update_document_progress(doc_id, 60, "Loading pages data...")
-        
-            # Load pages data
-            complete_json = doc_output_dir / 'complete_adaptive_ocr.json'
-            pages_data_list = []
-            total_pages = 0
-        
-            if complete_json.exists():
-                with open(complete_json, 'r', encoding='utf-8') as f:
-                    complete_data = json.load(f)
+            total_pages = len(complete_data.get('pages', []))
+            task_manager.update_task(
+                doc_id,
+                progress_percentage=65,
+                message=f"Processing {total_pages} pages...",
+                total_pages=total_pages,
+                processed_pages=0
+            )
+            db.update_document_progress(doc_id, 65, f"Processing {total_pages} pages...", 
+                                       processed_pages=0, total_pages=total_pages)
             
-                total_pages = len(complete_data.get('pages', []))
-                db.update_document_progress(doc_id, 65, f"Processing {total_pages} pages...", 
-                                           processed_pages=0, total_pages=total_pages)
-            
-                # Build pages data
-                for idx, page in enumerate(complete_data.get('pages', []), 1):
-                    page_num = page.get('page_number', idx)
+            # Build pages data
+            for idx, page in enumerate(complete_data.get('pages', []), 1):
+                # Check for cancellation/pause before each page
+                if not task_manager.wait_if_paused(doc_id):
+                    raise InterruptedError("Task was cancelled by user")
                 
-                    # Update progress per page
-                    page_progress = 65 + (20 * idx / total_pages)  # 65-85% for page processing
-                    db.update_document_progress(
-                        doc_id, 
-                        int(page_progress), 
-                        f"Processing page {idx}/{total_pages}...",
-                        processed_pages=idx,
-                        total_pages=total_pages
-                    )
+                page_num = page.get('page_number', idx)
                 
-                    # Get text count from statistics
-                    stats = page.get('statistics', {})
-                    text_count = stats.get('total_text_blocks', 0)
+                # Update progress per page
+                page_progress = 65 + (20 * idx / total_pages)  # 65-85% for page processing
+                task_manager.update_task(
+                    doc_id,
+                    progress_percentage=int(page_progress),
+                    message=f"Processing page {idx}/{total_pages}...",
+                    current_page=idx,
+                    processed_pages=idx
+                )
+                db.update_document_progress(
+                    doc_id, 
+                    int(page_progress), 
+                    f"Processing page {idx}/{total_pages}...",
+                    processed_pages=idx,
+                    total_pages=total_pages
+                )
                 
-                    # Get stage1 file paths
-                    stage1 = page.get('stage1_global', {})
-                    image_filename = stage1.get('image', f'page_{page_num:03d}_300dpi.png')
-                    visualized_filename = stage1.get('visualized', f'page_{page_num:03d}_global_visualized.png')
-                    ocr_json_filename = stage1.get('ocr_json', f'page_{page_num:03d}_global_ocr.json')
+                # Get text count from statistics
+                stats = page.get('statistics', {})
+                text_count = stats.get('total_text_blocks', 0)
                 
-                    # Try to extract components from VLM JSON if available
-                    components = []
-                    stage3 = page.get('stage3_vlm', {})
-                    vlm_json_filename = stage3.get('vlm_json')
-                    if vlm_json_filename:
-                        vlm_json_path = doc_output_dir / vlm_json_filename
-                        if vlm_json_path.exists():
-                            try:
-                                with open(vlm_json_path, 'r', encoding='utf-8') as vf:
-                                    vlm_data = json.load(vf)
-                                    # Try different possible locations for components
-                                    if 'components' in vlm_data:
-                                        components = vlm_data['components']
-                                    elif 'domain_data' in vlm_data and isinstance(vlm_data['domain_data'], dict):
-                                        if 'components' in vlm_data['domain_data']:
-                                            components = vlm_data['domain_data']['components']
-                                        elif 'equipment' in vlm_data['domain_data']:
-                                            equipment = vlm_data['domain_data']['equipment']
-                                            if isinstance(equipment, list):
-                                                components = [e.get('id', '') for e in equipment if isinstance(e, dict) and 'id' in e]
-                            except Exception as e:
-                                logger.warning("failed_to_parse_vlm_json", error=str(e), file=vlm_json_filename)
+                # Get stage1 file paths
+                stage1 = page.get('stage1_global', {})
+                image_filename = stage1.get('image', f'page_{page_num:03d}_300dpi.png')
+                visualized_filename = stage1.get('visualized', f'page_{page_num:03d}_global_visualized.png')
+                ocr_json_filename = stage1.get('ocr_json', f'page_{page_num:03d}_global_ocr.json')
                 
-                    page_info = {
-                        'page_num': page_num,
-                        'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{image_filename}",
-                        'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{visualized_filename}",
-                        'ocr_json_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{ocr_json_filename}",
-                        'text_count': text_count,
-                        'components': components[:20] if components else []
-                    }
-                    pages_data_list.append(page_info)
+                # Try to extract components from VLM JSON if available
+                components = []
+                stage3 = page.get('stage3_vlm', {})
+                vlm_json_filename = stage3.get('vlm_json')
+                if vlm_json_filename:
+                    vlm_json_path = doc_output_dir / vlm_json_filename
+                    if vlm_json_path.exists():
+                        try:
+                            with open(vlm_json_path, 'r', encoding='utf-8') as vf:
+                                vlm_data = json.load(vf)
+                                # Try different possible locations for components
+                                if 'components' in vlm_data:
+                                    components = vlm_data['components']
+                                elif 'domain_data' in vlm_data and isinstance(vlm_data['domain_data'], dict):
+                                    if 'components' in vlm_data['domain_data']:
+                                        components = vlm_data['domain_data']['components']
+                                    elif 'equipment' in vlm_data['domain_data']:
+                                        equipment = vlm_data['domain_data']['equipment']
+                                        if isinstance(equipment, list):
+                                            components = [e.get('id', '') for e in equipment if isinstance(e, dict) and 'id' in e]
+                        except Exception as e:
+                            logger.warning("failed_to_parse_vlm_json", error=str(e), file=vlm_json_filename)
+                
+                page_info = {
+                    'page_num': page_num,
+                    'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{image_filename}",
+                    'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{visualized_filename}",
+                    'ocr_json_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{ocr_json_filename}",
+                    'text_count': text_count,
+                    'components': components[:20] if components else []
+                }
+                pages_data_list.append(page_info)
         
-            # Update progress: Indexing to Elasticsearch
-            db.update_document_progress(doc_id, 85, "Indexing to Elasticsearch...")
+        # Check for cancellation before indexing
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
         
-            # Process with vector store
-            result = pipeline.process_file(str(file_path), metadata, processed_json_dir=str(doc_output_dir))
+        # Update progress: Indexing to Elasticsearch
+        task_manager.update_task(
+            doc_id,
+            stage=TaskStage.INDEXING,
+            progress_percentage=85,
+            message="Indexing to Elasticsearch..."
+        )
+        db.update_document_progress(doc_id, 85, "Indexing to Elasticsearch...")
         
-            # Update progress: Finalizing
-            db.update_document_progress(doc_id, 95, "Finalizing...")
+        # Add document identifiers to metadata for MinIO naming
+        metadata['document_id'] = doc_id
+        metadata['filename'] = pdf_path.name
+        metadata['checksum'] = checksum
         
-            # Update database with result
-            if result.get('status') == 'completed':
-                if not result.get('document_ids'):
-                    logger.error("NO_DOCUMENTS_INDEXED", 
-                               num_chunks=result.get('num_chunks', 0), doc_id=doc_id)
-                    db.update_document_status(
-                        doc_id,
-                        'failed',
-                        error_message='Processing completed but no documents were indexed to Elasticsearch'
-                    )
-                else:
-                    db.update_document_status(
-                        doc_id,
-                        'completed',
-                        num_chunks=result.get('num_chunks', 0),
-                        es_document_ids=json.dumps(result.get('document_ids', [])),
-                        pages_data=json.dumps(pages_data_list)
-                    )
-                    logger.info("document_processing_completed", doc_id=doc_id, 
-                              num_chunks=result.get('num_chunks', 0))
+        # Process with vector store
+        result = pipeline.process_file(str(pdf_path), metadata, processed_json_dir=str(doc_output_dir))
+        
+        # Check for cancellation after indexing
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Update progress: Finalizing
+        task_manager.update_task(
+            doc_id,
+            stage=TaskStage.FINALIZING,
+            progress_percentage=95,
+            message="Finalizing..."
+        )
+        db.update_document_progress(doc_id, 95, "Finalizing...")
+        
+        # Update database with result
+        if result.get('status') == 'completed':
+            if not result.get('document_ids'):
+                error_msg = 'Processing completed but no documents were indexed to Elasticsearch'
+                logger.error("NO_DOCUMENTS_INDEXED", 
+                           num_chunks=result.get('num_chunks', 0), doc_id=doc_id)
+                task_manager.complete_task(doc_id, success=False, error_message=error_msg)
+                db.update_document_status(doc_id, 'failed', error_message=error_msg)
             else:
+                task_manager.complete_task(doc_id, success=True)
                 db.update_document_status(
                     doc_id,
-                    'failed',
-                    error_message=result.get('error', 'Unknown error')
+                    'completed',
+                    num_chunks=result.get('num_chunks', 0),
+                    es_document_ids=json.dumps(result.get('document_ids', [])),
+                    pages_data=json.dumps(pages_data_list)
                 )
+                logger.info("document_processing_completed", doc_id=doc_id, 
+                          num_chunks=result.get('num_chunks', 0))
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            task_manager.complete_task(doc_id, success=False, error_message=error_msg)
+            db.update_document_status(doc_id, 'failed', error_message=error_msg)
+        
+    except InterruptedError:
+        raise
+    except Exception as e:
+        logger.error("pdf_processing_failed", error=str(e), doc_id=doc_id, pdf=pdf_path.name)
+        raise
+
+
+def process_document_background(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str):
+    """Background task to process document with full control"""
+    # Create task in task manager
+    task_manager.create_task(doc_id)
     
-        except subprocess.CalledProcessError as e:
-            logger.error("adaptive_ocr_failed", error=str(e), doc_id=doc_id)
-            db.update_document_status(
-                doc_id,
-                'failed',
-                error_message=f"OCR processing failed: {str(e)}"
+    # Wait for processing slot (max 3 concurrent documents)
+    with processing_semaphore:
+        temp_extract_dir = None
+        
+        try:
+            # Update task status
+            task_manager.update_task(
+                    doc_id,
+                status=TaskStatus.RUNNING,
+                stage=TaskStage.INITIALIZING,
+                progress_percentage=0,
+                message="Initializing document processing...",
+                filename=file_path.name
             )
+            db.update_document_progress(doc_id, 0, "Initializing...")
+            logger.info("background_processing_started", doc_id=doc_id, filename=file_path.name)
+            
+            # Check for cancellation
+            if not task_manager.wait_if_paused(doc_id):
+                raise InterruptedError("Task was cancelled by user")
+            
+            # Determine file type and handle accordingly
+            file_ext = file_path.suffix.lower()
+            
+            # Handle ZIP files - extract and process all PDFs
+            if file_ext == '.zip':
+                import zipfile
+                
+                task_manager.update_task(
+                doc_id,
+                    stage=TaskStage.EXTRACTING_ZIP,
+                    progress_percentage=5,
+                    message="Extracting ZIP archive...",
+                    is_zip_parent=True
+                )
+                db.update_document_progress(doc_id, 5, "Extracting ZIP archive...")
+                logger.info("extracting_zip", doc_id=doc_id, zip_file=file_path.name)
+                
+                # Create temporary extraction directory
+                temp_extract_dir = upload_folder / f"temp_extract_{doc_id}_{checksum[:8]}"
+                temp_extract_dir.mkdir(exist_ok=True)
+                
+                # Extract ZIP
+                try:
+                    with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                        zip_ref.extractall(temp_extract_dir)
+                    
+                    # Find all PDF files in extracted content, ignoring hidden files and __MACOSX
+                    pdf_files = []
+                    for p in temp_extract_dir.rglob('*'):
+                        if p.is_file() and p.suffix.lower() == '.pdf':
+                            # Check if any part of the path is hidden or __MACOSX
+                            parts = p.relative_to(temp_extract_dir).parts
+                            if not any(part.startswith('.') or part == '__MACOSX' for part in parts):
+                                pdf_files.append(p)
+                    
+                    if not pdf_files:
+                        raise ValueError("No PDF files found in ZIP archive")
+                    
+                    logger.info("found_pdfs_in_zip", count=len(pdf_files), doc_id=doc_id)
+                    
+                    # Update parent task with total files
+                    task_manager.update_task(
+                        doc_id,
+                        total_files=len(pdf_files),
+                        processed_files=0,
+                        message=f"Found {len(pdf_files)} PDF files in ZIP"
+                    )
+                    
+                    # Process each PDF as a sub-task
+                    for idx, pdf_path in enumerate(pdf_files, 1):
+                        # Check for cancellation
+                        if not task_manager.wait_if_paused(doc_id):
+                            raise InterruptedError("Task was cancelled by user")
+                        
+                        # Create sub-task (use negative IDs to avoid conflicts)
+                        child_doc_id = -(doc_id * 1000 + idx)
+                        child_checksum = f"{checksum}_{idx}"
+                        
+                        # Create child task
+                        task_manager.create_task(child_doc_id)
+                        task_manager.add_child_task(doc_id, child_doc_id)
+                        
+                        # Create database record for child
+                        child_doc = db.create_document(
+                            filename=pdf_path.name,
+                            file_path=str(pdf_path),
+                            file_type='pdf',
+                            file_size=pdf_path.stat().st_size,
+                            checksum=child_checksum,
+                            category=metadata.get('category'),
+                            tags=metadata.get('tags'),
+                            author=metadata.get('author'),
+                            description=f"From ZIP: {file_path.name}",
+                            ocr_engine=ocr_engine
+                        )
+                        
+                        # Update parent progress
+                        parent_progress = 10 + (80 * (idx - 1) / len(pdf_files))
+                        task_manager.update_task(
+                            doc_id,
+                            progress_percentage=int(parent_progress),
+                            message=f"Processing file {idx}/{len(pdf_files)}: {pdf_path.name}",
+                            processed_files=idx - 1
+                        )
+                        
+                        # Process the PDF (use child_doc_id for task_manager, child_doc.id for database)
+                        try:
+                            process_single_pdf(
+                                child_doc_id,  # Use negative ID for task manager
+                                pdf_path,
+                                metadata,
+                                ocr_engine,
+                                child_checksum,
+                                parent_task_id=doc_id
+                            )
+                            
+                            # Mark child as completed
+                            task_manager.complete_task(child_doc_id, success=True)
+                            db.update_document_status(child_doc.id, 'completed')  # Database uses positive ID
+                            
+                        except Exception as e:
+                            logger.error("child_pdf_failed", error=str(e), child_id=child_doc_id, pdf=pdf_path.name)
+                            task_manager.complete_task(child_doc_id, success=False, error_message=str(e))
+                            db.update_document_status(child_doc.id, 'failed', error_message=str(e))
+                        
+                        # Update parent processed count
+                        task_manager.update_task(
+                            doc_id,
+                            processed_files=idx
+                        )
+                    
+                    # All PDFs processed
+                    task_manager.complete_task(doc_id, success=True)
+                    db.update_document_status(doc_id, 'completed')
+                    logger.info("zip_processing_completed", doc_id=doc_id, total_files=len(pdf_files))
+                    return
+                    
+                except zipfile.BadZipFile:
+                    raise ValueError("Invalid or corrupted ZIP file")
+            
+            elif file_ext != '.pdf':
+                raise ValueError(f"Unsupported file type: {file_ext}. Only PDF and ZIP files are supported.")
+            
+            # Handle single PDF file
+            process_single_pdf(doc_id, file_path, metadata, ocr_engine, checksum)
+    
+        except InterruptedError as e:
+            # Task was cancelled by user
+            logger.info("task_cancelled", doc_id=doc_id, message=str(e))
+            task_manager.complete_task(doc_id, success=False, error_message="Task cancelled by user")
+            db.update_document_status(doc_id, 'cancelled', error_message=str(e))
+        
+        except subprocess.CalledProcessError as e:
+            error_msg = f"OCR processing failed: {str(e)}"
+            logger.error("adaptive_ocr_failed", error=str(e), doc_id=doc_id)
+            task_manager.complete_task(doc_id, success=False, error_message=error_msg)
+            db.update_document_status(doc_id, 'failed', error_message=error_msg)
+        
         except (RuntimeError, ValueError) as e:
+            error_msg = f"Elasticsearch operation failed: {str(e)}"
             logger.error("elasticsearch_operation_failed", error=str(e), 
                         error_type=type(e).__name__, doc_id=doc_id)
-            db.update_document_status(
-                doc_id,
-                'failed',
-                error_message=f"Elasticsearch operation failed: {str(e)}"
-            )
+            task_manager.complete_task(doc_id, success=False, error_message=error_msg)
+            db.update_document_status(doc_id, 'failed', error_message=error_msg)
+        
         except Exception as e:
-            logger.error("background_processing_failed", error=str(e), doc_id=doc_id)
-            db.update_document_status(doc_id, 'failed', error_message=str(e))
+            error_msg = str(e)
+            logger.error("background_processing_failed", error=error_msg, doc_id=doc_id)
+            task_manager.complete_task(doc_id, success=False, error_message=error_msg)
+            db.update_document_status(doc_id, 'failed', error_message=error_msg)
         finally:
+            # Clean up temporary extraction directory
+            if temp_extract_dir and temp_extract_dir.exists():
+                try:
+                    shutil.rmtree(temp_extract_dir)
+                    logger.info("cleaned_up_temp_extract_dir", dir=str(temp_extract_dir))
+                except Exception as e:
+                    logger.warning("failed_to_cleanup_temp_dir", error=str(e), dir=str(temp_extract_dir))
+            
             # Clean up uploaded file
             if file_path and file_path.exists():
                 try:
@@ -423,9 +663,11 @@ async def upload_file(
             ocr_engine=ocr_engine
         )
         doc_id = doc.id
+        logger.info("document_created", doc_id=doc_id, file_type=file_ext)
         
         # Update status to processing
         db.update_document_status(doc_id, 'processing')
+        logger.info("status_updated_to_processing", doc_id=doc_id)
         
         # Prepare metadata
         metadata = {}
@@ -447,6 +689,9 @@ async def upload_file(
             args=(doc_id, file_path, metadata, ocr_engine, checksum),
             daemon=True
         )
+        
+        # Register thread in task manager
+        task_manager.register_thread(doc_id, thread)
         thread.start()
         
         # Return immediately with task info
@@ -722,9 +967,35 @@ async def list_documents(limit: int = 50, offset: int = 0, status: Optional[str]
 
 
 @app.get("/documents/{doc_id}/progress")
-async def get_document_progress(doc_id: int):
-    """Get processing progress for a document"""
+async def get_document_progress(doc_id: int, include_children: bool = False):
+    """Get processing progress for a document (enhanced with task manager)"""
     try:
+        # Try to get from task manager first (for active tasks)
+        if include_children:
+            task_dict = task_manager.get_task_with_children(doc_id)
+            if task_dict:
+                # Also get database info
+                doc = db.get_document(doc_id)
+                if doc:
+                    if not task_dict.get('filename'):
+                        task_dict['filename'] = doc.filename
+                    task_dict['doc_id'] = doc.id
+                
+                return JSONResponse(content=task_dict)
+        else:
+            task = task_manager.get_task(doc_id)
+            if task:
+                task_dict = task.to_dict()
+                
+                # Also get database info
+                doc = db.get_document(doc_id)
+                if doc:
+                    task_dict['filename'] = doc.filename
+                    task_dict['doc_id'] = doc.id
+                
+                return JSONResponse(content=task_dict)
+        
+        # Fall back to database for completed/old tasks
         doc = db.get_document(doc_id)
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
@@ -733,10 +1004,14 @@ async def get_document_progress(doc_id: int):
             "doc_id": doc.id,
             "status": doc.status,
             "progress_percentage": doc.progress_percentage or 0,
-            "progress_message": doc.progress_message or "",
+            "message": doc.progress_message or "",
             "total_pages": doc.total_pages or 0,
             "processed_pages": doc.processed_pages or 0,
-            "filename": doc.filename
+            "filename": doc.filename,
+            "is_zip_parent": False,
+            "child_task_ids": [],
+            "total_files": 0,
+            "processed_files": 0
         })
     except HTTPException:
         raise
@@ -753,6 +1028,9 @@ async def delete_document(doc_id: int):
         doc = db.get_document(doc_id)
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Cancel any running task for this document
+        task_manager.cancel_task(doc_id)
         
         checksum = doc.checksum
         
@@ -812,6 +1090,119 @@ async def delete_all_documents():
         })
     except Exception as e:
         logger.error("delete_all_documents_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/tasks")
+async def list_tasks(status: Optional[str] = None):
+    """List all tasks with optional status filter"""
+    try:
+        status_filter = None
+        if status:
+            try:
+                status_filter = TaskStatus(status)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+        
+        tasks = task_manager.list_tasks(status_filter)
+        return JSONResponse(content={
+            "tasks": tasks,
+            "total": len(tasks)
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("list_tasks_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/tasks/{task_id}")
+async def get_task(task_id: int):
+    """Get detailed task information"""
+    try:
+        task = task_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        return JSONResponse(content=task.to_dict())
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_task_failed", error=str(e), task_id=task_id)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/tasks/{task_id}/pause")
+async def pause_task(task_id: int):
+    """Pause a running task"""
+    try:
+        success = task_manager.pause_task(task_id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Cannot pause task. Check task status.")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Task {task_id} pause requested",
+            "task_id": task_id
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("pause_task_failed", error=str(e), task_id=task_id)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/tasks/{task_id}/resume")
+async def resume_task(task_id: int):
+    """Resume a paused task"""
+    try:
+        success = task_manager.resume_task(task_id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Cannot resume task. Check task status.")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Task {task_id} resumed",
+            "task_id": task_id
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("resume_task_failed", error=str(e), task_id=task_id)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/tasks/{task_id}/cancel")
+async def cancel_task(task_id: int):
+    """Cancel a task"""
+    try:
+        success = task_manager.cancel_task(task_id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Cannot cancel task. Check task status.")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Task {task_id} cancellation requested",
+            "task_id": task_id
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("cancel_task_failed", error=str(e), task_id=task_id)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/tasks/cleanup")
+async def cleanup_tasks(keep_recent: int = 10):
+    """Cleanup old finished tasks"""
+    try:
+        task_manager.cleanup_finished_tasks(keep_recent)
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Cleaned up old tasks, keeping {keep_recent} most recent"
+        })
+    except Exception as e:
+        logger.error("cleanup_tasks_failed", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 

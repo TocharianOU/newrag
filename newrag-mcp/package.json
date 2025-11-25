@@ -1,0 +1,62 @@
+{
+  "name": "smartresume-rag-search-mcp",
+  "description": "SmartResume RAG智能搜索MCP服务器 - 支持向量混合搜索和完整ES API访问",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "bin": {
+    "smartresume-rag-search": "./dist/index.js"
+  },
+  "keywords": [
+    "rag",
+    "semantic-search",
+    "hybrid-search",
+    "elasticsearch",
+    "mcp",
+    "embedding",
+    "vector-search"
+  ],
+  "files": [
+    "dist",
+    "NOTICE.txt",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build && npm run license-checker",
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "start:http": "MCP_TRANSPORT=http node dist/index.js",
+    "inspector": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "test": "npm run build",
+    "license-checker": "license-checker --production --onlyAllow='MIT;Apache-2.0;Apache1.1;ISC;BSD-3-Clause;BSD-2-Clause;0BSD;BlueOak-1.0.0;Unlicense'",
+    "license-header": "./scripts/check-spdx",
+    "generate-notice": "node ./scripts/generate-notice.js"
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.17.1",
+    "@modelcontextprotocol/sdk": "^1.19.1",
+    "@types/express": "^5.0.3",
+    "@types/js-yaml": "^4.0.9",
+    "express": "^5.1.0",
+    "js-yaml": "^4.1.1",
+    "mcp-ssh": "^1.0.1",
+    "server-cmd": "^2.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "22.13.15",
+    "license-checker": "^25.0.1",
+    "shx": "0.4.0",
+    "typescript": "5.8.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

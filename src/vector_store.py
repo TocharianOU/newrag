@@ -1,5 +1,6 @@
 """Vector store module with Elasticsearch integration"""
 
+import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -17,12 +18,20 @@ logger = structlog.get_logger(__name__)
 class VectorStore:
     """Vector store with Elasticsearch backend and hybrid search"""
 
-    def __init__(self):
-        """Initialize vector store"""
-        self.config = config.es_config
+    def __init__(self, config_override: Optional[Dict[str, Any]] = None):
+        """
+        Initialize vector store
+        
+        Args:
+            config_override: Optional config dict to override global config
+        """
+        # 从 config.yaml 读取 Elasticsearch 配置
+        self.config = config_override or config.es_config
+        
+        # 初始化 Embedding 模型（从 config.yaml 读取）
         self.embedding_model = EmbeddingModel()
         
-        # Initialize Elasticsearch client
+        # Initialize Elasticsearch client from config
         es_hosts = self.config.get('hosts', ['http://localhost:9200'])
         es_username = self.config.get('username', '')
         es_password = self.config.get('password', '')
@@ -97,12 +106,18 @@ class VectorStore:
                 # Add indexed_at timestamp
                 doc.metadata['indexed_at'] = datetime.utcnow().isoformat()
                 
-                # Remove page_json and ocr_data from metadata before indexing to avoid mapping conflicts
-                # (ES tries to dynamically map nested fields even with enabled:false)
+                # Remove complex nested objects (not needed in ES, all files stored in MinIO)
+                # MinIO will hold all original data (PNG, JSON, etc.)
                 if 'page_json' in doc.metadata:
                     del doc.metadata['page_json']
+                
                 if 'ocr_data' in doc.metadata:
                     del doc.metadata['ocr_data']
+                
+                # Remove minio_urls dict to avoid nested object issues
+                # Individual URLs are stored in page_image_url, minio_base_url, etc.
+                if 'minio_urls' in doc.metadata:
+                    del doc.metadata['minio_urls']
                 
                 valid_documents.append(doc)
                 logger.debug(
@@ -127,7 +142,6 @@ class VectorStore:
                     logger.warning(f"⚠️  Index '{self.index_name}' does not exist, creating automatically...")
                     # Load mapping from file and create index
                     from pathlib import Path
-                    import json
                     mapping_file = Path(__file__).parent.parent / "schemas" / "elasticsearch_mapping.json"
                     with open(mapping_file, 'r') as f:
                         mapping = json.load(f)

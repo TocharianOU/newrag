@@ -23,6 +23,7 @@ data/
 uploads/
 *.db
 *.sqlite3
+web/static/processed_docs/
 
 # Test outputs (temporary)
 *_adaptive/
@@ -53,6 +54,10 @@ uv.lock
 logs/
 *.log
 
+# OCR Models
+# 模型存储在系统默认位置: ~/.EasyOCR/, ~/.paddlex/
+# 使用 init_ocr_models.sh 脚本初始化
+
 # OS
 .DS_Store
 Thumbs.db
@@ -61,3 +66,4 @@ Thumbs.db
 .env
 .env.local
 logs/
+node_modules/

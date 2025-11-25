@@ -79,9 +79,15 @@ def detect_garbled_text(text: str, threshold: float = 0.15) -> tuple[bool, float
 class DocumentProcessor:
     """Document processor with multi-format support and metadata extraction"""
 
-    def __init__(self):
-        """Initialize document processor"""
-        self.config = config.processing_config
+    def __init__(self, config_override: Optional[Dict[str, Any]] = None):
+        """
+        Initialize document processor
+        
+        Args:
+            config_override: Optional config dict to override global config
+        """
+        # 从 config.yaml 读取所有配置
+        self.config = config_override or config.processing_config
         self.text_splitting_config = config.text_splitting_config
         self.metadata_config = config.metadata_config
         
@@ -339,6 +345,22 @@ class DocumentProcessor:
             
             logger.info("✅ Successfully loaded complete_document.json", num_pages=len(pages_data))
             
+            # Load OCR metadata from complete_adaptive_ocr.json for bbox data (for MCP tool)
+            ocr_metadata_path = json_path.parent / "complete_adaptive_ocr.json"
+            ocr_pages_map = {}
+            if ocr_metadata_path.exists():
+                try:
+                    with open(ocr_metadata_path, 'r', encoding='utf-8') as f:
+                        ocr_meta = json.load(f)
+                    for page in ocr_meta.get('pages', []):
+                        page_num = page.get('page_number')
+                        ocr_json_file = page.get('stage1_global', {}).get('ocr_json')
+                        if page_num and ocr_json_file:
+                            ocr_pages_map[page_num] = ocr_json_file
+                    logger.info("✅ Loaded OCR metadata for MCP tool", num_pages=len(ocr_pages_map))
+                except Exception as e:
+                    logger.warning("failed_to_load_ocr_metadata", error=str(e))
+            
             documents = []
             for page_data in pages_data:
                 page_num = page_data.get('page_number', len(documents) + 1)
@@ -346,13 +368,33 @@ class DocumentProcessor:
                 # Convert VLM JSON to searchable text
                 page_content = self._flatten_to_searchable_text(page_data)
                 
-                # Create Document with metadata (OCR bbox data will be loaded on-demand during search)
+                # Load OCR data for MCP tool (will be serialized to JSON string in vector_store)
+                ocr_data = {}
+                if page_num in ocr_pages_map:
+                    ocr_json_path = json_path.parent / ocr_pages_map[page_num]
+                    if ocr_json_path.exists():
+                        try:
+                            with open(ocr_json_path, 'r', encoding='utf-8') as f:
+                                ocr_json = json.load(f)
+                            ocr_data = {
+                                'text_blocks': ocr_json.get('text_blocks', []),
+                                'image_size': ocr_json.get('image_size', {}),
+                                'file': ocr_json.get('file', ''),
+                                'status': ocr_json.get('status', '')
+                            }
+                            logger.debug(f"✅ Loaded OCR data for page {page_num}", 
+                                       num_blocks=len(ocr_data.get('text_blocks', [])))
+                        except Exception as e:
+                            logger.warning(f"failed_to_load_ocr_json_for_page_{page_num}", error=str(e))
+                
+                # Create Document with full metadata (will be serialized as JSON strings for ES)
                 doc = Document(
                     page_content=page_content,
                     metadata={
                         'page': page_num,
                         'page_number': page_num,
-                        'page_json': page_data,
+                        'page_json': page_data,  # Will be serialized to page_json_raw
+                        'ocr_data': ocr_data,    # Will be serialized to ocr_data_raw
                         'page_type': page_data.get('document_info', {}).get('document_type', 'drawing'),
                         'extraction_method': 'vlm_refined'
                     }
@@ -364,7 +406,8 @@ class DocumentProcessor:
                     f"✅ Page {page_num} converted to searchable text",
                     page_number=page_num,
                     content_length=len(page_content),
-                    has_content=bool(page_content.strip())
+                    has_content=bool(page_content.strip()),
+                    has_ocr_data=bool(ocr_data)
                 )
             
             return documents
