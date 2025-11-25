@@ -293,7 +293,41 @@ class DocumentProcessor:
                     # Fall back to standard loading
                     loader = UnstructuredExcelLoader(str(file_path))
             elif file_ext in ['.png', '.jpg', '.jpeg']:
-                # Use vision model for images
+                # Check if we have pre-processed JSON from OCR pipeline
+                if processed_json_dir:
+                    json_dir = Path(processed_json_dir)
+                    complete_json = json_dir / 'complete_document.json'
+                    
+                    if complete_json.exists():
+                        logger.info("loading_image_from_preprocessed_json", json_file=str(complete_json))
+                        with open(complete_json, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        
+                        # Build document from OCR-extracted content
+                        pages = data.get('pages', [])
+                        if pages:
+                            page_data = pages[0]  # Single image = single page
+                            text_content = page_data.get('text', '')
+                            
+                            # Use text_blocks if available, otherwise use text
+                            if not text_content and page_data.get('text_blocks'):
+                                text_blocks = page_data['text_blocks']
+                                text_content = '\n'.join(block.get('text', '') for block in text_blocks if block.get('text'))
+                            
+                            doc = Document(
+                                page_content=text_content,
+                                metadata={
+                                    'source': str(file_path),
+                                    'file_type': 'image',
+                                    'extraction_method': 'ocr',
+                                    'ocr_engine': page_data.get('ocr_engine', 'unknown')
+                                }
+                            )
+                            
+                            logger.info("image_loaded_from_ocr", text_length=len(text_content))
+                            return [doc]
+                
+                # Fallback: Use vision model for images (if no pre-processed JSON)
                 return self._load_image_document(file_path)
             else:
                 raise ValueError(f"Unsupported file format: {file_ext}")

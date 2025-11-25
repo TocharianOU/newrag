@@ -546,12 +546,175 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                 except zipfile.BadZipFile:
                     raise ValueError("Invalid or corrupted ZIP file")
             
-            elif file_ext != '.pdf':
-                raise ValueError(f"Unsupported file type: {file_ext}. Only PDF and ZIP files are supported.")
+            elif file_ext == '.pdf':
+                # Handle single PDF file
+                process_single_pdf(doc_id, file_path, metadata, ocr_engine, checksum)
             
-            # Handle single PDF file
-            process_single_pdf(doc_id, file_path, metadata, ocr_engine, checksum)
-    
+            elif file_ext in ['.jpg', '.jpeg', '.png']:
+                # Handle image files - use OCR pipeline (same as PDF but without page conversion)
+                logger.info("processing_image_file", doc_id=doc_id, filename=file_path.name)
+                
+                task_manager.update_task(
+                    doc_id,
+                    status=TaskStatus.RUNNING,
+                    stage=TaskStage.OCR_PROCESSING,
+                    progress_percentage=10,
+                    message=f"Running OCR on {file_path.name}...",
+                    filename=file_path.name
+                )
+                db.update_document_progress(doc_id, 10, f"Starting OCR for {file_path.name}...")
+                
+                # Check for cancellation
+                if not task_manager.wait_if_paused(doc_id):
+                    raise InterruptedError("Task was cancelled by user")
+                
+                # Run OCR extraction directly on image (使用 extract_document.py)
+                # 创建输出目录
+                processed_folder = Path('web/static/processed_docs')
+                doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
+                doc_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                # 运行 extract_document.py 提取文本
+                logger.info("running_ocr_extraction", doc_id=doc_id, image=file_path.name)
+                ocr_json_path = doc_output_dir / "image_ocr.json"
+                
+                extract_script = Path('document_ocr_pipeline/extract_document.py')
+                subprocess.run([
+                    sys.executable,
+                    str(extract_script),
+                    str(file_path),
+                    '--ocr-engine', ocr_engine,
+                    '-o', str(ocr_json_path)
+                ], check=True)
+                
+                logger.info("ocr_extraction_completed", doc_id=doc_id)
+                
+                # 生成可视化图片
+                task_manager.update_task(
+                    doc_id,
+                    progress_percentage=40,
+                    message="Creating visualization..."
+                )
+                db.update_document_progress(doc_id, 40, "Creating visualization...")
+                
+                visualize_script = Path('document_ocr_pipeline/visualize_extraction.py')
+                vis_output_path = doc_output_dir / "image_visualized.png"
+                subprocess.run([
+                    sys.executable,
+                    str(visualize_script),
+                    str(file_path),
+                    str(ocr_json_path),
+                    '-o', str(vis_output_path)
+                ], check=True)
+                
+                # 复制原始图片作为预览
+                import shutil
+                preview_path = doc_output_dir / "image_preview.png"
+                shutil.copy(file_path, preview_path)
+                
+                # Check for cancellation
+                if not task_manager.wait_if_paused(doc_id):
+                    raise InterruptedError("Task was cancelled by user")
+                
+                # 更新进度：构建 pages_data
+                task_manager.update_task(
+                    doc_id,
+                    stage=TaskStage.VLM_EXTRACTION,
+                    progress_percentage=60,
+                    message="Building searchable content...",
+                    total_pages=1,
+                    processed_pages=0
+                )
+                db.update_document_progress(doc_id, 60, "Building searchable content...", processed_pages=0, total_pages=1)
+                
+                # 读取 OCR 结果并构建 pages_data
+                with open(ocr_json_path, 'r', encoding='utf-8') as f:
+                    ocr_data = json.load(f)
+                
+                # 提取文本内容
+                text_content = ocr_data.get('text', '')
+                
+                # 构建 pages_data（模拟 PDF 的单页结构）
+                pages_data = [{
+                    'page_number': 1,
+                    'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/image_preview.png",
+                    'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/image_visualized.png",
+                    'ocr_json_path': str(ocr_json_path),
+                    'text': text_content,
+                    'text_blocks': ocr_data.get('text_blocks', []),
+                    'extraction_method': 'ocr',
+                    'ocr_engine': ocr_engine
+                }]
+                
+                # 保存 pages_data
+                pages_data_json = doc_output_dir / "complete_document.json"
+                with open(pages_data_json, 'w', encoding='utf-8') as f:
+                    json.dump({'pages': pages_data}, f, ensure_ascii=False, indent=2)
+                
+                task_manager.update_task(
+                    doc_id,
+                    processed_pages=1
+                )
+                db.update_document_progress(doc_id, 70, "Processing completed", processed_pages=1, total_pages=1)
+                
+                # Check for cancellation before indexing
+                if not task_manager.wait_if_paused(doc_id):
+                    raise InterruptedError("Task was cancelled by user")
+                
+                # 更新进度：索引到 Elasticsearch
+                task_manager.update_task(
+                    doc_id,
+                    stage=TaskStage.INDEXING,
+                    progress_percentage=80,
+                    message="Indexing to Elasticsearch..."
+                )
+                db.update_document_progress(doc_id, 80, "Indexing to Elasticsearch...")
+                
+                # 添加文档标识到 metadata
+                metadata['document_id'] = doc_id
+                metadata['filename'] = file_path.name
+                metadata['checksum'] = checksum
+                
+                # 使用 pipeline 索引（会读取 complete_document.json）
+                result = pipeline.process_file(str(file_path), metadata, processed_json_dir=str(doc_output_dir))
+                
+                # Check for cancellation after indexing
+                if not task_manager.wait_if_paused(doc_id):
+                    raise InterruptedError("Task was cancelled by user")
+                
+                # 更新进度：完成
+                task_manager.update_task(
+                    doc_id,
+                    stage=TaskStage.FINALIZING,
+                    progress_percentage=95,
+                    message="Finalizing..."
+                )
+                db.update_document_progress(doc_id, 95, "Finalizing...")
+                
+                # 更新数据库
+                if result.get('status') == 'completed':
+                    if not result.get('document_ids'):
+                        error_msg = 'Image processing completed but no documents were indexed'
+                        logger.error("no_documents_indexed", doc_id=doc_id)
+                        task_manager.complete_task(doc_id, success=False, error_message=error_msg)
+                        db.update_document_status(doc_id, 'failed', error_message=error_msg)
+                    else:
+                        task_manager.complete_task(doc_id, success=True)
+                        db.update_document_status(
+                            doc_id,
+                            'completed',
+                            num_chunks=result.get('num_chunks', 0),
+                            pages_data=json.dumps(pages_data)
+                        )
+                        logger.info("image_processing_completed", doc_id=doc_id, num_chunks=result.get('num_chunks', 0))
+                else:
+                    error_msg = result.get('error', 'Unknown error during image processing')
+                    task_manager.complete_task(doc_id, success=False, error_message=error_msg)
+                    db.update_document_status(doc_id, 'failed', error_message=error_msg)
+            
+            else:
+                raise ValueError(f"Unsupported file type: {file_ext}. Supported: PDF, ZIP, JPG, JPEG, PNG")
+        
         except InterruptedError as e:
             # Task was cancelled by user
             logger.info("task_cancelled", doc_id=doc_id, message=str(e))
@@ -1203,6 +1366,177 @@ async def cleanup_tasks(keep_recent: int = 10):
         })
     except Exception as e:
         logger.error("cleanup_tasks_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/orphan-check")
+async def check_orphan_documents():
+    """
+    Check for orphan documents in ES (documents without corresponding files)
+    """
+    try:
+        orphans = []
+        processed_folder_path = Path('web/static/processed_docs')
+        
+        # Get all documents from ES
+        es_client = pipeline.vector_store.es_client
+        index_name = pipeline.vector_store.index_name
+        
+        # Check if index exists
+        if not es_client.indices.exists(index=index_name):
+            return JSONResponse(content={
+                "status": "no_index",
+                "orphans": [],
+                "total": 0
+            })
+        
+        # Scan all documents in ES
+        from elasticsearch.helpers import scan
+        query = {"query": {"match_all": {}}}
+        
+        # Track unique document folders to avoid duplicate checks
+        folders_checked = set()
+        
+        for hit in scan(es_client, index=index_name, query=query, _source=['metadata']):
+            metadata = hit['_source'].get('metadata', {})
+            doc_id = metadata.get('document_id')
+            checksum = metadata.get('checksum', '')
+            filename = metadata.get('filename', 'unknown')
+            filepath = metadata.get('filepath', '')
+            
+            # Determine the folder path for this document
+            if checksum:
+                folder_key = f"{doc_id}_{checksum[:8]}"
+                doc_folder = processed_folder_path / folder_key
+            else:
+                folder_key = str(doc_id)
+                doc_folder = processed_folder_path / folder_key
+            
+            # Skip if we've already checked this folder
+            if folder_key in folders_checked:
+                continue
+            
+            folders_checked.add(folder_key)
+            
+            # Check if processed folder OR original file exists
+            file_exists = doc_folder.exists()
+            if not file_exists and filepath:
+                # Also check original file path
+                original_file = Path(filepath)
+                file_exists = original_file.exists()
+            
+            if not file_exists:
+                # This is an orphan - ES record exists but no files
+                # Check if document exists in database
+                db_doc = None
+                try:
+                    if doc_id and isinstance(doc_id, int):
+                        db_doc = db.get_document(doc_id)
+                    elif checksum:
+                        db_doc = db.get_document_by_checksum(checksum)
+                except:
+                    pass
+                
+                orphans.append({
+                    'es_id': hit['_id'],
+                    'document_id': doc_id,
+                    'checksum': checksum,
+                    'filename': filename,
+                    'filepath': filepath,
+                    'expected_folder': str(doc_folder),
+                    'metadata': metadata,
+                    'in_database': bool(db_doc),
+                    'file_exists': False
+                })
+        
+        return JSONResponse(content={
+            "status": "success",
+            "orphans": orphans,
+            "total": len(orphans)
+        })
+    
+    except Exception as e:
+        logger.error("orphan_check_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/orphan-cleanup")
+async def cleanup_orphan_documents(document_ids: Optional[List[str]] = None):
+    """
+    Clean up orphan documents from ES
+    If document_ids is provided, clean specific documents, otherwise clean all orphans
+    """
+    try:
+        es_client = pipeline.vector_store.es_client
+        index_name = pipeline.vector_store.index_name
+        
+        if not es_client.indices.exists(index=index_name):
+            return JSONResponse(content={
+                "status": "no_index",
+                "deleted_count": 0
+            })
+        
+        deleted_count = 0
+        
+        if document_ids:
+            # Delete specific documents (by document_id from metadata)
+            for doc_id_str in document_ids:
+                try:
+                    # Try to convert to int if it's a document ID
+                    try:
+                        doc_id_int = int(doc_id_str)
+                        filter_dict = {"document_id": doc_id_int}
+                    except (ValueError, TypeError):
+                        # If not an int, treat as string (checksum or other identifier)
+                        filter_dict = {"document_id": doc_id_str}
+                    
+                    count = pipeline.vector_store.delete_by_metadata(filter_dict)
+                    deleted_count += count
+                    logger.info("deleted_orphan_chunks", doc_id=doc_id_str, count=count)
+                except Exception as e:
+                    logger.warning("failed_to_delete_orphan", doc_id=doc_id_str, error=str(e))
+        else:
+            # Get all orphans and delete them
+            orphan_check = await check_orphan_documents()
+            orphan_data = json.loads(orphan_check.body.decode())
+            
+            for orphan in orphan_data.get('orphans', []):
+                doc_id = orphan['document_id']
+                try:
+                    count = pipeline.vector_store.delete_by_metadata({"document_id": doc_id})
+                    deleted_count += count
+                except Exception as e:
+                    logger.warning("failed_to_delete_orphan", doc_id=doc_id, error=str(e))
+        
+        return JSONResponse(content={
+            "status": "success",
+            "deleted_count": deleted_count
+        })
+    
+    except Exception as e:
+        logger.error("orphan_cleanup_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/es-index/delete")
+async def delete_es_document_by_id(es_doc_id: str):
+    """
+    Delete a specific document from ES by its ES document ID
+    """
+    try:
+        es_client = pipeline.vector_store.es_client
+        index_name = pipeline.vector_store.index_name
+        
+        response = es_client.delete(index=index_name, id=es_doc_id)
+        
+        return JSONResponse(content={
+            "status": "success",
+            "es_id": es_doc_id,
+            "result": response.get('result', 'deleted')
+        })
+    
+    except Exception as e:
+        logger.error("es_document_deletion_failed", es_id=es_doc_id, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 

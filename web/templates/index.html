@@ -79,13 +79,13 @@
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
                     <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-blue-500 transition-colors cursor-pointer">
                         <i class="fas fa-cloud-upload-alt text-6xl text-gray-400 mb-4"></i>
-                        <p class="text-lg text-gray-600 mb-2" data-i18n="upload.dragDrop">Drag & drop PDF or ZIP files here</p>
+                        <p class="text-lg text-gray-600 mb-2" data-i18n="upload.dragDrop">Drag & drop files here</p>
                         <p class="text-sm text-gray-500 mb-1" data-i18n="upload.clickBrowse">or click to browse</p>
                         <p class="text-xs text-gray-400 mt-2">
                             <i class="fas fa-info-circle mr-1"></i>
-                            <span data-i18n="upload.autoDetect">Auto-detects PDF and ZIP files. ZIP archives will be extracted automatically.</span>
+                            <span data-i18n="upload.autoDetect">Supports PDF, ZIP, JPG/JPEG, PNG. ZIP archives will be extracted automatically.</span>
                         </p>
-                        <input type="file" id="file-input" class="hidden" accept=".pdf,.zip" multiple>
+                        <input type="file" id="file-input" class="hidden" accept=".pdf,.zip,.jpg,.jpeg,.png" multiple>
                     </div>
 
                     <!-- Selected Files Display -->
@@ -144,16 +144,20 @@
                         </button>
                     </div>
 
-                    <div class="mt-4 flex gap-4">
-                        <div class="flex-1">
+                    <div class="mt-4 grid grid-cols-4 gap-4">
+                        <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="search.categoryFilter">Category Filter</label>
                             <input type="text" id="filter-category" class="w-full px-4 py-2 border rounded-lg" data-i18n-placeholder="search.optional">
                         </div>
-                        <div class="flex-1">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="search.authorFilter">Author Filter</label>
+                            <input type="text" id="filter-author" class="w-full px-4 py-2 border rounded-lg" data-i18n-placeholder="search.optional">
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="search.typeFilter">File Type Filter</label>
                             <input type="text" id="filter-type" class="w-full px-4 py-2 border rounded-lg" data-i18n-placeholder="search.optional">
                         </div>
-                        <div class="w-32">
+                        <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="search.results">Results</label>
                             <input type="number" id="search-k" class="w-full px-4 py-2 border rounded-lg" value="5" min="1" max="20">
                         </div>
@@ -193,7 +197,7 @@
                     </div>
                 </div>
                 
-                <div class="grid grid-cols-4 gap-6 mb-6">
+                <div class="grid grid-cols-5 gap-6 mb-6">
                     <div class="bg-white rounded-lg shadow p-6">
                         <div class="text-3xl font-bold text-blue-600" id="stat-docs">-</div>
                         <div class="text-gray-600 mt-2" data-i18n="stats.totalUploaded">Total Uploaded</div>
@@ -210,6 +214,33 @@
                         <div class="text-3xl font-bold text-red-600" id="stat-failed">-</div>
                         <div class="text-gray-600 mt-2" data-i18n="stats.failed">Failed</div>
                     </div>
+                    <div class="bg-white rounded-lg shadow p-6 cursor-pointer hover:shadow-lg transition-shadow" onclick="checkOrphanDocuments()">
+                        <div class="text-3xl font-bold text-orange-600" id="stat-orphans">?</div>
+                        <div class="text-gray-600 mt-2" data-i18n="stats.orphans">Orphan Records</div>
+                        <div class="text-xs text-gray-500 mt-1" data-i18n="stats.clickToCheck">Click to check</div>
+                    </div>
+                </div>
+                
+                <!-- Orphan Documents Panel -->
+                <div id="orphan-panel" class="bg-white rounded-lg shadow p-6 mb-6 hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-orange-700">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            <span data-i18n="stats.orphanDocuments">Orphan Documents (ES only)</span>
+                        </h3>
+                        <div class="flex gap-2">
+                            <button onclick="cleanupOrphanDocuments()" class="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1 border border-red-600 rounded hover:bg-red-50">
+                                <i class="fas fa-trash mr-1"></i> <span data-i18n="stats.cleanupOrphans">Cleanup All</span>
+                            </button>
+                            <button onclick="document.getElementById('orphan-panel').classList.add('hidden')" class="text-gray-600 hover:text-gray-800 text-sm">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600 mb-4" data-i18n="stats.orphanDescription">
+                        These records exist in Elasticsearch but their source files are missing. This may happen if documents were deleted while ES was offline.
+                    </div>
+                    <div id="orphan-list" class="space-y-2 max-h-96 overflow-y-auto"></div>
                 </div>
 
                 <!-- Document List -->
@@ -220,7 +251,81 @@
                             <i class="fas fa-trash mr-1"></i> <span data-i18n="stats.clearAll">Clear All</span>
                         </button>
                     </div>
-                    <div id="documents-list" class="space-y-2"></div>
+                    
+                    <!-- Search and Filter Bar -->
+                    <div class="mb-4 grid grid-cols-4 gap-3">
+                        <div>
+                            <input type="text" id="doc-search" 
+                                   class="w-full px-3 py-2 border rounded-lg text-sm" 
+                                   placeholder="搜索文档名称..." 
+                                   data-i18n-placeholder="stats.searchPlaceholder"
+                                   oninput="filterDocuments()">
+                        </div>
+                        <div>
+                            <select id="doc-category-filter" 
+                                    class="w-full px-3 py-2 border rounded-lg text-sm" 
+                                    onchange="filterDocuments()">
+                                <option value="">全部分类</option>
+                            </select>
+                        </div>
+                        <div>
+                            <select id="doc-status-filter" 
+                                    class="w-full px-3 py-2 border rounded-lg text-sm" 
+                                    onchange="filterDocuments()">
+                                <option value="" data-i18n="stats.allStatus">全部状态</option>
+                                <option value="completed" data-i18n="stats.completed">已完成</option>
+                                <option value="processing" data-i18n="stats.processing">处理中</option>
+                                <option value="failed" data-i18n="stats.failed">失败</option>
+                            </select>
+                        </div>
+                        <div>
+                            <select id="doc-date-filter" 
+                                    class="w-full px-3 py-2 border rounded-lg text-sm" 
+                                    onchange="filterDocuments()">
+                                <option value="all" data-i18n="stats.allTime">全部时间</option>
+                                <option value="today" data-i18n="stats.today">今天</option>
+                                <option value="week" data-i18n="stats.thisWeek">本周</option>
+                                <option value="month" data-i18n="stats.thisMonth">本月</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Document List -->
+                    <div id="documents-list" class="space-y-2 mb-4"></div>
+                    
+                    <!-- Pagination -->
+                    <div class="flex justify-between items-center pt-4 border-t">
+                        <div class="text-sm text-gray-600">
+                            <span data-i18n="stats.showing">显示</span>
+                            <span id="doc-showing-start">0</span>-<span id="doc-showing-end">0</span>
+                            <span data-i18n="stats.of">共</span>
+                            <span id="doc-total-count">0</span>
+                            <span data-i18n="stats.documents">个文档</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="previousPage()" 
+                                    id="prev-page-btn"
+                                    class="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled>
+                                <i class="fas fa-chevron-left"></i>
+                                <span class="ml-1" data-i18n="stats.previous">上一页</span>
+                            </button>
+                            <span class="px-3 py-1 text-sm text-gray-700">
+                                <span data-i18n="stats.page">第</span>
+                                <span id="current-page">1</span>
+                                <span data-i18n="stats.pageOf">/</span>
+                                <span id="total-pages">1</span>
+                                <span data-i18n="stats.pageUnit">页</span>
+                            </span>
+                            <button onclick="nextPage()" 
+                                    id="next-page-btn"
+                                    class="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled>
+                                <span class="mr-1" data-i18n="stats.next">下一页</span>
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-6">
@@ -349,11 +454,14 @@
                 const file = files[i];
                 const fileName = file.name.toLowerCase();
                 
-                // Validate file extension
-                if (!fileName.endsWith('.pdf') && !fileName.endsWith('.zip')) {
+                // Validate file extension (支持 PDF, ZIP, JPG, JPEG, PNG)
+                const supportedExtensions = ['.pdf', '.zip', '.jpg', '.jpeg', '.png'];
+                const isSupported = supportedExtensions.some(ext => fileName.endsWith(ext));
+                
+                if (!isSupported) {
                     const msg = currentLang === 'zh' 
-                        ? `跳过不支持的文件: ${file.name} (仅支持 PDF 和 ZIP)` 
-                        : `Skipping unsupported file: ${file.name} (only PDF and ZIP are supported)`;
+                        ? `跳过不支持的文件: ${file.name} (支持: PDF, ZIP, JPG, JPEG, PNG)` 
+                        : `Skipping unsupported file: ${file.name} (supported: PDF, ZIP, JPG, JPEG, PNG)`;
                     console.warn(msg);
                     continue;
                 }
@@ -375,8 +483,8 @@
             
             if (uploadPromises.length === 0) {
                 const msg = currentLang === 'zh' 
-                    ? '没有有效的文件可上传 (仅支持 PDF 和 ZIP 文件)' 
-                    : 'No valid files to upload (only PDF and ZIP files are supported)';
+                    ? '没有有效的文件可上传 (支持: PDF, ZIP, JPG, JPEG, PNG)' 
+                    : 'No valid files to upload (supported: PDF, ZIP, JPG, JPEG, PNG)';
                 alert(msg);
                 return;
             }
@@ -711,10 +819,12 @@
             const k = parseInt(document.getElementById('search-k').value);
             const useHybrid = document.getElementById('use-hybrid').checked;
             const filterCategory = document.getElementById('filter-category').value;
+            const filterAuthor = document.getElementById('filter-author').value;
             const filterType = document.getElementById('filter-type').value;
 
             const filters = {};
             if (filterCategory) filters.category = filterCategory;
+            if (filterAuthor) filters.author = filterAuthor;
             if (filterType) filters.file_type = filterType;
 
             const searchingMsg = currentLang === 'zh' ? '搜索中...' : 'Searching...';
@@ -841,14 +951,63 @@
                             `;
                         } else {
                             console.log(`  No pages_data for result ${index}`);
-                            // 如果没有 pages_data，显示提示
+                            // 如果没有 pages_data，显示提示和详细信息
                             const noPreviewMsg = currentLang === 'zh' 
-                                ? 'ℹ️ 无页面预览（文档可能需要使用OCR管道重新处理）'
-                                : 'ℹ️ No page preview available (document may need reprocessing with OCR pipeline)';
+                                ? '⚠️ 无页面预览'
+                                : '⚠️ No page preview available';
+                            const fileIssueMsg = currentLang === 'zh'
+                                ? '文档文件可能已被删除或ES索引数据不同步'
+                                : 'Document file may be deleted or ES index data is out of sync';
+                            const showDetailsLabel = currentLang === 'zh' ? '查看详细信息' : 'View Details';
+                            const hideDetailsLabel = currentLang === 'zh' ? '隐藏详细信息' : 'Hide Details';
+                            const deleteFromESLabel = currentLang === 'zh' ? '从 ES 删除此记录' : 'Delete from ES';
+                            const metadataLabel = currentLang === 'zh' ? '元数据信息' : 'Metadata Information';
+                            
+                            // Format metadata for display
+                            const metadataDisplay = Object.entries(result.metadata || {})
+                                .map(([key, value]) => {
+                                    let displayValue = value;
+                                    if (Array.isArray(value)) {
+                                        displayValue = value.join(', ');
+                                    } else if (typeof value === 'object') {
+                                        displayValue = JSON.stringify(value, null, 2);
+                                    }
+                                    return `<div class="flex py-1"><span class="font-semibold text-gray-700 w-32">${key}:</span><span class="text-gray-600">${displayValue}</span></div>`;
+                                }).join('');
+                            
                             imageSection = `
-                                <div class="mt-4 border-t pt-4">
-                                    <div class="text-sm text-gray-500 italic">
-                                        ${noPreviewMsg}
+                                <div class="mt-4 border-t pt-4 bg-red-50 rounded-lg p-4">
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex-1">
+                                            <div class="text-sm font-semibold text-red-700 mb-1">
+                                                ${noPreviewMsg}
+                                            </div>
+                                            <div class="text-xs text-gray-600 mb-3">
+                                                ${fileIssueMsg}
+                                            </div>
+                                            
+                                            <!-- Collapsible Details -->
+                                            <div class="mb-2">
+                                                <button onclick="toggleOrphanDetails('orphan-${index}')" 
+                                                        class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                                    <i class="fas fa-chevron-down mr-1"></i>
+                                                    <span id="orphan-${index}-toggle">${showDetailsLabel}</span>
+                                                </button>
+                                            </div>
+                                            <div id="orphan-${index}-details" class="hidden mt-2 p-3 bg-white rounded border border-gray-200">
+                                                <div class="text-xs font-semibold text-gray-700 mb-2">${metadataLabel}:</div>
+                                                <div class="text-xs max-h-48 overflow-y-auto">
+                                                    ${metadataDisplay || '<span class="text-gray-500">No metadata available</span>'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Delete Button -->
+                                        <button onclick="deleteOrphanDocument('${result.id}', ${index})" 
+                                                class="px-3 py-2 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 transition-colors whitespace-nowrap">
+                                            <i class="fas fa-trash mr-1"></i>
+                                            ${deleteFromESLabel}
+                                        </button>
                                     </div>
                                 </div>
                             `;
@@ -943,8 +1102,10 @@
                                 <!-- Metadata Tags -->
                                 <div class="flex gap-2 flex-wrap mb-3">
                                     ${result.metadata?.category ? `<span class="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">📂 ${result.metadata.category}</span>` : ''}
+                                    ${result.metadata?.author ? `<span class="px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">👤 ${result.metadata.author}</span>` : ''}
                                     ${result.metadata?.file_type ? `<span class="px-3 py-1 bg-gray-100 text-gray-800 text-xs font-semibold rounded-full">📎 ${result.metadata.file_type.toUpperCase()}</span>` : ''}
                                     ${result.metadata?.extraction_method ? `<span class="px-3 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full">⚙️ ${result.metadata.extraction_method}</span>` : ''}
+                                    ${result.metadata?.tags && Array.isArray(result.metadata.tags) ? result.metadata.tags.map(tag => `<span class="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-full">🏷️ ${tag.trim()}</span>`).join('') : ''}
                                 </div>
                                 
                                 ${imageSection}
@@ -964,6 +1125,124 @@
         }
 
         // Load statistics
+        // Check for orphan documents in ES
+        async function checkOrphanDocuments() {
+            try {
+                document.getElementById('stat-orphans').textContent = '...';
+                
+                const response = await fetch('/orphan-check');
+                const result = await response.json();
+                
+                const orphanCount = result.total || 0;
+                document.getElementById('stat-orphans').textContent = orphanCount;
+                
+                if (orphanCount > 0) {
+                    // Show orphan panel
+                    const panel = document.getElementById('orphan-panel');
+                    panel.classList.remove('hidden');
+                    
+                    // Display orphan list
+                    const orphanList = document.getElementById('orphan-list');
+                    const orphanHTML = result.orphans.map((orphan, index) => `
+                        <div class="p-3 bg-orange-50 rounded border border-orange-200 flex justify-between items-start">
+                            <div class="flex-1">
+                                <div class="font-semibold text-gray-900">📄 ${orphan.filename}</div>
+                                <div class="text-xs text-gray-600 mt-1">
+                                    <span class="mr-3"><strong>Doc ID:</strong> ${orphan.document_id}</span>
+                                    <span class="mr-3"><strong>Checksum:</strong> ${orphan.checksum || 'N/A'}</span>
+                                    <span class="mr-3"><strong>In DB:</strong> ${orphan.in_database ? '✅' : '❌'}</span>
+                                </div>
+                                ${orphan.metadata.category ? `<div class="text-xs text-gray-600 mt-1"><strong>Category:</strong> ${orphan.metadata.category}</div>` : ''}
+                                ${orphan.metadata.author ? `<div class="text-xs text-gray-600"><strong>Author:</strong> ${orphan.metadata.author}</div>` : ''}
+                            </div>
+                            <button onclick="deleteOrphanByDocId('${orphan.document_id}', ${index})" 
+                                    class="ml-3 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    `).join('');
+                    
+                    orphanList.innerHTML = orphanHTML || '<div class="text-gray-500 text-sm">No orphan documents found</div>';
+                } else {
+                    alert(currentLang === 'zh' ? '✅ 未发现孤岛数据记录！' : '✅ No orphan records found!');
+                }
+            } catch (error) {
+                document.getElementById('stat-orphans').textContent = '?';
+                alert(currentLang === 'zh' ? `检查失败: ${error.message}` : `Check failed: ${error.message}`);
+            }
+        }
+        
+        // Cleanup all orphan documents
+        async function cleanupOrphanDocuments() {
+            const confirmMsg = currentLang === 'zh' 
+                ? '确定要清理所有孤岛数据记录吗？此操作无法撤销。' 
+                : 'Are you sure you want to cleanup all orphan records? This action cannot be undone.';
+            
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/orphan-cleanup', {
+                    method: 'DELETE',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    const successMsg = currentLang === 'zh' 
+                        ? `成功清理 ${result.deleted_count} 条孤岛数据！` 
+                        : `Successfully cleaned up ${result.deleted_count} orphan records!`;
+                    alert(successMsg);
+                    
+                    // Refresh stats and hide panel
+                    document.getElementById('orphan-panel').classList.add('hidden');
+                    document.getElementById('stat-orphans').textContent = '0';
+                    loadStats();
+                } else {
+                    throw new Error(result.message || 'Cleanup failed');
+                }
+            } catch (error) {
+                alert(currentLang === 'zh' ? `清理失败: ${error.message}` : `Cleanup failed: ${error.message}`);
+            }
+        }
+        
+        // Delete single orphan by document_id
+        async function deleteOrphanByDocId(docId, index) {
+            try {
+                const response = await fetch('/orphan-cleanup', {
+                    method: 'DELETE',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({document_ids: [docId]})
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    // Remove from UI
+                    const orphanList = document.getElementById('orphan-list');
+                    const orphanItem = orphanList.children[index];
+                    if (orphanItem) {
+                        orphanItem.remove();
+                    }
+                    
+                    // Update count
+                    const currentCount = parseInt(document.getElementById('stat-orphans').textContent) || 0;
+                    document.getElementById('stat-orphans').textContent = Math.max(0, currentCount - 1);
+                    
+                    // Hide panel if no more orphans
+                    if (orphanList.children.length === 0) {
+                        document.getElementById('orphan-panel').classList.add('hidden');
+                    }
+                } else {
+                    throw new Error(result.message || 'Delete failed');
+                }
+            } catch (error) {
+                alert(currentLang === 'zh' ? `删除失败: ${error.message}` : `Delete failed: ${error.message}`);
+            }
+        }
+
         async function loadStats() {
             try {
                 const response = await fetch('/stats');
@@ -1013,16 +1292,120 @@
             }
         }
 
-        // Load documents list
+        // Load documents list with pagination and filtering
         let documentsPollingIntervalId = null;
+        let allDocuments = []; // Store all documents for client-side filtering
+        let filteredDocuments = []; // Store filtered documents
+        let currentPageNum = 1;
+        const docsPerPage = 10;
         
-        async function loadDocuments() {
+        async function loadDocuments(reload = true) {
             try {
-                const response = await fetch('/documents?limit=10');
-                const data = await response.json();
+                if (reload) {
+                    // Fetch all documents from server
+                    const response = await fetch('/documents?limit=1000');
+                    const data = await response.json();
+                    allDocuments = data.documents || [];
+                    
+                    // Populate category filter
+                    populateCategoryFilter();
+                }
+                
+                // Apply filters
+                filterDocuments();
+                
+            } catch (error) {
+                console.error('Failed to load documents:', error);
+            }
+        }
+        
+        function populateCategoryFilter() {
+            const categories = new Set();
+            allDocuments.forEach(doc => {
+                if (doc.category) {
+                    categories.add(doc.category);
+                }
+            });
+            
+            const categoryFilter = document.getElementById('doc-category-filter');
+            const currentValue = categoryFilter.value;
+            
+            // Keep first option (全部分类)
+            const allCategoryText = currentLang === 'zh' ? '全部分类' : 'All Categories';
+            categoryFilter.innerHTML = `<option value="">${allCategoryText}</option>`;
+            
+            Array.from(categories).sort().forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.textContent = cat;
+                categoryFilter.appendChild(option);
+            });
+            
+            // Restore previous selection
+            categoryFilter.value = currentValue;
+        }
+        
+        function filterDocuments() {
+            const searchTerm = document.getElementById('doc-search').value.toLowerCase();
+            const categoryFilter = document.getElementById('doc-category-filter').value;
+            const statusFilter = document.getElementById('doc-status-filter').value;
+            const dateFilter = document.getElementById('doc-date-filter').value;
+            
+            // Get date range
+            const now = new Date();
+            let dateStart = null;
+            if (dateFilter === 'today') {
+                dateStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            } else if (dateFilter === 'week') {
+                dateStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            } else if (dateFilter === 'month') {
+                dateStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            }
+            
+            // Apply filters
+            filteredDocuments = allDocuments.filter(doc => {
+                // Search filter (filename)
+                if (searchTerm && !doc.filename.toLowerCase().includes(searchTerm)) {
+                    return false;
+                }
+                
+                // Category filter
+                if (categoryFilter && doc.category !== categoryFilter) {
+                    return false;
+                }
+                
+                // Status filter
+                if (statusFilter && doc.status !== statusFilter) {
+                    return false;
+                }
+                
+                // Date filter
+                if (dateStart && doc.created_at) {
+                    const docDate = new Date(doc.created_at);
+                    if (docDate < dateStart) {
+                        return false;
+                    }
+                }
+                
+                return true;
+            });
+            
+            // Reset to first page
+            currentPageNum = 1;
+            
+            // Display documents
+            displayDocuments();
+        }
+        
+        function displayDocuments() {
+            const start = (currentPageNum - 1) * docsPerPage;
+            const end = start + docsPerPage;
+            const pageDocuments = filteredDocuments.slice(start, end);
+            
+            if (pageDocuments.length > 0) {
+                const data = {documents: pageDocuments};
 
-                if (data.documents && data.documents.length > 0) {
-                    const docsHTML = data.documents.map(doc => {
+                const docsHTML = pageDocuments.map(doc => {
                         const statusColor = 
                             doc.status === 'completed' ? 'bg-green-100 text-green-800' :
                             doc.status === 'failed' ? 'bg-red-100 text-red-800' :
@@ -1074,24 +1457,59 @@
                                 </div>
                             </div>
                         `;
-                    }).join('');
-                    
-                    document.getElementById('documents-list').innerHTML = docsHTML;
-                    
-                    // Start polling if there are processing documents
-                    const hasProcessing = data.documents.some(doc => doc.status === 'processing');
-                    if (hasProcessing) {
-                        startDocumentsPolling();
-                    } else {
-                        stopDocumentsPolling();
-                    }
+                }).join('');
+                
+                document.getElementById('documents-list').innerHTML = docsHTML;
+                
+                // Start polling if there are processing documents
+                const hasProcessing = pageDocuments.some(doc => doc.status === 'processing');
+                if (hasProcessing) {
+                    startDocumentsPolling();
                 } else {
-                    const noDocsMsg = currentLang === 'zh' ? '尚未上传任何文档' : 'No documents uploaded yet';
-                    document.getElementById('documents-list').innerHTML = `<div class="text-gray-500 text-center py-4">${noDocsMsg}</div>`;
                     stopDocumentsPolling();
                 }
-            } catch (error) {
-                console.error('Failed to load documents:', error);
+            } else {
+                const noDocsMsg = currentLang === 'zh' ? '没有找到匹配的文档' : 'No documents found';
+                document.getElementById('documents-list').innerHTML = `<div class="text-gray-500 text-center py-4">${noDocsMsg}</div>`;
+                stopDocumentsPolling();
+            }
+            
+            // Update pagination info
+            updatePaginationInfo();
+        }
+        
+        function updatePaginationInfo() {
+            const totalDocs = filteredDocuments.length;
+            const totalPages = Math.ceil(totalDocs / docsPerPage);
+            const start = totalDocs === 0 ? 0 : ((currentPageNum - 1) * docsPerPage + 1);
+            const end = Math.min(currentPageNum * docsPerPage, totalDocs);
+            
+            document.getElementById('doc-showing-start').textContent = start;
+            document.getElementById('doc-showing-end').textContent = end;
+            document.getElementById('doc-total-count').textContent = totalDocs;
+            document.getElementById('current-page').textContent = totalPages === 0 ? 0 : currentPageNum;
+            document.getElementById('total-pages').textContent = Math.max(1, totalPages);
+            
+            // Enable/disable pagination buttons
+            const prevBtn = document.getElementById('prev-page-btn');
+            const nextBtn = document.getElementById('next-page-btn');
+            
+            prevBtn.disabled = currentPageNum <= 1;
+            nextBtn.disabled = currentPageNum >= totalPages || totalPages === 0;
+        }
+        
+        function previousPage() {
+            if (currentPageNum > 1) {
+                currentPageNum--;
+                displayDocuments();
+            }
+        }
+        
+        function nextPage() {
+            const totalPages = Math.ceil(filteredDocuments.length / docsPerPage);
+            if (currentPageNum < totalPages) {
+                currentPageNum++;
+                displayDocuments();
             }
         }
         
@@ -1099,7 +1517,7 @@
             if (documentsPollingIntervalId) return; // Already polling
             
             documentsPollingIntervalId = setInterval(() => {
-                loadDocuments(); // Reload documents list
+                loadDocuments(true); // Reload documents list from server
             }, 3000); // Poll every 3 seconds
         }
         
@@ -1183,9 +1601,9 @@
                 },
                 upload: {
                     title: '上传文档',
-                    dragDrop: '拖放 PDF 或 ZIP 文件到这里',
+                    dragDrop: '拖放文件到这里',
                     clickBrowse: '或点击浏览',
-                    autoDetect: '自动检测 PDF 和 ZIP 文件。ZIP 压缩包将自动解压。',
+                    autoDetect: '支持 PDF、ZIP、JPG/JPEG、PNG。ZIP 压缩包将自动解压。',
                     selectedFiles: '已选择的文件：',
                     category: '分类',
                     categoryPlaceholder: '例如：incident, log, alert',
@@ -1204,6 +1622,7 @@
                     queryPlaceholder: '输入您的搜索查询...',
                     button: '搜索',
                     categoryFilter: '分类过滤',
+                    authorFilter: '作者过滤',
                     typeFilter: '文件类型过滤',
                     optional: '可选',
                     results: '结果数',
@@ -1219,9 +1638,28 @@
                     totalUploaded: '总上传',
                     completed: '已完成',
                     processing: '处理中',
+                    orphans: '孤岛数据',
+                    clickToCheck: '点击检查',
+                    orphanDocuments: '孤岛文档（仅ES）',
+                    cleanupOrphans: '清理全部',
+                    orphanDescription: '这些记录存在于 Elasticsearch 中，但源文件已丢失。这可能发生在 ES 离线时删除了文档。',
                     failed: '失败',
                     recentDocs: '最近文档',
                     clearAll: '清空全部',
+                    searchPlaceholder: '搜索文档名称...',
+                    allStatus: '全部状态',
+                    allTime: '全部时间',
+                    today: '今天',
+                    thisWeek: '本周',
+                    thisMonth: '本月',
+                    showing: '显示',
+                    of: '共',
+                    documents: '个文档',
+                    previous: '上一页',
+                    next: '下一页',
+                    page: '第',
+                    pageOf: '/',
+                    pageUnit: '页',
                     topCategories: '热门分类',
                     fileTypes: '文件类型',
                     refresh: '刷新统计'
@@ -1239,9 +1677,9 @@
                 },
                 upload: {
                     title: 'Upload Documents',
-                    dragDrop: 'Drag & drop PDF or ZIP files here',
+                    dragDrop: 'Drag & drop files here',
                     clickBrowse: 'or click to browse',
-                    autoDetect: 'Auto-detects PDF and ZIP files. ZIP archives will be extracted automatically.',
+                    autoDetect: 'Supports PDF, ZIP, JPG/JPEG, PNG. ZIP archives will be extracted automatically.',
                     selectedFiles: 'Selected Files:',
                     category: 'Category',
                     categoryPlaceholder: 'e.g., incident, log, alert',
@@ -1260,6 +1698,7 @@
                     queryPlaceholder: 'Enter your search query...',
                     button: 'Search',
                     categoryFilter: 'Category Filter',
+                    authorFilter: 'Author Filter',
                     typeFilter: 'File Type Filter',
                     optional: 'Optional',
                     results: 'Results',
@@ -1275,9 +1714,28 @@
                     totalUploaded: 'Total Uploaded',
                     completed: 'Completed',
                     processing: 'Processing',
+                    orphans: 'Orphan Records',
+                    clickToCheck: 'Click to check',
+                    orphanDocuments: 'Orphan Documents (ES only)',
+                    cleanupOrphans: 'Cleanup All',
+                    orphanDescription: 'These records exist in Elasticsearch but their source files are missing. This may happen if documents were deleted while ES was offline.',
                     failed: 'Failed',
                     recentDocs: 'Recent Documents',
                     clearAll: 'Clear All',
+                    searchPlaceholder: 'Search documents...',
+                    allStatus: 'All Status',
+                    allTime: 'All Time',
+                    today: 'Today',
+                    thisWeek: 'This Week',
+                    thisMonth: 'This Month',
+                    showing: 'Showing',
+                    of: 'of',
+                    documents: 'documents',
+                    previous: 'Previous',
+                    next: 'Next',
+                    page: 'Page',
+                    pageOf: 'of',
+                    pageUnit: '',
                     topCategories: 'Top Categories',
                     fileTypes: 'File Types',
                     refresh: 'Refresh Statistics'
@@ -1501,6 +1959,61 @@
         }
         
         // Toggle full content display
+        // Toggle orphan document details
+        function toggleOrphanDetails(orphanId) {
+            const details = document.getElementById(`${orphanId}-details`);
+            const toggle = document.getElementById(`${orphanId}-toggle`);
+            
+            if (details && toggle) {
+                const isHidden = details.classList.contains('hidden');
+                const showDetailsLabel = currentLang === 'zh' ? '查看详细信息' : 'View Details';
+                const hideDetailsLabel = currentLang === 'zh' ? '隐藏详细信息' : 'Hide Details';
+                
+                if (isHidden) {
+                    details.classList.remove('hidden');
+                    toggle.textContent = hideDetailsLabel;
+                } else {
+                    details.classList.add('hidden');
+                    toggle.textContent = showDetailsLabel;
+                }
+            }
+        }
+        
+        // Delete orphan document from ES
+        async function deleteOrphanDocument(esDocId, resultIndex) {
+            const confirmMsg = currentLang === 'zh' 
+                ? '确定要从 Elasticsearch 删除这条记录吗？此操作无法撤销。' 
+                : 'Are you sure you want to delete this record from Elasticsearch? This action cannot be undone.';
+            
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/es-index/delete?es_doc_id=${esDocId}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    const successMsg = currentLang === 'zh' ? '删除成功！' : 'Deleted successfully!';
+                    alert(successMsg);
+                    // Remove the result card from UI
+                    const resultCard = document.querySelector(`#search-results > div:nth-child(${resultIndex + 1})`);
+                    if (resultCard) {
+                        resultCard.remove();
+                    }
+                } else {
+                    throw new Error(result.message || 'Delete failed');
+                }
+            } catch (error) {
+                const errorMsg = currentLang === 'zh' ? `删除失败: ${error.message}` : `Delete failed: ${error.message}`;
+                alert(errorMsg);
+            }
+        }
+
         function toggleContent(contentId) {
             const preview = document.getElementById(`${contentId}-preview`);
             const full = document.getElementById(`${contentId}-full`);
