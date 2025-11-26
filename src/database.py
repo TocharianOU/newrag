@@ -180,6 +180,18 @@ class DatabaseManager:
         finally:
             session.close()
     
+    def update_document_pages_data(self, doc_id: int, pages_data: list):
+        """Update document pages_data field"""
+        import json
+        session = self.get_session()
+        try:
+            doc = session.query(Document).filter(Document.id == doc_id).first()
+            if doc:
+                doc.pages_data = json.dumps(pages_data)
+                session.commit()
+        finally:
+            session.close()
+    
     def get_document(self, doc_id: int) -> Optional[Document]:
         """Get document by ID"""
         session = self.get_session()

@@ -5,42 +5,37 @@
     "image_filename": "page_001_300dpi.png",
     "page_analysis": {
       "page_type": "data_table",
-      "page_description": "This page is an energy bill from British Gas. It's visually structured with a clear header containing the British Gas logo and supply address information. The main body of the page is divided into sections: 'Your Account Summary', and 'Important Information'.  A table presents the previous balance, energy costs, payments received, and new balance. Below this is a section highlighting payment information with options for switching to Direct Debit. The page also includes two smaller tables detailing gas and electricity tariff information, including estimated annual usage and costs. The overall design is clean and uses a limited color palette (primarily white, green, and blue).",
+      "page_description": "This page is an energy bill from British Gas. It's visually structured with a clear header containing the British Gas logo and supply address information. The main body of the page is divided into sections: 'Your Account Summary', and 'Important Information'.  A table presents the previous balance, energy costs, payments received, and new balance. Below this is a section highlighting payment information with options for switching to Direct Debit. The page also includes two smaller tables detailing gas and electricity tariff information, including annual estimates of usage and cost. The overall design is clean and uses a limited color palette (primarily white, green, and blue).",
       "visual_elements": [
         "table",
         "logo",
         "header",
-        "footer",
         "section dividers"
       ],
-      "layout_structure": "The page is organized into distinct sections with clear headings and subheadings. The top section contains account details, followed by a summary table of charges and payments.  The bottom portion focuses on payment options and tariff information, presented in smaller tables."
+      "layout_structure": "The page follows a hierarchical layout. Header at the top, followed by account summary table, important information section with payment details, and then two smaller tables for gas/electricity estimates.  Clear separation of sections using whitespace and bold text."
     },
     "content": {
       "full_text_raw": "Supplyaddress:\n3 Bracken CI\nWorcesterWR26HN\nGas\nBritish\nRota block letter:\nA\n143 A/07212\n081605\nAbulaitiAizimaiti\n3 BrackenCI\nWorcester\nWR26HN\nHello\nwe've prepared your energy bill for you\nCovering:26 Jul 2025 to 26 Sep 2025\nBilldate:29 Sep 2025\nCustomer account number:8508850699\nYour account summary\nYour previous balance on 27 Jul 2025\n-£ 429.29\nYour total energy costs (inc. VAT and any adjustments)\n-£ 517.26\nPayments between26 Jul 2025to26 Sep2025\n+£ 429.29\nYour new balance on 29 Sep2025\nDebit -£502.20\nImportant information\nPlease pay £517.26 by 26 Oct 2025 - thank you\nYou can find 5 simple ways to pay on the last page of this letter.\nBRIT/E\nYour gas tariff\nStandard Variable\nYour Electrieity tariff:\nStandard Variable\nDid you know?\nPayment method:\nCash/Cheque\nPayment method:\nCash/Cheque\nYou could save £109.23* by\nswitching your payment to\nTariff ends:\nTariffends:\nNo end date\nNo end date\nExit fee:\nNot applicable\nDirect Debit.\nExit fee:\nNot applicable\nVisit britishgas.co.uk/dd\nAnnual estimates:\nGas\nAnnual estimates:\nElectrieity\nEstimated annual usage:\n2903.46kWh\nEstimated annual usage:\n7020.18kWh\nEstimated annual cost:\n£1,265.87\nEstimated annual cost:\n£1,776.09\nIfyou'refindingithardtopayyourenergybilltherearenumberofways wecanhelp\nyou.Visit britishgas.co.uk/payhelp\n*Estimated annual savings hased on",
-      "full_text_cleaned": "Supply address:\n3 Bracken Cl\nWorcester WR26 6HN\nGas\nBritish Gas\nRoto block letter: A\n143 A/07212 081605\nAbulaiti Aizimaiti\n3 Bracken Cl\nWorcester WR26 6HN\nHello\nwe've prepared your energy bill for you\nCovering: 26 Jul 2025 to 26 Sep 2025\nBill date: 29 Sep 2025\nCustomer account number: 8508850699\nYour account summary\nYour previous balance on 27 Jul 2025 -£429.29\nYour total energy costs (inc. VAT and any adjustments) -£517.26\nPayments between 26 Jul 2025 to 26 Sep 2025 +£429.29\nYour new balance on 29 Sep 2025 Debit -£502.20\nImportant information\nPlease pay £517.26 by 26 Oct 2025 - thank you\nYou can find 5 simple ways to pay on the last page of this letter.\nYour gas tariff Standard Variable\nPayment method: Cash/Cheque Tariff ends: No end date Exit fee: Not applicable\nAnnual estimates:\nGas Estimated annual usage: 2903.46 kWh Estimated annual cost: £1,265.87\nYour Electricity tariff: Standard Variable Did you know?\nYou could save £109.23* by switching your payment to Direct Debit.\nPayment method: Cash/Cheque Tariff ends: No end date Exit fee: Not applicable\nAnnual estimates:\nElectricity Estimated annual usage: 7020.18 kWh Estimated annual cost: £1,776.09\nIf you're finding it hard to pay your energy bill there are a number of ways we can help you. Visit britishgas.co.uk/payhelp\n*Estimated annual savings based on",
+      "full_text_cleaned": "Supply address:\n3 Bracken CI\nWorcester WR26HN\nGas\nBritish Gas\nRoto block letter: A\n143 A/07212 081605\nAbulaiti Aizimaiti\n3 Bracken CI\nWorcester WR26HN\nHello\nwe've prepared your energy bill for you\nCovering: 26 Jul 2025 to 26 Sep 2025\nBill date: 29 Sep 2025\nCustomer account number: 8508850699\nYour account summary\nYour previous balance on 27 Jul 2025 -£429.29\nYour total energy costs (inc. VAT and any adjustments) -£517.26\nPayments between 26 Jul 2025 to 26 Sep 2025 +£429.29\nYour new balance on 29 Sep 2025 Debit -£502.20\nImportant information\nPlease pay £517.26 by 26 Oct 2025 - thank you\nYou can find 5 simple ways to pay on the last page of this letter.\nYour gas tariff Standard Variable\nYour Electricity tariff: Standard Variable\nDid you know?\nYou could save £109.23* by switching your payment to Direct Debit.\nPayment method: Cash/Cheque Payment method: Cash/Cheque\nTariff ends: No end date Tariff ends: No end date\nExit fee: Not applicable Exit fee: Not applicable\nAnnual estimates:\nGas Annual estimates:\nElectricity\nEstimated annual usage: 2903.46 kWh Estimated annual usage: 7020.18 kWh\nEstimated annual cost: £1,265.87 Estimated annual cost: £1,776.09\nIf you're finding it hard to pay your energy bill there are a number of ways we can help you. Visit britishgas.co.uk/payhelp\n*Estimated annual savings based on",
       "key_fields": [
         {
           "field": "Supply Address",
-          "value": "3 Bracken Cl, Worcester WR26 6HN"
-        },
-        {
-          "field": "Customer Account Number",
-          "value": "8508850699"
+          "value": "3 Bracken CI, Worcester WR26HN"
         },
         {
           "field": "Bill Date",
           "value": "29 Sep 2025"
         },
         {
-          "field": "Covering Period",
-          "value": "26 Jul 2025 to 26 Sep 2025"
+          "field": "Account Number",
+          "value": "8508850699"
         },
         {
           "field": "Previous Balance",
           "value": "-£429.29"
         },
         {
-          "field": "Total Energy Costs",
+          "field": "Total Energy Cost",
           "value": "-£517.26"
         },
         {
@@ -68,35 +63,30 @@
           "value": "Standard Variable"
         },
         {
-          "field": "Gas Estimated Annual Usage",
+          "field": "Estimated Gas Usage",
           "value": "2903.46 kWh"
         },
         {
-          "field": "Gas Estimated Annual Cost",
-          "value": "£1,265.87"
-        },
-        {
-          "field": "Electricity Estimated Annual Usage",
+          "field": "Estimated Electricity Usage",
           "value": "7020.18 kWh"
         },
         {
-          "field": "Electricity Estimated Annual Cost",
+          "field": "Estimated Gas Cost",
+          "value": "£1,265.87"
+        },
+        {
+          "field": "Estimated Electricity Cost",
           "value": "£1,776.09"
         }
       ],
       "tables": [
         {
-          "description": "Account Summary Table - presents charges, payments and balance",
+          "description": "Account Summary - Previous Balance, Total Cost, Payments, New Balance",
           "rows": 4,
           "cols": 2
         },
         {
-          "description": "Gas Tariff Information - details gas usage and cost",
-          "rows": 2,
-          "cols": 2
-        },
-        {
-          "description": "Electricity Tariff Information - details electricity usage and cost",
+          "description": "Gas & Electricity Tariff Estimates - Usage and Cost",
           "rows": 2,
           "cols": 2
         }
@@ -933,14 +923,14 @@
       "British Gas",
       "gas",
       "electricity",
+      "payment",
       "usage",
-      "cost",
-      "payment"
+      "cost"
     ],
     "vlm_metadata": {
       "confidence": 0.98,
       "extraction_notes": [
-        "The OCR is generally accurate but some minor corrections were made for clarity."
+        "The OCR is generally very accurate. The 'Did you know?' section suggests potential savings from switching to Direct Debit."
       ]
     },
     "source_file": "/Users/ablatazmat/Downloads/SmartResume/uploads/Aizimaiti.pdf",

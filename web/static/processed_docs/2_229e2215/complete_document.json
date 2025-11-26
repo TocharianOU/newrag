@@ -5,27 +5,27 @@
     "image_filename": "page_001_300dpi.png",
     "page_analysis": {
       "page_type": "mixed",
-      "page_description": "This page serves as a process datasheet for a Reformed Gas Water Cooler (ES-3137) within the Ankara Bio-Methanol Project. It's visually structured with a header containing logos and document control information (Proj No, Doc No, Rev No). The main body features a table outlining the external documentation review and approval process.  The table has columns for revision date, description, and status (Prepared, Checked, Approved) with associated signatures. A clear 'Supplier/Contractor Status Label' section is present at the top, indicating a workflow for document compliance. The page also includes authorization signatures and notes regarding responsibility for contract compliance.",
+      "page_description": "This page serves as a process datasheet for a Reformed Gas Water Cooler (ES-3137) within the Ankara Bio-Methanol Project. The layout is structured with a header containing document control information (Proj. No., Doc. No., Rev. No.). A prominent section details project specifics, including plant name and phase. The bulk of the page is dedicated to a revision history table with columns for Date, Description, Prepared By (PREP'D), Checked (CHK'D) and Approved (APP'D).  A disclaimer regarding supplier/contractor responsibility is present, along with a status label area. The page includes WasteFuel's logo in the top left corner and utilizes clear table formatting for revision tracking. The overall visual impression is of a formal engineering document focused on controlled release and approval of process information.",
       "visual_elements": [
         "table",
         "logo",
-        "signature blocks",
-        "document control block",
-        "revision history"
+        "disclaimer",
+        "revision history",
+        "status label"
       ],
-      "layout_structure": "Header with document information, followed by a main table section for review/approval status.  Footer contains page numbering."
+      "layout_structure": "Header with document control info, followed by project details.  The main section is a revision history table taking up the majority of the page space, with a disclaimer at the bottom.  Clear column headings and consistent formatting are used."
     },
     "content": {
       "full_text_raw": "Proj. No.\nTR1D\nDoc. No.\nTR1D-HXG-31-8110-DAS-0016\nProcess Datasheet for ES-3137\nWASTEFUEL\nReformed Gas Water Cooler\nRev. No.\n04\nPage\nPage 1 of 5\nProcess Datasheet for ES-3137\nReformed Gas Water Cooler\nPROJECT: Ankara Bio-Methanol Project\nPLANT: WasteFuel Global Inc. and ITC\nAREA/UNIT:SMR\nybjieshou@eastmoney.com\nPROJECT PHASE: PDP\nPKG /PO No.: 31\nTAG/EQP NO.: ES-3137\nSupplier/Contractor Status Label\nExternal Documentation To Comply with WasteFuel Procedures\nReview& Accepted as Final & Certified.\nWasteFuel Revision No\nA\nEngineering/Manufacture/Construction May Proceed.\nAuthorization Sig.\nReviewed&Accepted as Marked.Revise & Resubmit.\n日\nEngineering/Manufacture/ConstructionMay Proceed\nReviewed & Returned. Rectify & Resubmit.\nPrint Name\nEngineering/Manufacture/ConstructionShallNot\nProceed.\nDate\nReview Not Required.For Information Only\nEngineering/Manufacture/ConstructionMay Proceed.\nAcceptanceofthis document by WasteFuel doesnotrelleve the Supplier/Contractorofanyresponsillityfr\ncompliancewithterms&conditionsofthecontract.Allchanges tothisdocumentshall becloudedbythe\nSupplier/Contractor and bemarked by a Revision Triangle.\nSun Jian\nRen XJ\n04\nJin Zhida\nIssued for FEED\n9-Oct-25\nSun Jian\nRen XJ\n03\nJin Zhida\n15-Sep-25\nlssued for review\nSun Jian\nRen XJ\n02\nJin Zhida\n4-Aug-25\nIssued for review\nSun Jian\nRen XJ\n01\nJin Zhida\n24-Jun-25\nIssued for review\nSun Jian\nRen XJ\nJin Zhida\n00\n12-May-25\nIssued for review\nFinal APP'D\nAPP'D\nCHK'D\nPREP'D\nREV.\nDATE\nDESCRIPTION\nPAGE  1 OF\n5",
-      "full_text_cleaned": "Proj. No.\nTR1D\nDoc. No.\nTR1D-HXG-31-8110-DAS-0016\nProcess Datasheet for ES-3137\nWASTEFUEL Reformed Gas Water Cooler\nRev. No.\n04\nPage\nPage 1 of 5\nProcess Datasheet for ES-3137\nReformed Gas Water Cooler\nPROJECT: Ankara Bio-Methanol Project\nPLANT: WasteFuel Global Inc. and ITC\nAREA/UNIT:SMR\nybjieshou@eastmoney.com\nPROJECT PHASE: PDP\nPKG /PO No.: 31\nTAG/EQP NO.: ES-3137\nSupplier/Contractor Status Label\nExternal Documentation To Comply with WasteFuel Procedures\nA Review& Accepted as Final & Certified.\nWasteFuel Revision No\nEngineering/Manufacture/Construction May Proceed.\nAuthorization Sig.\nReviewed&Accepted as Marked.Revise & Resubmit.\nEngineering/Manufacture/ConstructionMay Proceed\nReviewed & Returned. Rectify & Resubmit.\nPrint Name\nEngineering/Manufacture/ConstructionShallNot\nProceed.\nDate\nReview Not Required.For Information Only\nEngineering/Manufacture/ConstructionMay Proceed.\nAcceptanceofthis document by WasteFuel doesnotrelleve the Supplier/Contractorofanyresponsillityfr\ncompliancewithterms&conditionsofthecontract.Allchanges tothisdocumentshall becloudedbythe\nSupplier/Contractor and bemarked by a Revision Triangle.\n04 Jin Zhida 9-Oct-25 Sun Jian Ren XJ\n03 Jin Zhida 15-Sep-25 Sun Jian Ren XJ\n02 Jin Zhida 4-Aug-25 Sun Jian Ren XJ\n01 Jin Zhida 24-Jun-25 Sun Jian Ren XJ\n00 Jin Zhida 12-May-25 Sun Jian Ren XJ\nREV. DATE DESCRIPTION PREP'D CHK'D APPD Final APP'D",
+      "full_text_cleaned": "Proj. No.\nTR1D\nDoc. No.\nTR1D-HXG-31-8110-DAS-0016\nProcess Datasheet for ES-3137\nWASTEFUEL Reformed Gas Water Cooler\nRev. No.\n04\nPage\nPage 1 of 5\nProcess Datasheet for ES-3137\nReformed Gas Water Cooler\nPROJECT: Ankara Bio-Methanol Project\nPLANT: WasteFuel Global Inc. and ITC\nAREA/UNIT: SMR\nybjieshou@eastmoney.com\nPROJECT PHASE: PDP\nPKG /PO No.: 31\nTAG/EQP NO.: ES-3137\nSupplier/Contractor Status Label\nExternal Documentation To Comply with WasteFuel Procedures\nA Review& Accepted as Final & Certified.\nWasteFuel Revision No\nB Reviewed&Accepted as Marked.Revise & Resubmit.\n日 Engineering/Manufacture/ConstructionMay Proceed\nReviewed & Returned. Rectify & Resubmit.\nEngineering/Manufacture/ConstructionShallNot\nProceed.\nDate\nReview Not Required.For Information Only\nEngineering/Manufacture/ConstructionMay Proceed.\nAcceptanceofthis document by WasteFuel doesnotrelleve the Supplier/Contractorofanyresponsillityfr\ncompliancewithterms&conditionsofthecontract.Allchanges tothisdocumentshall becloudedbythe\nSupplier/Contractor and bemarked by a Revision Triangle.\n04 Jin Zhida 9-Oct-25 Sun Jian Ren XJ\n03 Jin Zhida 15-Sep-25 Sun Jian Ren XJ\n02 Jin Zhida 4-Aug-25 Sun Jian Ren XJ\n01 Jin Zhida 24-Jun-25 Sun Jian Ren XJ\n00 Jin Zhida 12-May-25 Sun Jian Ren XJ\nREV. DATE DESCRIPTION PREP'D CHK'D APP'D Final APP'D\nPAGE 1 OF 5",
       "key_fields": [
         {
-          "field": "Document ID",
+          "field": "Document Number",
           "value": "TR1D-HXG-31-8110-DAS-0016"
         },
         {
-          "field": "Equipment Tag",
-          "value": "ES-3137"
+          "field": "Revision",
+          "value": "04"
         },
         {
           "field": "Project Name",
@@ -36,25 +36,17 @@
           "value": "WasteFuel Global Inc. and ITC"
         },
         {
-          "field": "Area/Unit",
-          "value": "SMR"
+          "field": "Equipment Tag",
+          "value": "ES-3137"
         },
         {
-          "field": "Project Phase",
-          "value": "PDP"
-        },
-        {
-          "field": "PKG/PO No.",
-          "value": "31"
-        },
-        {
-          "field": "Revision",
-          "value": "04"
+          "field": "Equipment Name",
+          "value": "Reformed Gas Water Cooler"
         }
       ],
       "tables": [
         {
-          "description": "External Documentation Review/Approval History",
+          "description": "Revision History Table",
           "rows": 5,
           "cols": 4
         }
@@ -1023,7 +1015,7 @@
       "document_id": "TR1D-HXG-31-8110-DAS-0016",
       "document_type": "Process Datasheet",
       "revision": "04",
-      "title": "Reformed Gas Water Cooler (ES-3137)"
+      "title": "Process Datasheet for ES-3137 Reformed Gas Water Cooler"
     },
     "domain_data": {
       "project": {
@@ -1038,24 +1030,24 @@
       },
       "revisions": [
         {
-          "rev_no": "04",
-          "date": "9-Oct-25"
+          "date": "9-Oct-25",
+          "description": null
         },
         {
-          "rev_no": "03",
-          "date": "15-Sep-25"
+          "date": "15-Sep-25",
+          "description": null
         },
         {
-          "rev_no": "02",
-          "date": "4-Aug-25"
+          "date": "4-Aug-25",
+          "description": null
         },
         {
-          "rev_no": "01",
-          "date": "24-Jun-25"
+          "date": "24-Jun-25",
+          "description": null
         },
         {
-          "rev_no": "00",
-          "date": "12-May-25"
+          "date": "12-May-25",
+          "description": null
         }
       ]
     },
@@ -1063,14 +1055,13 @@
       "Process Datasheet",
       "Reformed Gas Water Cooler",
       "WasteFuel",
-      "Ankara Bio-Methanol Project",
-      "Review",
-      "Approval"
+      "Revision History",
+      "Ankara Bio-Methanol Project"
     ],
     "vlm_metadata": {
-      "confidence": 0.95,
+      "confidence": 0.98,
       "extraction_notes": [
-        "The OCR quality is generally good, but some minor errors were corrected. The table structure is clearly defined."
+        "The table lacks descriptions for each revision entry."
       ]
     },
     "source_file": "/Users/ablatazmat/Downloads/SmartResume/uploads/wendanglizi.pdf",
@@ -1086,28 +1077,24 @@
     "image_filename": "page_002_300dpi.png",
     "page_analysis": {
       "page_type": "data_table",
-      "page_description": "This page is a detailed process datasheet for a Reformed Gas Water Cooler (ES-3137). It's structured as a comprehensive table presenting performance data for both the shell side and tube side of the heat exchanger. The layout is highly organized with rows representing different parameters (fluid name, quantity, temperature, density, viscosity, etc.) and columns separating inlet/outlet data for each side.  There are multiple sections covering performance, construction details, and materials of construction. Logos from 'Hanxing Energy' are present at the top left. The page includes numerous numerical values and units, indicating a technical engineering document. A stamp is visible at the bottom right.",
+      "page_description": "This page is a detailed process datasheet for a Reformed Gas Water Cooler (ES-3137). It's structured as a comprehensive table presenting performance data for both the shell side and tube side of the heat exchanger. The layout is highly organized with rows representing different parameters (fluid name, quantity, temperature, density, viscosity, etc.) and columns separating inlet/outlet data for each side.  There are multiple sections covering performance, construction details, and materials of construction. Logos from 'Hanxing Energy' are present at the top left. The page includes numerous numerical values and technical specifications, suggesting it’s intended for engineering design or operational monitoring. A stamp is visible at the bottom right.",
       "visual_elements": [
         "table",
         "logo",
         "stamp"
       ],
-      "layout_structure": "The page is dominated by a large, multi-section table. The top section details performance parameters, followed by sections for construction and materials of construction.  Data is presented in a clear row-and-column format with distinct headings for each parameter and side (shell/tube). The bottom of the page includes sections related to cyclic service, construction details and materials."
+      "layout_structure": "The page is dominated by a large, multi-row and multi-column table. The top rows contain general information about the cooler. Subsequent sections are clearly delineated with headings like 'PERFORMANCE OF ONE UNIT', 'CONSTRUCTION PER SHELL', and 'MATERIALS OF CONSTRUCTION'. The table uses consistent formatting for data presentation, with inlet/outlet values clearly separated. There are also sections dedicated to nozzle specifications and cyclic service details."
     },
     "content": {
       "full_text_raw": "Rev.\nProject No.:\nTR1D\nProcess Datasheet for ES-3137 Reformed Gas Water\n汉兴能源\n04\nDoc. No.: TR1D-HXG-31-8110-DAS-0016\nHanxing Energy\nCooler\nPage 2 of 5\nP.O. No.:\nDoc. No.:\nREV\n1\nClient:\nWasteFuel\nLocation:\noutdoors\n2\nProcess unit:\n31 Unit\nItem No.:\nES-3137\n3\nJob No.:\nFabricator:\nNo. of units:\n4\n1\nReformed Gas Water Cooler\nService of unit:\nConnected in:\nTEMA Type:\nBES\nParallel\n5\nSize:\nSeries\n700x4500mm\n1\n2\n2\n1\nEffective surface per shell:\nShells/unit:\n100.3\n6\nEffective surface per unit (plain/finned):\n100.3\nm\nm\nTUBE SIDE\nSHELL SIDE\n7\nPERFORMANCE OF ONE UNIT\nOutlet\nInlet\nInlet\nOutlet\n8\nReformed Gas\nCooling Water\n9\nFluid\nName:\n60212.0\n10066\n10\nFluid\nkg/h\nQuantity, Total\n8584.0\n11\nkg/h\n8955.8\nVapour / (relative molecular mass)\n1482\n60212.0\n12\n1110.3\nkg/h\n60212.0\nLiquid\n13\nkg/h\nSteam\n14\nWater\nkg/h\n15\nNoncondensable / (re. mole mass)\nkg/h\n/\n/\n40.0\n16\n30.0\nTemperature\n℃\n93.8\n39.0\n17\n℃\nDew / Bubble Point\n3\n992.6\n11.91\n/\nkg/m\n/\n18\n10.19\n/\n966\nDensity (vapour/liquid):\n963.2\n/\n992.8\n一\n0.6513\nmPa•s\n0.0144\n/\n0.0162\n19\n/\nViscosity (vapour/liquid):\n0.2982\n0.7970\n0.6590\n/\n一\n2.5437\n4.1678\n2.5471\n/\nkJ/(kg·K)\n20\nSpecific Heat (vapor/liquid)\n/\n4.2013\n4.1770\n4.1760\n/\n/\n0.1042\n0.6297\nW/(m·K)\n0.0939\nThermal Conductivity (vapor/liquid):\n/\n0.6759\n21\n/\n0.6173\n0.6290\n/\n@℃\nkJ/kg\nSpecific Latent Heat\n22\n@\n@\nMPaG\nInlet Pressure\n23\n2.50\n0.45\nm/s\n24\nVelocity\n3.08\n1.50\nkPa\n30\n/\n13.533\nPressure Drop (allowable/calculated):\n25\n/\n70.536\nm²·K/W\n0.000172\n26\nFouling Resistance (min.)\n0.000344\n798\nW/(m2·K)\n27\nAverage film coefficient:\n2366\nkW\nMean Temperature Difference (MTD)\n℃\n655.3\n22.4\n28\ncorrected/weighted\nHeat Exchanged:\nRequired:\n292.25\nW/(m2·K)\nDirty:\n29\n450.27\nClean:\nHeat transfer rate:\n619.91\nInlet nozzle:\nkg/(m.s2)\n2156.67\n30\nBundle entrance:\n119.33\nρ v2:\nBundle exit:\n123.27\n(Y/N)\nSour Service:\nShell Side\n31\n(￥/N)\nTube Side\nHydrogen Service:\nTube Side\nShell Side\n(¥/N)\n(Y/N)\nCyclic Service:\n(￥/N)\n32\nCONSTRUCTION PER SHELL\n33\nOD:\n19.00\nTube Number:\nmm\n382\nNOZZLES – Number, Size and Rating\n34\n2.00\nTube wall thickness\nmm\nSHELL SIDE\nTUBE SIDE\nTube layout:\n35\n60\nmm\nTube pitch:\nInlet:\n25.00\ninch\nsee next page\nsee next page\nTube type:\nPlain\n4500\n36\nTube length:\nmm\nOutlet:inch\nsee next page\nsee next page\n37\nTube to tubesheet joint:\nIntermediate:\nShell diameter:\n700\n一\n38\n(ID/OD)\nmm\nVent:\nSINGLE-SEG.\n39\nCross-baffle type\nDrain:\nBaffle spacing:c/c 200 mm No.of cross passes:\n40\nPressure relief:\nvertical/horizontal\n25.57 %\nDesign Pressure:\nBaffle cut:\n41\nMPaG\n2.85\n2.4\nVacuum Pressure:\nTube support type:\nMPaA\n42\nDesign Temp. (Max/MDMT):\nLongitudinal baffle seal type:\n43\n℃\n130\n/\n-25\n105\n/\n-25\n44\nNumber of passes per shell:\nBypass seal type:\n1\n6\nType:\nCorrosion Allowance:\nImpingement protection: (Y/N)\n45\nmm\n0\n3\nMATERIALS OF CONSTRUCTION\n46\nTubes:\nSA-312 TP321\nSA-240 321\nShell:\n47\nSA-240 321\nShell Cover:\nShell Side:\n48\nSA-240 321\nSA-516 Gr.70N\nChannel or Bonnet:\n49\nTube Side:\nSA-516 Gr.70N\nSA-516 Gr.70N\nChannel Cover:\n50\nFloating Head:\nBolts:\nSA-193 B7\nFloating-HeadCover:\n51\nSpare Gaskets required:\nS.S.316L SPIRAL WOUND+FLEX.\nFloating:\nSA-182 F321\nTubesheet Stationary:\n52\nTest ring required:\n(¥/N)\nLongitudinal:\nBaffles S.S.304 Cros:\n53\nInsulation - shell:\nmm\nTube Support Material:\n54\nInsulation - channel:\nmm\nExpansion Joint Type:\ninlet/outlet\n55\nExpansion joint material:\nASME Sect. VIIl, Div.1\nPressure Design Code:\nStamp:\n56\nU (and CE)\nCalculate MAWP:\nY\nRemarks:\nTEMA Class:\n57\nR\n58\n59",
-      "full_text_cleaned": "Process Datasheet for ES-3137 Reformed Gas Water Cooler\nRev. 04 Doc. No.: TR1D-HXG-31-8110-DAS-0016 Page 2 of 5\nClient: WasteFuel Location: outdoors Item No.: ES-3137 Job No.\nFabricator: No. of units: 1\nService of unit: Reformed Gas Water Cooler Connected in: TEMA Type: BES Size: 700x4500mm Shells/unit: 1\nEffective surface per shell: 100.3 m Effective surface per unit (plain/finned): 100.3 m\nPERFORMANCE OF ONE UNIT\nInlet Outlet Inlet Outlet Reformed Gas Cooling Water Fluid Name: 60212.0 kg/h Quantity, Total: 8584.0 kg/h 8955.8 kg/h Vapour / (relative molecular mass): 1482 kg/h Liquid: 1110.3 kg/h Steam: kg/h Water: kg/h Noncondensable / (re. mole mass): 40.0 kg/h Temperature: 93.8 ℃ 39.0 ℃ Dew / Bubble Point: 3 ℃ 992.6 kg/m 11.91 kg/m Density (vapour/liquid): 963.2 / 992.8 Viscosity (vapour/liquid): 0.6513 mPa•s 0.0144 / 0.0162 Specific Heat (vapor/liquid): 0.2982 kJ/(kg·K) 4.2013 / 4.1770 Thermal Conductivity (vapor/liquid): 0.7970 W/(m·K) 0.6297 / 0.6173 Specific Latent Heat: 0.1042 kJ/kg Inlet Pressure: 2.50 MPaG Velocity: 3.08 m/s Pressure Drop (allowable/calculated): 13.533 kPa Fouling Resistance (min.): 0.000172 m²·K/W Average film coefficient: 798 W/(m2·K) Mean Temperature Difference (MTD): 655.3 ℃ corrected/weighted Heat Exchanged: Required: 292.25 W/(m2·K) Dirty: 450.27 Clean: 619.91 Heat transfer rate: Inlet nozzle: kg/(m.s2) Bundle entrance: 119.33 ρ v2: Bundle exit: 123.27 Sour Service: (Y/N) Shell Side Hydrogen Service: Tube Side Shell Side Cyclic Service: (Y/N) CONSTRUCTION PER SHELL OD: 19.00 mm Tube Number: 382 NOZZLES – Number, Size and Rating Tube wall thickness: 2.00 mm Tube layout: 60 mm Tube pitch: 25.00 inch Tube type: Plain Tube length: 4500 mm Outlet:inch see next page Tube to tubesheet joint: Intermediate Shell diameter: 700 mm (ID/OD) Vent: SINGLE-SEG. Drain: Baffle spacing:c/c 200 mm No.of cross passes: Pressure relief: vertical/horizontal Design Pressure: 2.85 MPaG Baffle cut: Vacuum Pressure: Tube support type: Design Temp. (Max/MDMT): 130 ℃ / -25 Number of passes per shell: Bypass seal type: Type: Corrosion Allowance: Impingement protection: (Y/N) MATERIALS OF CONSTRUCTION Tubes: SA-312 TP321 SA-240 321 Shell: SA-240 321 Shell Cover: SA-240 321 Shell Side: SA-516 Gr.70N Channel or Bonnet: SA-516 Gr.70N Tube Side: SA-516 Gr.70N Channel Cover: Floating Head: Bolts: SA-193 B7 Floating-HeadCover: Spare Gaskets required: S.S.316L SPIRAL WOUND+FLEX. Floating: SA-182 F321 Tubesheet Stationary: Test ring required: (Y/N) Longitudinal: Baffles S.S.304 Cros: Insulation - shell: mm Tube Support Material: Insulation - channel: mm Expansion Joint Type: inlet/outlet Expansion joint material: ASME Sect. VIIl, Div.1 Pressure Design Code: Stamp: U (and CE) Calculate MAWP: Y Remarks: TEMA Class: R",
+      "full_text_cleaned": "Process Datasheet for ES-3137 Reformed Gas Water Cooler\nProject No.: TR1D Rev. 04 Doc. No.: TR1D-HXG-31-8110-DAS-0016 Page 2 of 5\nClient: WasteFuel Location: outdoors Item No.: ES-3137 Job No.\nFabricator: No. of units: 1\nService of unit: Reformed Gas Water Cooler Connected in: TEMA Type: BES Parallel Series 700x4500mm Shells/unit: 1 Effective surface per shell: 100.3 m Effective surface per unit (plain/finned): 100.3 m\nPERFORMANCE OF ONE UNIT SHELL SIDE TUBE SIDE Inlet Outlet Inlet Outlet Reformed Gas Cooling Water Fluid Name: 60212.0 10066 Fluid Quantity, Total: kg/h 8584.0 8955.8 Vapour / (relative molecular mass): kg/h 1482 60212.0 Liquid: kg/h 1110.3 60212.0 Steam: kg/h Water: kg/h Noncondensable / (re. mole mass): kg/h 40.0 Temperature: ℃ 93.8 39.0 Dew / Bubble Point: ℃ 3 992.6 Density (vapour/liquid): kg/m³ 10.19 / 963.2 Viscosity (vapour/liquid): mPa•s 0.2982 0.7970 Specific Heat (vapor/liquid): kJ/(kg·K) / 4.2013 4.1770 Thermal Conductivity (vapor/liquid): W/(m·K) / 0.6297 0.6173 Specific Latent Heat: kJ/kg @ ℃ / @ Inlet Pressure: MPaG 2.50 0.45 Velocity: m/s 3.08 1.50 Pressure Drop (allowable/calculated): kPa / 13.533 Fouling Resistance (min.): m²·K/W 0.000172 0.000344 Average film coefficient: W/(m2·K) 798 2366 Mean Temperature Difference (MTD): ℃ 655.3 22.4 corrected/weighted Heat Exchanged: Required: W/(m2·K) 292.25 Dirty: Clean: Heat transfer rate: Inlet nozzle: kg/(m.s2) 2156.67 Bundle entrance: ρ v2: Bundle exit: (Y/N) Sour Service: Shell Side Tube Side (Y/N) Hydrogen Service: Tube Side Shell Side (Y/N) Cyclic Service: (Y/N)\nCONSTRUCTION PER SHELL OD: mm 19.00 Tube Number: 382 NOZZLES – Number, Size and Rating Tube wall thickness: mm 2.00 Tube layout: mm 60 Tube pitch: 25.00 inch see next page Tube type: Plain Tube length: mm 4500 Outlet:inch see next page Tube to tubesheet joint: Intermediate: Shell diameter: 700 (ID/OD) mm Cross-baffle type: SINGLE-SEG. Drain: Baffle spacing:c/c 200 mm No.of cross passes: Pressure relief: vertical/horizontal Design Pressure: MPaG 2.85 2.4 Vacuum Pressure: MPaA Tube support type: Design Temp. (Max/MDMT): ℃ 130 / -25 Number of passes per shell: Bypass seal type: 1 Type: Corrosion Allowance: mm Impingement protection: (Y/N) 0 MATERIALS OF CONSTRUCTION Tubes: SA-312 TP321 SA-240 321 Shell: SA-240 321 Shell Cover: SA-240 321 Shell Side: SA-516 Gr.70N Channel or Bonnet: SA-516 Gr.70N Tube Side: SA-516 Gr.70N Channel Cover: Floating Head: Bolts: SA-193 B7 Floating-HeadCover: Spare Gaskets required: S.S.316L SPIRAL WOUND+FLEX. Floating: SA-182 F321 Tubesheet Stationary: (Y/N) Longitudinal: Baffles S.S.304 Cros: Insulation - shell: mm Tube Support Material: Insulation - channel: mm Expansion Joint Type: inlet/outlet Expansion joint material: ASME Sect. VIIl, Div.1 Pressure Design Code: Stamp: U (and CE) Calculate MAWP: Y Remarks: TEMA Class: R",
       "key_fields": [
         {
-          "field": "Document Title",
-          "value": "Process Datasheet for ES-3137 Reformed Gas Water Cooler"
+          "field": "Project No.",
+          "value": "TR1D"
         },
         {
-          "field": "Revision",
-          "value": "04"
-        },
-        {
-          "field": "Document Number",
+          "field": "Document No.",
           "value": "TR1D-HXG-31-8110-DAS-0016"
         },
         {
@@ -1115,11 +1102,7 @@
           "value": "WasteFuel"
         },
         {
-          "field": "Location",
-          "value": "outdoors"
-        },
-        {
-          "field": "Item Number",
+          "field": "Equipment Tag",
           "value": "ES-3137"
         },
         {
@@ -1135,28 +1118,28 @@
           "value": "700 mm"
         },
         {
-          "field": "Tube Length",
-          "value": "4500 mm"
+          "field": "Tube OD",
+          "value": "19.00 mm"
         },
         {
-          "field": "Shell Material",
-          "value": "SA-240 321"
+          "field": "Design Pressure",
+          "value": "2.85 MPaG (Shell) / 2.4 MPaG (Tube)"
         },
         {
-          "field": "Tube Material",
-          "value": "SA-312 TP321 / SA-240 321"
+          "field": "Design Temperature",
+          "value": "130°C (Max) / -25°C (MDMT)"
         }
       ],
       "tables": [
         {
-          "description": "Performance Data - Reformed Gas Side",
+          "description": "Performance Data - Shell Side",
           "rows": 15,
-          "cols": 6
+          "cols": 2
         },
         {
-          "description": "Performance Data - Cooling Water Side",
+          "description": "Performance Data - Tube Side",
           "rows": 15,
-          "cols": 6
+          "cols": 2
         },
         {
           "description": "Construction Details",
@@ -5677,7 +5660,7 @@
     },
     "domain_data": {
       "project": {
-        "name": null,
+        "name": "TR1D",
         "plant": null,
         "phase": null
       },
@@ -5698,8 +5681,7 @@
     "vlm_metadata": {
       "confidence": 0.98,
       "extraction_notes": [
-        "Some OCR errors were corrected based on context.",
-        "Table structure is inferred from the layout."
+        "Some OCR errors were corrected based on context. The table structure is inferred from the layout."
       ]
     },
     "source_file": "/Users/ablatazmat/Downloads/SmartResume/uploads/wendanglizi.pdf",
@@ -5715,38 +5697,38 @@
     "image_filename": "page_003_300dpi.png",
     "page_analysis": {
       "page_type": "data_table",
-      "page_description": "This page is a process datasheet for a Reformed Gas Water Cooler (ES-3137). It's structured as a table detailing nozzle specifications. The top portion includes document metadata and client information, with the bulk of the page dedicated to a table listing nozzle marks, descriptions, sizes (in mm and inches), connection types, facing requirements, flange ratings, and remarks. The table has a clear header row defining each column. A note at the bottom indicates that drains and vents are not included in this table. The page has a clean, professional layout with consistent formatting.",
+      "page_description": "This page is a process datasheet for a Reformed Gas Water Cooler (ES-3137). It's structured as a table detailing nozzle specifications. The top portion includes document metadata and client information, with the bulk of the page dedicated to a table listing nozzle marks, descriptions, sizes (in mm and inches), connection types, facing requirements, flange ratings, and remarks. The table has empty rows at the bottom indicating potential for further entries. A logo is present in the top left corner, and there's a clear border around the entire page. The layout is clean and organized with consistent formatting.",
       "visual_elements": [
         "table",
         "logo",
-        "borders"
+        "border"
       ],
-      "layout_structure": "The page is divided into three main sections: a header with document information, a large table occupying the central portion of the page, and a note at the bottom. The table is well-defined with clear column headers and consistent row formatting."
+      "layout_structure": "Header section with document details, followed by a detailed table. The table has clearly defined columns and rows."
     },
     "content": {
       "full_text_raw": "Rev.\nProject No.: TR1D\nProcess Datasheet for ES-3137 Reformed Gas\n汉兴能源\n04\nDoc. No.: TR1D-HXG-31-8110-DAS-0016\nHanxing Energy\nWater Cooler\nPage 3 of 5\nREV\nP.O. No.:\nDoc. No.:\n1\nClient:\nWasteFuel\nLocation:\n2\nProcess unil 31 Unit\nES-3137\nItem No.:\n3\nJob No.:\nFabricator:\n4\n5\nNOZZLE TABLE\n6\nMARK\nFACING\nFLANGE\nRATING\nREMARKS\nSIZE\nFACING TO CL.\nNO.\nNOZZLECONN.\nDESCRIPTION\n7\nTYPE\nSTD.\nmm\ninch\nReq.'d\n8\nRF\nN01\nCLASS300\nWN\nASME B16.5\n1\n6\nCooling Water Inlet\n9\nN02\nRF\nCLASS300\nWN\nASME B16.5\n1\n6\nCooling Water Outlet\n10\nN03\nRF\nCLASS300\nWN\n1\n6\nASME B16.5\nReformed Gas Outlet\n11\nN04\nRF\nCLASS300\nWN\nReformed Gas Inlet\n1\n6\nASME B16.5\n12\n13\n14\n15\n16\nNote:Not reguired for drains and vents\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
-      "full_text_cleaned": "Rev.\nProject No.: TR1D\nProcess Datasheet for ES-3137 Reformed Gas\n汉兴能源\n04\nDoc. No.: TR1D-HXG-31-8110-DAS-0016\nHanxing Energy\nWater Cooler\nPage 3 of 5\nREV\nP.O. No.:\nDoc. No.:\n1\nClient:\nWasteFuel\nLocation:\n2\nProcess unit 31 Unit\nES-3137\nItem No.:\n3\nJob No.:\nFabricator:\n4\n5\nNOZZLE TABLE\n6\nMARK\nFACING\nFLANGE\nRATING\nREMARKS\nSIZE\nNOZZLECONN.\nDESCRIPTION\n7\nTYPE\nSTD.\nREQ.'D\n8\nRF\nCLASS300\nWNN\nASME B16.5\n1\n6\nCooling Water Inlet\n9\nN02\nRF\nCLASS300\nWNN\nASME B16.5\n1\n6\nCooling Water Outlet\n10\nN03\nRF\nCLASS300\nWNN\n1\n6\nASME B16.5\nReformed Gas Outlet\n11\nN04\nRF\nCLASS300\nWNN\nReformed Gas Inlet\n1\n6\nASME B16.5\n12\n13\n14\n15\n16\nNote:Not required for drains and vents\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
+      "full_text_cleaned": "Rev.\nProject No.: TR1D\nProcess Datasheet for ES-3137 Reformed Gas\n汉兴能源\n04\nDoc. No.: TR1D-HXG-31-8110-DAS-0016\nHanxing Energy\nWater Cooler\nPage 3 of 5\nREV\nP.O. No.:\nDoc. No.:\n1\nClient:\nWasteFuel\nLocation:\n2\nProcess unit 31 Unit\nES-3137\nItem No.:\n3\nJob No.:\nFabricator:\n4\n5\nNOZZLE TABLE\n6\nMARK\nFACING\nFLANGE\nRATING\nREMARKS\nSIZE\nNOZZLECONN.\nDESCRIPTION\n7\nTYPE\nSTD.\nREQ.'D\n8\nRF\nCLASS300\nWNN\nASME B16.5\n1\n6\nCooling Water Inlet\n9\nN02\nRF\nCLASS300\nWNN\nASME B16.5\n1\n6\nCooling Water Outlet\n10\nN03\nRF\nCLASS300\nWNN\n1\n6\nASME B16.5\nReformed Gas Outlet\n11\nN04\nRF\nCLASS300\nWNN\nReformed Gas Inlet\n1\n6\nASME B16.5\n12\n13\n14\n15\n16\nNote:Not reguired for drains and vents\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60",
       "key_fields": [
         {
-          "field": "Project No.",
-          "value": "TR1D"
+          "field": "Document Number",
+          "value": "TR1D-HXG-31-8110-DAS-0016"
         },
         {
-          "field": "Document No.",
-          "value": "TR1D-HXG-31-8110-DAS-0016"
+          "field": "Project Number",
+          "value": "TR1D"
         },
         {
           "field": "Equipment Tag",
           "value": "ES-3137"
         },
         {
-          "field": "Client",
-          "value": "WasteFuel"
+          "field": "Equipment Name",
+          "value": "Reformed Gas Water Cooler"
         }
       ],
       "tables": [
         {
-          "description": "Nozzle Table detailing specifications for cooling water and reformed gas connections.",
+          "description": "Nozzle Table detailing specifications for each nozzle connection.",
           "rows": 12,
           "cols": 6
         }
@@ -7312,7 +7294,7 @@
       "layout_regions": null
     },
     "metadata": {
-      "document_id": "TR1D-HXG-31-8110-DAS-0016",
+      "document_id": "TR1D",
       "document_type": "Process Datasheet",
       "revision": "04",
       "title": "Reformed Gas Water Cooler"
@@ -7326,7 +7308,7 @@
       "equipment": {
         "tag": "ES-3137",
         "name": "Reformed Gas Water Cooler",
-        "unit": null
+        "unit": "31 Unit"
       },
       "revisions": [
         "04"
@@ -7340,9 +7322,9 @@
       "Flange Rating"
     ],
     "vlm_metadata": {
-      "confidence": 0.99,
+      "confidence": 0.98,
       "extraction_notes": [
-        "The table appears incomplete as there are many blank rows at the bottom. The 'REQ.'D' column is unclear in its meaning."
+        "The table has several empty rows at the bottom suggesting more nozzles may be added. The 'REQ\\'D' column is unclear in its meaning."
       ]
     },
     "source_file": "/Users/ablatazmat/Downloads/SmartResume/uploads/wendanglizi.pdf",
@@ -7358,7 +7340,7 @@
     "image_filename": "page_004_300dpi.png",
     "page_analysis": {
       "page_type": "mixed",
-      "page_description": "This page appears to be a process datasheet for a water cooler, specifically unit ES-3137. The dominant visual element is a detailed sketch of a horizontal cylindrical vessel with dimensions labeled in millimeters (4500 mm length, 700 mm diameter). The sketch includes several connection points (labeled with numbers 1-37) and associated piping. A table structure is present on the left side of the page, likely containing item numbers and associated details. The top portion includes document control information with revision number 04, project number TR1D, and a logo for 'Hanxing Energy'. The page is formatted with a grid structure to organize the sketch and associated data.",
+      "page_description": "This page appears to be a process datasheet for a water cooler, specifically unit ES-3137. The dominant visual element is a detailed sketch of a horizontal cylindrical vessel with dimensions labeled in millimeters (4500 mm length, 700 mm diameter). The sketch includes several connection points (labeled with numbers 1-37) and associated components. A table structure is present on the left side of the page, likely containing item numbers and associated details. The top portion includes document control information with revision number 04, project number TR1D, and a logo for 'Hanxing Energy'. The page is formatted with a grid-like structure to organize the sketch and associated data.",
       "visual_elements": [
         "sketch",
         "table",
@@ -7366,11 +7348,11 @@
         "grid lines",
         "dimension labels"
       ],
-      "layout_structure": "The page is divided into two main sections: a left-side table area and a large right-side sketch area. The top of the page contains document control information."
+      "layout_structure": "The page is divided into two main sections: a left-side table area and a large right-side sketch area. The top portion contains document control information."
     },
     "content": {
       "full_text_raw": "REV\nRev.\n04\nTR1D\nDoc. No.: TR1D-HXG-31-8110-DAS-0016\nPage 4 of 5\nProject No.:\n1\nM1\nItem No.: ES-3137\nFabricator:\nLocation:\nSketch\n4500 mm\nWater Cooler\nmm\n700\nDoc. No.:\n10\nEnergy\nWasteFuel\n二\n汉兴能源\nHanxing\nProcess unil 31 Unit\nJob No.:\nClient:\nP.O. No.:\nω\n4\n8\n2\n0\n2\nω\n1\n17\n$5\n24\n25\n26\n5\n2\n23\n1\n8\n27\n28\n20\n2\n6\n30\n21\n2\n3\n31\n34\n35\n8\n37\n3\n3\n0\n42\n4\n4\n4\n5\n9\n1\n1\n1\n1\n47\n8\ng\n6\n52\n51\n53\n5\nG\n9\n58\n57\n59",
-      "full_text_cleaned": "Item No.: ES-3137\nFabricator:\nLocation:\nSketch\nWater Cooler\n4500 mm\n700 mm\nDoc. No.: TR1D-HXG-31-8110-DAS-0016\nPage 4 of 5\nProject No.: TR1D\nRev. 04\nDoc. No.\nM1\nWasteFuel\n二\n汉兴能源\nHanxing Energy\nProcess unit 31 Unit\nJob No.:\nClient:\nP.O. No.:\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37",
+      "full_text_cleaned": "Item No.: ES-3137\nFabricator:\nLocation:\nSketch\nWater Cooler\n4500 mm\n700 mm\nDoc. No.: TR1D-HXG-31-8110-DAS-0016\nPage 4 of 5\nProject No.: TR1D\nRev. 04\nDoc. No.\nM1\nWasteFuel\n二\n汉兴能源\nHanxing Energy\nProcess unit 31 Unit\nJob No.\nClient:\nP.O. No.:\n1 2 3 4 5 6 7 8 9 10\n11 12 13 14 15 16 17 18 19 20\n21 22 23 24 25 26 27 28 29 30\n31 32 33 34 35 36 37",
       "key_fields": [
         {
           "field": "Item No.",
@@ -7403,7 +7385,7 @@
       ],
       "tables": [
         {
-          "description": "Item Number List",
+          "description": "Item number list, likely associated with connection points on the sketch",
           "rows": 37,
           "cols": 1
         }
@@ -8456,7 +8438,7 @@
       "document_id": null,
       "document_type": "Process Datasheet",
       "revision": "04",
-      "title": "Water Cooler Process Datasheet"
+      "title": "Water Cooler Process Datasheet (ES-3137)"
     },
     "domain_data": {
       "project": {
@@ -8477,13 +8459,13 @@
       "water cooler",
       "process datasheet",
       "horizontal vessel",
-      "dimensions",
-      "equipment tag"
+      "sketch",
+      "dimensions"
     ],
     "vlm_metadata": {
       "confidence": 0.85,
       "extraction_notes": [
-        "The table structure is simple and only contains item numbers. Further information about each item would be needed for a complete analysis."
+        "The table content is unclear without further context. The numbers 1-37 likely correspond to connection points on the sketch."
       ]
     },
     "source_file": "/Users/ablatazmat/Downloads/SmartResume/uploads/wendanglizi.pdf",
@@ -8499,18 +8481,17 @@
     "image_filename": "page_005_300dpi.png",
     "page_analysis": {
       "page_type": "data_table",
-      "page_description": "This page presents a detailed data table related to the properties of Reformed Gas and Water Cooler performance. The layout is structured as a grid with multiple columns representing different properties (Surface Tension, Density, Conductivity, Viscosity, Heat Capacity, Enthalpy, Weight Fraction) for both Vapor and Liquid phases. The table spans numerous rows with numerical data associated with each property, likely representing varying temperatures or operating conditions. The top portion includes document metadata and notes regarding the basis of the data (100% design case, margin). The table is densely populated with numerical values and units.",
+      "page_description": "This page presents a detailed data table related to the properties of Reformed Gas and Water Cooler performance. The layout is structured with a header row defining column labels (Surface Tension, Density, etc.) and subsequent rows containing numerical data. The table is extensive, spanning a significant portion of the page.  There's a logo in the upper left corner and header information at the top indicating project details (TR1D, WasteFuel). The data appears to be organized by some incremental parameter, likely temperature or pressure.  The table is densely populated with numerical values and units.",
       "visual_elements": [
         "table",
-        "header row",
-        "column labels",
-        "numerical data"
+        "logo",
+        "header"
       ],
-      "layout_structure": "The page is dominated by a large, multi-column data table. A header section at the top provides document information and notes. The main body consists of rows representing different properties, with columns for Vapor and Liquid phases."
+      "layout_structure": "Header row with column labels, followed by multiple rows of numerical data.  The table is the dominant visual element on the page."
     },
     "content": {
       "full_text_raw": "Rev.\nProject No.:\nTR1D\nProcess Datasheet for ES-3137 Reformed Gas\n汉兴能源\n04\nDoc. No.: TR1D-HXG-31-8110-DAS-0016\nWater Cooler\nHanxing Energy\nPage 5of 5\nP.O. No.:\nREV\nDoc. No.:\n1\nClient:\nWasteFuel\nLocation:\n2\nProcess uni1 31 Unit\nItem No.: ES-3137\n3\nJob No.:\nFabricator:\n4\nNOTES:\n5\n1.The sheet shows the data is based on the 100% design case(EOR). 110% max case or 110% min methane case as the\n6\nrating case.\n7\n2.The design margin of 54% is based on the 100% design case(EOR).\n8\n3.Max flowrate of tube Reformed Gas is 10968 kg/h.\n6\n4.Design case hydrogen partial pressure: 1.63MPaG\n10\n5.Orientation: Horizontal\n11\n6. Cooling curve for shell side: CASE EOR, PRESSURE 2.5 MPaG\n12\nLiquid Properties\nVapor Properties\n13\nSurface Tension\nDensity\nConductivity\nVis cosity\nConductivity\nHeat Capacity\nHeat Capacity\nVis cosity\nDensity\nTemperature\nEnthalpy\n14\nWeight Fraction\n(W/m-C)\n(kg/m3)\n(kJ/kg-C)\n(W/m-C)\n(mN/m)\n(mN-s/m2)\nVapor\n(mN-s/m2)\n(kJ/kg-C)\n(kg/m3)\n(℃)\n(kJ/kg)\n15\n962.75\n60.47\n0.68\n0.10\n4.20\n0.30\n2.55\n0.02\n10.34\n93.84\n435.81\n0.89\n16\n966.28\n0.32\n61.44\n0.10\n0.67\n4.20\n2.55\n0.02\n10.46\n88.64\n404.83\n0.88\n17\n969.30\n0.33\n62.29\n0.10\n0.67\n4.19\n2.55\n0.02\n10.57\n84.04\n0.88\n379.53\n18\n972.75\n0.10\n0.36\n63.28\n4.19\n0.67\n2.55\n0.02\n10.72\n78.56\n0.87\n351.69\n19\n976.09\n64.26\n0.10\n0.38\n0.66\n2.55\n4.18\n0.02\n10.87\n73.00\n0.87\n325.64\n20\n980.06\n65.47\n0.42\n0.66\n0.10\n4.18\n2.55\n0.02\n11.08\n65.99\n295.45\n0.86\n21\n66.58\n983.55\n0.65\n0.10\n0.02\n0.47\n4.17\n2.55\n11.29\n59.36\n269.17\n22\n0.86\n67.62\n0.64\n986.70\n0.01\n0.10\n0.52\n4.17\n2.55\n11.51\n52.90\n23\n245.24\n0.86\n68.49\n0.64\n0.01\n989.18\n4.17\n2.55\n0.10\n0.57\n11.70\n24\n47.35\n225.80\n0.85\n0.63\n69.59\n0.01\n992.13\n4.17\n2.54\n0.09\n0.65\n11.97\n39.99\n201.31\n25\n0.85\n26\n27\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n4454647484950\n51",
-      "full_text_cleaned": "Rev.\nProject No.: TR1D\nProcess Datasheet for ES-3137 Reformed Gas\n汉兴能源 Water Cooler Hanxing Energy Page 5 of 5\nP.O. No.: REV Doc. No.: Client: WasteFuel Location: Process uni1 31 Unit Item No.: ES-3137 Job No.: Fabricator: NOTES: 1.The sheet shows the data is based on the 100% design case(EOR). 110% max case or 110% min methane case as the rating case. 2.The design margin of 54% is based on the 100% design case(EOR). 3.Max flowrate of tube Reformed Gas is 10968 kg/h. 4.Design case hydrogen partial pressure: 1.63MPaG 5.Orientation: Horizontal 6. Cooling curve for shell side: CASE EOR, PRESSURE 2.5 MPaG Liquid Properties Vapor Properties Surface Tension Density Conductivity Vis cosity Conductivity Heat Capacity Heat Capacity Vis cosity Density Temperature Enthalpy Weight Fraction (W/m-C) (kg/m3) (kJ/kg-C) (W/m-C) (mN/m) (mN-s/m2) Vapor (mN-s/m2) (kJ/kg-C) (kg/m3) (℃) (kJ/kg) 962.75 60.47 0.68 0.10 4.20 0.30 2.55 0.02 10.34 93.84 435.81 0.89 966.28 0.32 61.44 0.10 0.67 4.20 2.55 0.02 10.46 88.64 404.83 0.88 969.30 0.33 62.29 0.10 0.67 4.19 2.55 0.02 10.57 84.04 379.53 0.88 972.75 0.10 0.36 63.28 4.19 0.67 2.55 0.02 10.72 78.56 351.69 0.87 976.09 64.26 0.10 0.38 0.66 2.55 4.18 0.02 10.87 73.00 325.64 0.87 980.06 65.47 0.42 0.66 0.10 4.18 2.55 0.02 11.08 65.99 295.45 0.86 66.58 983.55 0.65 0.10 0.02 0.47 4.17 2.55 11.29 59.36 269.17 0.86 67.62 986.70 0.64 0.01 0.10 0.52 4.17 2.55 11.51 52.90 245.24 0.86 68.49 0.64 0.01 989.18 4.17 2.55 0.10 0.57 11.70 47.35 225.80 0.85 69.59 0.01 992.13 4.17 2.54 0.09 0.65 11.97 39.99 201.31 0.85",
+      "full_text_cleaned": "Rev.\nProject No.: TR1D\nProcess Datasheet for ES-3137 Reformed Gas Water Cooler Doc. No.: TR1D-HXG-31-8110-DAS-0016\n汉兴能源 Hanxing Energy Page 5 of 5\nP.O. No.: REV Doc. No.:\n1 Client: WasteFuel Location:\n2 Process uni1 31 Unit Item No.: ES-3137\n3 Job No.: Fabricator:\n4 NOTES:\n5 1.The sheet shows the data is based on the 100% design case(EOR). 110% max case or 110% min methane case as the\n6 rating case.\n7 2.The design margin of 54% is based on the 100% design case(EOR).\n8 3.Max flowrate of tube Reformed Gas is 10968 kg/h.\n6 4.Design case hydrogen partial pressure: 1.63MPaG\n10 5.Orientation: Horizontal\n11 6. Cooling curve for shell side: CASE EOR, PRESSURE 2.5 MPaG\n12 Liquid Properties Vapor Properties\n13 Surface Tension Density Conductivity Vis cosity Conductivity Heat Capacity Heat Capacity Vis cosity Density Temperature Enthalpy\n14 Weight Fraction (W/m-C) (kg/m3) (kJ/kg-C) (W/m-C) (mN/m) (mN-s/m2) Vapor (mN-s/m2) (kJ/kg-C) (kg/m3) (℃) (kJ/kg)\n15 962.75 60.47 0.68 0.10 4.20 0.30 2.55 0.02 10.34 93.84 435.81 0.89\n16 966.28 0.32 61.44 0.10 0.67 4.20 2.55 0.02 10.46 88.64 404.83 0.88\n17 969.30 0.33 62.29 0.10 0.67 4.19 2.55 0.02 10.57 84.04 379.53 0.88\n18 972.75 0.10 0.36 63.28 4.19 0.67 2.55 0.02 10.72 78.56 351.69 0.87\n19 976.09 64.26 0.10 0.38 0.66 2.55 4.18 0.02 10.87 73.00 325.64 0.87\n20 980.06 65.47 0.42 0.66 0.10 4.18 2.55 0.02 11.08 65.99 295.45 0.86\n21 66.58 983.55 0.65 0.10 0.02 0.47 4.17 2.55 11.29 59.36 269.17 0.86\n22 0.64 67.62 986.70 0.01 0.10 0.52 4.17 2.55 11.51 52.90 245.24 0.86\n23 68.49 0.64 0.01 989.18 4.17 2.55 0.10 0.57 11.70 47.35 225.80 0.85\n24 69.59 0.01 992.13 4.17 2.54 0.09 0.65 11.97 39.99 201.31 0.85\n25 26 27 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 4454647484950",
       "key_fields": [
         {
           "field": "Project No.",
@@ -8523,20 +8504,12 @@
         {
           "field": "Item No.",
           "value": "ES-3137"
-        },
-        {
-          "field": "Design Hydrogen Pressure",
-          "value": "1.63 MPaG"
-        },
-        {
-          "field": "Cooling Curve Pressure",
-          "value": "2.5 MPaG"
         }
       ],
       "tables": [
         {
           "description": "Reformed Gas and Water Cooler Properties",
-          "rows": 25,
+          "rows": 24,
           "cols": 13
         }
       ]
@@ -11193,7 +11166,7 @@
       "layout_regions": null
     },
     "metadata": {
-      "document_id": null,
+      "document_id": "TR1D-HXG-31-8110-DAS-0016",
       "document_type": "Process Datasheet",
       "revision": "04",
       "title": "ES-3137 Reformed Gas Water Cooler"
@@ -11216,13 +11189,12 @@
       "properties",
       "density",
       "viscosity",
-      "enthalpy",
-      "temperature"
+      "enthalpy"
     ],
     "vlm_metadata": {
       "confidence": 0.95,
       "extraction_notes": [
-        "OCR accuracy is high but some minor errors may exist in numerical values. The table data appears to be related to temperature-dependent properties."
+        "OCR accuracy is high but some minor errors may exist in the numerical data. The table continues beyond page 5."
       ]
     },
     "source_file": "/Users/ablatazmat/Downloads/SmartResume/uploads/wendanglizi.pdf",

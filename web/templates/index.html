@@ -83,9 +83,9 @@
                         <p class="text-sm text-gray-500 mb-1" data-i18n="upload.clickBrowse">or click to browse</p>
                         <p class="text-xs text-gray-400 mt-2">
                             <i class="fas fa-info-circle mr-1"></i>
-                            <span data-i18n="upload.autoDetect">Supports PDF, ZIP, JPG/JPEG, PNG. ZIP archives will be extracted automatically.</span>
+                            <span data-i18n="upload.autoDetect">Supports PDF, ZIP, JPG/JPEG, PNG, PPTX. ZIP archives will be extracted automatically.</span>
                         </p>
-                        <input type="file" id="file-input" class="hidden" accept=".pdf,.zip,.jpg,.jpeg,.png" multiple>
+                        <input type="file" id="file-input" class="hidden" accept=".pdf,.zip,.jpg,.jpeg,.png,.pptx" multiple>
                     </div>
 
                     <!-- Selected Files Display -->
@@ -454,14 +454,14 @@
                 const file = files[i];
                 const fileName = file.name.toLowerCase();
                 
-                // Validate file extension (支持 PDF, ZIP, JPG, JPEG, PNG)
-                const supportedExtensions = ['.pdf', '.zip', '.jpg', '.jpeg', '.png'];
+                // Validate file extension (支持 PDF, ZIP, JPG, JPEG, PNG, PPTX)
+                const supportedExtensions = ['.pdf', '.zip', '.jpg', '.jpeg', '.png', '.pptx'];
                 const isSupported = supportedExtensions.some(ext => fileName.endsWith(ext));
                 
                 if (!isSupported) {
                     const msg = currentLang === 'zh' 
-                        ? `跳过不支持的文件: ${file.name} (支持: PDF, ZIP, JPG, JPEG, PNG)` 
-                        : `Skipping unsupported file: ${file.name} (supported: PDF, ZIP, JPG, JPEG, PNG)`;
+                        ? `跳过不支持的文件: ${file.name} (支持: PDF, ZIP, JPG, JPEG, PNG, PPTX)` 
+                        : `Skipping unsupported file: ${file.name} (supported: PDF, ZIP, JPG, JPEG, PNG, PPTX)`;
                     console.warn(msg);
                     continue;
                 }
@@ -483,8 +483,8 @@
             
             if (uploadPromises.length === 0) {
                 const msg = currentLang === 'zh' 
-                    ? '没有有效的文件可上传 (支持: PDF, ZIP, JPG, JPEG, PNG)' 
-                    : 'No valid files to upload (supported: PDF, ZIP, JPG, JPEG, PNG)';
+                    ? '没有有效的文件可上传 (支持: PDF, ZIP, JPG, JPEG, PNG, PPTX)' 
+                    : 'No valid files to upload (supported: PDF, ZIP, JPG, JPEG, PNG, PPTX)';
                 alert(msg);
                 return;
             }
@@ -543,13 +543,13 @@
                     console.log('Upload result for', file.name, ':', result);
                     console.log('Response OK?:', response.ok, 'Result status:', result.status);
                 
-                    // Check both HTTP status AND result.status field
-                    if (response.ok && result.status !== 'failed') {
-                        // Check if duplicate
-                        if (result.status === 'duplicate') {
+                       // Check both HTTP status AND result.status field
+                       if (response.ok && result.status !== 'failed') {
+                           // Check if duplicate
+                           if (result.status === 'duplicate') {
                             console.log('Duplicate file detected:', file.name);
                             duplicateCount++;
-                        } else if (result.status === 'processing') {
+                           } else if (result.status === 'processing') {
                             // Add to uploaded docs for progress tracking
                             uploadedDocs.push({
                                 docId: result.document_id,
@@ -730,12 +730,12 @@
                         const container = document.getElementById(`progress-container-${docId}`);
                         if (container) {
                             container.innerHTML = `
-                                <div class="text-green-600">
+                            <div class="text-green-600">
                                     <div class="flex items-center space-x-2 text-sm">
                                         <i class="fas fa-check-circle"></i>
                                         <span class="font-medium">${filename}</span>
                                         <span class="text-xs">(${progress.total_pages || 0} ${currentLang === 'zh' ? '页' : 'pages'})</span>
-                                    </div>
+                                </div>
                                 </div>
                             `;
                         }
@@ -749,9 +749,9 @@
                                         <i class="fas fa-ban"></i>
                                         <span class="font-medium">${filename}</span>
                                         <span class="text-xs">(${currentLang === 'zh' ? '已取消' : 'Cancelled'})</span>
-                                    </div>
                                 </div>
-                            `;
+                            </div>
+                        `;
                         }
                     } else if (progress.status === 'failed') {
                         stopProgressPolling(docId);
@@ -759,15 +759,15 @@
                         if (container) {
                             const errorMsg = progress.error_message || 'Unknown error';
                             container.innerHTML = `
-                                <div class="text-red-600">
+                            <div class="text-red-600">
                                     <div class="flex items-center space-x-2 text-sm">
                                         <i class="fas fa-exclamation-circle"></i>
                                         <span class="font-medium">${filename}</span>
                                         <span class="text-xs">(${currentLang === 'zh' ? '失败' : 'Failed'})</span>
-                                    </div>
-                                    <div class="text-xs text-gray-600 mt-1">${errorMsg}</div>
                                 </div>
-                            `;
+                                    <div class="text-xs text-gray-600 mt-1">${errorMsg}</div>
+                            </div>
+                        `;
                         }
                     }
                 } catch (error) {
@@ -980,7 +980,7 @@
                                     <div class="flex items-start gap-3">
                                         <div class="flex-1">
                                             <div class="text-sm font-semibold text-red-700 mb-1">
-                                                ${noPreviewMsg}
+                                        ${noPreviewMsg}
                                             </div>
                                             <div class="text-xs text-gray-600 mb-3">
                                                 ${fileIssueMsg}
@@ -1304,7 +1304,7 @@
                 if (reload) {
                     // Fetch all documents from server
                     const response = await fetch('/documents?limit=1000');
-                    const data = await response.json();
+                const data = await response.json();
                     allDocuments = data.documents || [];
                     
                     // Populate category filter
@@ -1457,22 +1457,22 @@
                                 </div>
                             </div>
                         `;
-                }).join('');
-                
-                document.getElementById('documents-list').innerHTML = docsHTML;
-                
-                // Start polling if there are processing documents
+                    }).join('');
+                    
+                    document.getElementById('documents-list').innerHTML = docsHTML;
+                    
+                    // Start polling if there are processing documents
                 const hasProcessing = pageDocuments.some(doc => doc.status === 'processing');
-                if (hasProcessing) {
-                    startDocumentsPolling();
+                    if (hasProcessing) {
+                        startDocumentsPolling();
+                    } else {
+                        stopDocumentsPolling();
+                    }
                 } else {
+                const noDocsMsg = currentLang === 'zh' ? '没有找到匹配的文档' : 'No documents found';
+                    document.getElementById('documents-list').innerHTML = `<div class="text-gray-500 text-center py-4">${noDocsMsg}</div>`;
                     stopDocumentsPolling();
                 }
-            } else {
-                const noDocsMsg = currentLang === 'zh' ? '没有找到匹配的文档' : 'No documents found';
-                document.getElementById('documents-list').innerHTML = `<div class="text-gray-500 text-center py-4">${noDocsMsg}</div>`;
-                stopDocumentsPolling();
-            }
             
             // Update pagination info
             updatePaginationInfo();
@@ -1603,7 +1603,7 @@
                     title: '上传文档',
                     dragDrop: '拖放文件到这里',
                     clickBrowse: '或点击浏览',
-                    autoDetect: '支持 PDF、ZIP、JPG/JPEG、PNG。ZIP 压缩包将自动解压。',
+                    autoDetect: '支持 PDF、ZIP、JPG/JPEG、PNG、PPTX。ZIP 压缩包将自动解压。',
                     selectedFiles: '已选择的文件：',
                     category: '分类',
                     categoryPlaceholder: '例如：incident, log, alert',
@@ -1679,7 +1679,7 @@
                     title: 'Upload Documents',
                     dragDrop: 'Drag & drop files here',
                     clickBrowse: 'or click to browse',
-                    autoDetect: 'Supports PDF, ZIP, JPG/JPEG, PNG. ZIP archives will be extracted automatically.',
+                    autoDetect: 'Supports PDF, ZIP, JPG/JPEG, PNG, PPTX. ZIP archives will be extracted automatically.',
                     selectedFiles: 'Selected Files:',
                     category: 'Category',
                     categoryPlaceholder: 'e.g., incident, log, alert',

@@ -195,6 +195,7 @@ web:
     - md
     - html
     - zip
+    - pptx
   
   # CORS 配置
   cors:

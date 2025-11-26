@@ -292,6 +292,72 @@ class DocumentProcessor:
                     logger.warning("excel_sheet_processing_failed", error=str(e))
                     # Fall back to standard loading
                     loader = UnstructuredExcelLoader(str(file_path))
+            elif file_ext == '.pptx':
+                # Check if we have pre-processed JSON from PPTX pipeline (same structure as PDF)
+                if processed_json_dir:
+                    complete_json = Path(processed_json_dir) / "complete_adaptive_ocr.json"
+                    if complete_json.exists():
+                        logger.info("loading_pptx_from_preprocessed_json", json_path=str(complete_json))
+                        # Load PPTX data from complete_adaptive_ocr.json
+                        with open(complete_json, 'r', encoding='utf-8') as f:
+                            pptx_data = json.load(f)
+                        
+                        documents = []
+                        for page in pptx_data.get('pages', []):
+                            page_num = page['page_number']
+                            stage3 = page.get('stage3_vlm', {})
+                            text_content = stage3.get('text_combined', '')
+                            
+                            # Create document for this slide
+                            doc = Document(
+                                page_content=text_content,
+                                metadata={
+                                    'source': str(file_path),
+                                    'file_type': 'pptx',
+                                    'page': page_num,
+                                    'extraction_method': 'pptx_ocr_pipeline',
+                                    'ocr_engine': pptx_data.get('ocr_engine', 'unknown'),
+                                    'has_title': page.get('statistics', {}).get('has_title', False),
+                                    'total_images': page.get('statistics', {}).get('total_images', 0)
+                                }
+                            )
+                            documents.append(doc)
+                        
+                        logger.info("pptx_loaded_from_json", num_pages=len(documents))
+                        return documents
+                    else:
+                        logger.warning("pptx_json_not_found", expected_path=str(complete_json))
+                
+                # Fallback: Try to load with python-pptx directly (basic text extraction)
+                try:
+                    from pptx import Presentation
+                    prs = Presentation(str(file_path))
+                    documents = []
+                    
+                    for slide_num, slide in enumerate(prs.slides, 1):
+                        text_content = []
+                        for shape in slide.shapes:
+                            if hasattr(shape, "text") and shape.text:
+                                text_content.append(shape.text)
+                        
+                        if text_content:
+                            doc = Document(
+                                page_content='\n\n'.join(text_content),
+                                metadata={
+                                    'source': str(file_path),
+                                    'file_type': 'pptx',
+                                    'page': slide_num,
+                                    'extraction_method': 'python-pptx'
+                                }
+                            )
+                            documents.append(doc)
+                    
+                    logger.info("pptx_loaded_with_python_pptx", num_slides=len(documents))
+                    return documents
+                except ImportError:
+                    logger.error("python_pptx_not_available")
+                    raise ValueError("PPTX file requires python-pptx or pre-processed JSON")
+            
             elif file_ext in ['.png', '.jpg', '.jpeg']:
                 # Check if we have pre-processed JSON from OCR pipeline
                 if processed_json_dir:
