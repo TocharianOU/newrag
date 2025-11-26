@@ -220,43 +220,43 @@ def process_single_pdf(doc_id: int, pdf_path: Path, metadata: dict, ocr_engine: 
             progress_percentage=50,
             message="OCR completed, processing pages..."
         )
-            db.update_document_progress(doc_id, 50, "OCR completed, processing pages...")
+        db.update_document_progress(doc_id, 50, "OCR completed, processing pages...")
         
-            # Find the generated output directory
+        # Find the generated output directory
         temp_output_dir = Path(pdf_path.stem.replace(' ', '_') + "_adaptive")
         
-            if not temp_output_dir.exists():
-                raise RuntimeError(f"OCR output directory not found: {temp_output_dir}")
+        if not temp_output_dir.exists():
+            raise RuntimeError(f"OCR output directory not found: {temp_output_dir}")
         
         # Check for cancellation before moving files
         if not task_manager.wait_if_paused(doc_id):
             raise InterruptedError("Task was cancelled by user")
         
-            # Move to static folder with doc ID
-            doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
-            if doc_output_dir.exists():
-                shutil.rmtree(doc_output_dir)
-            shutil.move(str(temp_output_dir), str(doc_output_dir))
+        # Move to static folder with doc ID
+        doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
+        if doc_output_dir.exists():
+            shutil.rmtree(doc_output_dir)
+        shutil.move(str(temp_output_dir), str(doc_output_dir))
         
-            # Update progress: Loading pages data
+        # Update progress: Loading pages data
         task_manager.update_task(
             doc_id,
             stage=TaskStage.VLM_EXTRACTION,
             progress_percentage=60,
             message="Loading pages data..."
         )
-            db.update_document_progress(doc_id, 60, "Loading pages data...")
+        db.update_document_progress(doc_id, 60, "Loading pages data...")
         
-            # Load pages data
-            complete_json = doc_output_dir / 'complete_adaptive_ocr.json'
-            pages_data_list = []
-            total_pages = 0
+        # Load pages data
+        complete_json = doc_output_dir / 'complete_adaptive_ocr.json'
+        pages_data_list = []
+        total_pages = 0
         
-            if complete_json.exists():
-                with open(complete_json, 'r', encoding='utf-8') as f:
-                    complete_data = json.load(f)
+        if complete_json.exists():
+            with open(complete_json, 'r', encoding='utf-8') as f:
+                complete_data = json.load(f)
             
-                total_pages = len(complete_data.get('pages', []))
+            total_pages = len(complete_data.get('pages', []))
             task_manager.update_task(
                 doc_id,
                 progress_percentage=65,
@@ -264,19 +264,19 @@ def process_single_pdf(doc_id: int, pdf_path: Path, metadata: dict, ocr_engine: 
                 total_pages=total_pages,
                 processed_pages=0
             )
-                db.update_document_progress(doc_id, 65, f"Processing {total_pages} pages...", 
-                                           processed_pages=0, total_pages=total_pages)
+            db.update_document_progress(doc_id, 65, f"Processing {total_pages} pages...", 
+                                       processed_pages=0, total_pages=total_pages)
             
-                # Build pages data
-                for idx, page in enumerate(complete_data.get('pages', []), 1):
+            # Build pages data
+            for idx, page in enumerate(complete_data.get('pages', []), 1):
                 # Check for cancellation/pause before each page
                 if not task_manager.wait_if_paused(doc_id):
                     raise InterruptedError("Task was cancelled by user")
                 
-                    page_num = page.get('page_number', idx)
+                page_num = page.get('page_number', idx)
                 
-                    # Update progress per page
-                    page_progress = 65 + (20 * idx / total_pages)  # 65-85% for page processing
+                # Update progress per page
+                page_progress = 65 + (20 * idx / total_pages)  # 65-85% for page processing
                 task_manager.update_task(
                     doc_id,
                     progress_percentage=int(page_progress),
@@ -284,111 +284,111 @@ def process_single_pdf(doc_id: int, pdf_path: Path, metadata: dict, ocr_engine: 
                     current_page=idx,
                     processed_pages=idx
                 )
-                    db.update_document_progress(
-                        doc_id, 
-                        int(page_progress), 
-                        f"Processing page {idx}/{total_pages}...",
-                        processed_pages=idx,
-                        total_pages=total_pages
-                    )
+                db.update_document_progress(
+                    doc_id, 
+                    int(page_progress), 
+                    f"Processing page {idx}/{total_pages}...",
+                    processed_pages=idx,
+                    total_pages=total_pages
+                )
                 
-                    # Get text count from statistics
-                    stats = page.get('statistics', {})
-                    text_count = stats.get('total_text_blocks', 0)
+                # Get text count from statistics
+                stats = page.get('statistics', {})
+                text_count = stats.get('total_text_blocks', 0)
                 
-                    # Get stage1 file paths
-                    stage1 = page.get('stage1_global', {})
-                    image_filename = stage1.get('image', f'page_{page_num:03d}_300dpi.png')
-                    visualized_filename = stage1.get('visualized', f'page_{page_num:03d}_global_visualized.png')
-                    ocr_json_filename = stage1.get('ocr_json', f'page_{page_num:03d}_global_ocr.json')
+                # Get stage1 file paths
+                stage1 = page.get('stage1_global', {})
+                image_filename = stage1.get('image', f'page_{page_num:03d}_300dpi.png')
+                visualized_filename = stage1.get('visualized', f'page_{page_num:03d}_global_visualized.png')
+                ocr_json_filename = stage1.get('ocr_json', f'page_{page_num:03d}_global_ocr.json')
                 
-                    # Try to extract components from VLM JSON if available
-                    components = []
-                    stage3 = page.get('stage3_vlm', {})
-                    vlm_json_filename = stage3.get('vlm_json')
-                    if vlm_json_filename:
-                        vlm_json_path = doc_output_dir / vlm_json_filename
-                        if vlm_json_path.exists():
-                            try:
-                                with open(vlm_json_path, 'r', encoding='utf-8') as vf:
-                                    vlm_data = json.load(vf)
-                                    # Try different possible locations for components
-                                    if 'components' in vlm_data:
-                                        components = vlm_data['components']
-                                    elif 'domain_data' in vlm_data and isinstance(vlm_data['domain_data'], dict):
-                                        if 'components' in vlm_data['domain_data']:
-                                            components = vlm_data['domain_data']['components']
-                                        elif 'equipment' in vlm_data['domain_data']:
-                                            equipment = vlm_data['domain_data']['equipment']
-                                            if isinstance(equipment, list):
-                                                components = [e.get('id', '') for e in equipment if isinstance(e, dict) and 'id' in e]
-                            except Exception as e:
-                                logger.warning("failed_to_parse_vlm_json", error=str(e), file=vlm_json_filename)
+                # Try to extract components from VLM JSON if available
+                components = []
+                stage3 = page.get('stage3_vlm', {})
+                vlm_json_filename = stage3.get('vlm_json')
+                if vlm_json_filename:
+                    vlm_json_path = doc_output_dir / vlm_json_filename
+                    if vlm_json_path.exists():
+                        try:
+                            with open(vlm_json_path, 'r', encoding='utf-8') as vf:
+                                vlm_data = json.load(vf)
+                                # Try different possible locations for components
+                                if 'components' in vlm_data:
+                                    components = vlm_data['components']
+                                elif 'domain_data' in vlm_data and isinstance(vlm_data['domain_data'], dict):
+                                    if 'components' in vlm_data['domain_data']:
+                                        components = vlm_data['domain_data']['components']
+                                    elif 'equipment' in vlm_data['domain_data']:
+                                        equipment = vlm_data['domain_data']['equipment']
+                                        if isinstance(equipment, list):
+                                            components = [e.get('id', '') for e in equipment if isinstance(e, dict) and 'id' in e]
+                        except Exception as e:
+                            logger.warning("failed_to_parse_vlm_json", error=str(e), file=vlm_json_filename)
                 
-                    page_info = {
-                        'page_num': page_num,
-                        'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{image_filename}",
-                        'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{visualized_filename}",
-                        'ocr_json_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{ocr_json_filename}",
-                        'text_count': text_count,
-                        'components': components[:20] if components else []
-                    }
-                    pages_data_list.append(page_info)
+                page_info = {
+                    'page_num': page_num,
+                    'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{image_filename}",
+                    'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{visualized_filename}",
+                    'ocr_json_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{ocr_json_filename}",
+                    'text_count': text_count,
+                    'components': components[:20] if components else []
+                }
+                pages_data_list.append(page_info)
         
         # Check for cancellation before indexing
         if not task_manager.wait_if_paused(doc_id):
             raise InterruptedError("Task was cancelled by user")
         
-            # Update progress: Indexing to Elasticsearch
+        # Update progress: Indexing to Elasticsearch
         task_manager.update_task(
             doc_id,
             stage=TaskStage.INDEXING,
             progress_percentage=85,
             message="Indexing to Elasticsearch..."
         )
-            db.update_document_progress(doc_id, 85, "Indexing to Elasticsearch...")
+        db.update_document_progress(doc_id, 85, "Indexing to Elasticsearch...")
         
-            # Add document identifiers to metadata for MinIO naming
-            metadata['document_id'] = doc_id
+        # Add document identifiers to metadata for MinIO naming
+        metadata['document_id'] = doc_id
         metadata['filename'] = pdf_path.name
-            metadata['checksum'] = checksum
+        metadata['checksum'] = checksum
         
-            # Process with vector store
+        # Process with vector store
         result = pipeline.process_file(str(pdf_path), metadata, processed_json_dir=str(doc_output_dir))
         
         # Check for cancellation after indexing
         if not task_manager.wait_if_paused(doc_id):
             raise InterruptedError("Task was cancelled by user")
         
-            # Update progress: Finalizing
+        # Update progress: Finalizing
         task_manager.update_task(
             doc_id,
             stage=TaskStage.FINALIZING,
             progress_percentage=95,
             message="Finalizing..."
         )
-            db.update_document_progress(doc_id, 95, "Finalizing...")
+        db.update_document_progress(doc_id, 95, "Finalizing...")
         
-            # Update database with result
-            if result.get('status') == 'completed':
-                if not result.get('document_ids'):
+        # Update database with result
+        if result.get('status') == 'completed':
+            if not result.get('document_ids'):
                 error_msg = 'Processing completed but no documents were indexed to Elasticsearch'
-                    logger.error("NO_DOCUMENTS_INDEXED", 
-                               num_chunks=result.get('num_chunks', 0), doc_id=doc_id)
+                logger.error("NO_DOCUMENTS_INDEXED", 
+                           num_chunks=result.get('num_chunks', 0), doc_id=doc_id)
                 task_manager.complete_task(doc_id, success=False, error_message=error_msg)
                 db.update_document_status(doc_id, 'failed', error_message=error_msg)
-                else:
-                task_manager.complete_task(doc_id, success=True)
-                    db.update_document_status(
-                        doc_id,
-                        'completed',
-                        num_chunks=result.get('num_chunks', 0),
-                        es_document_ids=json.dumps(result.get('document_ids', [])),
-                        pages_data=json.dumps(pages_data_list)
-                    )
-                    logger.info("document_processing_completed", doc_id=doc_id, 
-                              num_chunks=result.get('num_chunks', 0))
             else:
+                task_manager.complete_task(doc_id, success=True)
+                db.update_document_status(
+                    doc_id,
+                    'completed',
+                    num_chunks=result.get('num_chunks', 0),
+                    es_document_ids=json.dumps(result.get('document_ids', [])),
+                    pages_data=json.dumps(pages_data_list)
+                )
+                logger.info("document_processing_completed", doc_id=doc_id, 
+                          num_chunks=result.get('num_chunks', 0))
+        else:
             error_msg = result.get('error', 'Unknown error')
             task_manager.complete_task(doc_id, success=False, error_message=error_msg)
             db.update_document_status(doc_id, 'failed', error_message=error_msg)
@@ -608,14 +608,19 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                 for page in complete_data.get('pages', []):
                     page_num = page['page_number']
                     stage1 = page.get('stage1_global', {})
+                    stage2 = page.get('stage2_ocr', {})
                     stage3 = page.get('stage3_vlm', {})
                     
-                    # Build page data structure
+                    # Extract image filename from stage1
+                    image_filename = stage1.get('image', f'page_{page_num:03d}_preview.png')
+                    
+                    # Build page data structure (使用 page_num 字段名与 PDF 保持一致)
                     page_data = {
-                        'page_number': page_num,
-                        'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{stage1.get('image', f'page_{page_num:03d}_preview.png')}",
-                        'text': stage3.get('text_combined', ''),
-                        'statistics': page.get('statistics', {})
+                        'page_num': page_num,
+                        'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{image_filename}",
+                        'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/page_{page_num:03d}_visualized.png",
+                        'text_count': len(stage3.get('text_combined', '').split()),
+                        'components': []  # PPTX 暂无组件提取
                     }
                     pages_data.append(page_data)
                 
@@ -810,8 +815,8 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                         db.update_document_status(doc_id, 'failed', error_message=error_msg)
                     else:
                         task_manager.complete_task(doc_id, success=True)
-            db.update_document_status(
-                doc_id,
+                        db.update_document_status(
+                            doc_id,
                             'completed',
                             num_chunks=result.get('num_chunks', 0),
                             pages_data=json.dumps(pages_data)
@@ -1656,13 +1661,82 @@ async def health_check():
     return {"status": "healthy"}
 
 
+def check_required_services():
+    """检查必需的服务（MinIO、Elasticsearch）是否可用"""
+    import requests
+    issues = []
+    
+    # 检查 MinIO
+    if config.get('minio.enabled', False):
+        minio_endpoint = config.get('minio.endpoint', 'localhost:9000')
+        minio_url = f"http://{minio_endpoint}/minio/health/live"
+        try:
+            response = requests.get(minio_url, timeout=3)
+            if response.status_code == 200:
+                logger.info("✅ MinIO 连接正常", endpoint=minio_endpoint)
+            else:
+                issues.append(f"❌ MinIO 健康检查失败: HTTP {response.status_code}")
+                issues.append(f"   端点: {minio_endpoint}")
+        except requests.exceptions.ConnectionError:
+            issues.append("❌ MinIO 未运行")
+            issues.append(f"   请确保 MinIO 服务运行在: {minio_endpoint}")
+            issues.append("   启动命令: ./start_minio.sh")
+        except Exception as e:
+            issues.append(f"❌ MinIO 连接失败: {str(e)}")
+            issues.append(f"   端点: {minio_endpoint}")
+    else:
+        logger.warning("⚠️  MinIO 已禁用（minio.enabled=false），文件不会上传到对象存储")
+    
+    # 检查 Elasticsearch
+    es_url = config.get('elasticsearch.url', 'http://localhost:9200')
+    try:
+        response = requests.get(f"{es_url}/_cluster/health", timeout=3)
+        if response.status_code == 200:
+            health_data = response.json()
+            status = health_data.get('status', 'unknown')
+            if status in ['green', 'yellow']:
+                logger.info("✅ Elasticsearch 连接正常", status=status, url=es_url)
+            else:
+                issues.append(f"⚠️  Elasticsearch 状态异常: {status}")
+        else:
+            issues.append(f"❌ Elasticsearch 健康检查失败: HTTP {response.status_code}")
+    except requests.exceptions.ConnectionError:
+        issues.append("❌ Elasticsearch 未运行")
+        issues.append(f"   URL: {es_url}")
+        issues.append("   请确保 Elasticsearch 正在运行")
+    except Exception as e:
+        issues.append(f"❌ Elasticsearch 连接失败: {str(e)}")
+        issues.append(f"   URL: {es_url}")
+    
+    return issues
+
+
 if __name__ == "__main__":
     import uvicorn
+    import sys
+    
+    # 检查必需服务
+    logger.info("🔍 检查必需服务...")
+    service_issues = check_required_services()
+    
+    if service_issues:
+        logger.error("服务检查失败，无法启动应用")
+        print("\n" + "="*70)
+        print("⚠️  启动前检查失败")
+        print("="*70)
+        for issue in service_issues:
+            print(issue)
+        print("="*70)
+        print("\n请先解决以上问题后再启动应用。\n")
+        sys.exit(1)
+    
+    logger.info("✅ 所有必需服务检查通过")
     
     host = web_config.get('host', '0.0.0.0')
     port = web_config.get('port', 8000)
     
     logger.info("starting_web_server", host=host, port=port)
+    print(f"\n🚀 服务启动成功！访问: http://localhost:{port}\n")
     
     uvicorn.run(app, host=host, port=port)
 

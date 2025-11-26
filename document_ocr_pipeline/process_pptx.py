@@ -240,10 +240,12 @@ def extract_slide_content(slide, slide_num, output_dir, ocr_engine='paddle'):
     }
     
     # Stage1 信息（模拟 PDF 的结构）
-    # 使用第一张提取的图片作为预览图（如果有的话）
+    # 优先使用 LibreOffice 渲染的预览图（page_XXX_preview.png）
     preview_image = f"page_{slide_num:03d}_preview.png"
-    if images:
-        # 使用第一张图片作为预览
+    preview_path = output_dir / preview_image
+    
+    # 如果预览图不存在，降级使用第一张提取的图片
+    if not preview_path.exists() and images:
         first_image_path = Path(images[0]['path'])
         preview_image = first_image_path.name
     
@@ -251,6 +253,28 @@ def extract_slide_content(slide, slide_num, output_dir, ocr_engine='paddle'):
         "image": preview_image,
         "ocr_json": str(text_json_path),
         "text_source": "direct_extraction"
+    }
+    
+    # Stage2 OCR 可视化信息（使用预览图，但不重新 OCR）
+    # 如果预览图存在，直接复制作为可视化结果；否则使用第一张图片的可视化
+    preview_path = output_dir / preview_image
+    visualized_image = f"page_{slide_num:03d}_visualized.png"
+    visualized_path = output_dir / visualized_image
+    
+    if preview_path.exists():
+        # 直接复制预览图作为可视化结果（因为我们已经有完整的 LibreOffice 渲染图）
+        import shutil
+        shutil.copy2(preview_path, visualized_path)
+    elif images and image_ocr_results:
+        # 降级：使用第一张图片的 OCR 可视化
+        first_vis = next((r['visualized'] for r in image_ocr_results if r['image_id'] == images[0]['id']), None)
+        if first_vis and Path(first_vis).exists():
+            import shutil
+            shutil.copy2(first_vis, visualized_path)
+    
+    slide_data['stage2_ocr'] = {
+        "ocr_json": str(text_json_path),  # 文本提取结果
+        "visualized": str(visualized_path) if visualized_path.exists() else ""
     }
     
     # Stage3 VLM 信息
@@ -274,11 +298,73 @@ def process_pptx(pptx_path, output_dir, ocr_engine='paddle'):
     
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    pptx_path = Path(pptx_path)
     
-    prs = Presentation(pptx_path)
-    total_slides = len(prs.slides)
+    # ==================== 步骤 0: 使用 LibreOffice 转换为 PDF 并渲染预览图 ====================
+    print(f"\n{'='*70}")
+    print(f"📄 步骤 0: 生成页面预览图（LibreOffice 渲染）")
+    print(f"{'='*70}")
     
-    print(f"📄 总页数: {total_slides}")
+    temp_pdf = output_dir / f"{pptx_path.stem}_temp.pdf"
+    
+    try:
+        # 调用 LibreOffice 转换 PPTX -> PDF
+        print(f"  ⏳ 转换 PPTX 为 PDF...")
+        subprocess.run([
+            '/Applications/LibreOffice.app/Contents/MacOS/soffice',
+            '--headless',
+            '--convert-to', 'pdf',
+            '--outdir', str(output_dir),
+            str(pptx_path)
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # LibreOffice 输出的 PDF 文件名与输入文件名相同（仅扩展名不同）
+        generated_pdf = output_dir / f"{pptx_path.stem}.pdf"
+        if generated_pdf.exists() and generated_pdf != temp_pdf:
+            generated_pdf.rename(temp_pdf)
+        
+        print(f"  ✓ PDF 已生成: {temp_pdf.name}")
+        
+        # 使用 pdfplumber 渲染每一页为图片
+        import pdfplumber
+        import cv2
+        import numpy as np
+        
+        with pdfplumber.open(temp_pdf) as pdf:
+            total_slides = len(pdf.pages)
+            print(f"  📄 PDF 页数: {total_slides}")
+            
+            for page_num, page in enumerate(pdf.pages, 1):
+                # 渲染为高质量图片（300 DPI）
+                img = page.to_image(resolution=300)
+                img_array = np.array(img.original)
+                
+                # 保存为 page_XXX_preview.png（与 PDF 流程命名一致）
+                preview_path = output_dir / f"page_{page_num:03d}_preview.png"
+                cv2.imwrite(str(preview_path), cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR))
+                
+                height, width = img_array.shape[:2]
+                print(f"  ✓ 第 {page_num} 页: {width}x{height}px -> {preview_path.name}")
+        
+        # 删除临时 PDF 文件
+        temp_pdf.unlink()
+        print(f"  ✓ 预览图生成完成，临时 PDF 已清理")
+        
+    except FileNotFoundError:
+        print("  ⚠️  警告: 未找到 LibreOffice，跳过预览图生成")
+        print("  提示: 安装 LibreOffice 以启用页面预览功能")
+        print("  macOS: brew install --cask libreoffice")
+        total_slides = None
+    except Exception as e:
+        print(f"  ⚠️  预览图生成失败: {e}")
+        total_slides = None
+    
+    # ==================== 继续原有的内容提取流程 ====================
+    prs = Presentation(str(pptx_path))
+    if total_slides is None:
+        total_slides = len(prs.slides)
+    
+    print(f"\n📄 总页数: {total_slides}")
     
     result = {
         "source_file": str(pptx_path),

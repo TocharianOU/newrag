@@ -582,6 +582,24 @@
                 uploadedDocs.forEach(doc => {
                     startProgressPolling(doc.docId, doc.filename);
                 });
+                
+                // 🔥 监听所有文档完成后刷新统计数据
+                const checkAllCompleted = setInterval(() => {
+                    // 检查是否所有任务都已完成（没有正在运行的 interval）
+                    const runningTasks = Object.keys(progressIntervals).filter(id => progressIntervals[id] !== null);
+                    if (runningTasks.length === 0) {
+                        clearInterval(checkAllCompleted);
+                        console.log('All document processing completed, refreshing stats...');
+                        
+                        // 刷新统计数据和文档列表
+                        const currentTab = document.querySelector('.tab-button.bg-blue-600, .tab-button.bg-gray-700');
+                        if (currentTab && (currentTab.textContent.includes('Statistics') || currentTab.textContent.includes('统计'))) {
+                            loadStats();
+                            loadDocuments(true);
+                        }
+                    }
+                }, 2000); // 每2秒检查一次
+                
             } else if (successCount > 0 || duplicateCount > 0) {
                 // All completed immediately
                 const successTitle = currentLang === 'zh' ? '上传完成！' : 'Upload Complete!';
@@ -606,6 +624,15 @@
                                        </div>
                                    </div>
                                `;
+                
+                // 🔥 立即刷新统计数据
+                setTimeout(() => {
+                    loadStats();
+                    const currentTab = document.querySelector('.tab-button.bg-blue-600, .tab-button.bg-gray-700');
+                    if (currentTab && (currentTab.textContent.includes('Statistics') || currentTab.textContent.includes('统计'))) {
+                        loadDocuments(true);
+                    }
+                }, 1000);
                 } else {
                 // All failed
                 const failTitle = currentLang === 'zh' ? '❌ 上传失败' : '❌ Upload Failed';
@@ -738,6 +765,13 @@
                                 </div>
                                 </div>
                             `;
+                        }
+                        
+                        // 🔥 自动刷新文档列表（如果在 Statistics 标签页）
+                        const currentTab = document.querySelector('.tab-button.bg-blue-600, .tab-button.bg-gray-700');
+                        if (currentTab && currentTab.textContent.includes('Statistics') || currentTab.textContent.includes('统计')) {
+                            console.log('Document processing completed, refreshing document list...');
+                            loadDocuments(true); // 重新加载文档列表
                         }
                     } else if (progress.status === 'cancelled') {
                         stopProgressPolling(docId);
