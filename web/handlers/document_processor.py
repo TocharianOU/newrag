@@ -11,8 +11,19 @@ from typing import Optional
 
 import structlog
 from src.task_manager import task_manager, TaskStatus, TaskStage
+from src.database import DatabaseManager
+from src.pipeline import ProcessingPipeline
+from src.config import config
 
 logger = structlog.get_logger(__name__)
+
+# Initialize database and pipeline
+db = DatabaseManager()
+pipeline = ProcessingPipeline()
+
+# Get upload folder from config
+web_config = config.web_config
+upload_folder = Path(web_config.get('upload_folder', './uploads'))
 
 # Concurrent processing control (limit to 3 documents processing at the same time)
 processing_semaphore = threading.Semaphore(3)
