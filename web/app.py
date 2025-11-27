@@ -641,18 +641,16 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                     message="Indexing to vector store..."
                 )
                 
-                # Index to vector store using pipeline
-                additional_metadata = {
-                    'document_id': str(doc_id),
-                    'checksum': checksum,
-                    'pages_data': pages_data,
-                    'source': str(file_path)
-                }
-                additional_metadata.update(metadata)
+                # Index to vector store using pipeline (与 PDF/DOCX 保持一致的命名)
+                metadata['document_id'] = doc_id
+                metadata['filename'] = file_path.name  # 使用原始文件名
+                metadata['checksum'] = checksum
+                metadata['pages_data'] = pages_data
+                metadata['source'] = str(file_path)
                 
                 pipeline.process_file(
                     file_path=str(file_path),
-                    metadata=additional_metadata,
+                    metadata=metadata,
                     processed_json_dir=str(doc_output_dir)
                 )
                 
@@ -1298,9 +1296,57 @@ async def get_document_progress(doc_id: int, include_children: bool = False):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/documents/{doc_id}/cleanup-minio")
+async def cleanup_document_minio(doc_id: int):
+    """
+    清理单个文档的 MinIO 数据（不删除数据库记录）
+    """
+    try:
+        # 获取文档信息
+        doc = db.get_document(doc_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        checksum = doc.checksum
+        filename = doc.filename
+        
+        # 删除 MinIO 数据
+        deleted_count = 0
+        try:
+            from src.minio_storage import minio_storage
+            if minio_storage.enabled and checksum:
+                filename_base = Path(filename).stem.replace(' ', '_').replace('/', '_')
+                minio_prefix = f"{filename_base}_{doc_id}_{checksum[:8]}"
+                
+                deleted_count = minio_storage.delete_directory(minio_prefix)
+                logger.info("minio_cleaned_for_document", doc_id=doc_id, prefix=minio_prefix, count=deleted_count)
+        except Exception as minio_error:
+            logger.warning("minio_cleanup_failed", error=str(minio_error), doc_id=doc_id)
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"MinIO data cleaned for document {doc_id}",
+            "doc_id": doc_id,
+            "files_deleted": deleted_count
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("cleanup_document_minio_failed", error=str(e), doc_id=doc_id)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/documents/{doc_id}")
 async def delete_document(doc_id: int):
-    """Delete a specific document by ID (both SQLite and ES)"""
+    """
+    Delete a specific document completely from:
+    - SQLite database
+    - Elasticsearch index
+    - MinIO storage (if enabled)
+    - Local processed files
+    - Original uploaded files
+    """
     try:
         # 1. Get document info before deletion
         doc = db.get_document(doc_id)
@@ -1311,24 +1357,72 @@ async def delete_document(doc_id: int):
         task_manager.cancel_task(doc_id)
         
         checksum = doc.checksum
+        filename = doc.filename
+        file_path = doc.file_path
         
-        # 2. Delete from SQLite
+        deletion_result = {
+            "doc_id": doc_id,
+            "filename": filename,
+            "es_deleted": 0,
+            "minio_deleted": 0,
+            "local_files_deleted": False,
+            "original_file_deleted": False
+        }
+        
+        # 2. Delete from Elasticsearch by document_id (正确方式！)
+        try:
+            es_deleted = pipeline.vector_store.delete_by_metadata({"document_id": str(doc_id)})
+            deletion_result["es_deleted"] = es_deleted
+            logger.info("es_deleted", doc_id=doc_id, count=es_deleted)
+        except Exception as es_error:
+            logger.warning("es_deletion_failed", error=str(es_error), doc_id=doc_id)
+        
+        # 3. Delete from MinIO (使用正确的 prefix 格式)
+        try:
+            from src.minio_storage import minio_storage
+            if minio_storage.enabled:
+                # 构建 MinIO prefix: {filename_base}_{doc_id}_{checksum[:8]}
+                filename_base = Path(filename).stem.replace(' ', '_').replace('/', '_')
+                minio_prefix = f"{filename_base}_{doc_id}_{checksum[:8]}"
+                
+                minio_deleted = minio_storage.delete_directory(minio_prefix)
+                deletion_result["minio_deleted"] = minio_deleted
+                logger.info("minio_deleted", doc_id=doc_id, prefix=minio_prefix, count=minio_deleted)
+        except Exception as minio_error:
+            logger.warning("minio_deletion_failed", error=str(minio_error), doc_id=doc_id)
+        
+        # 4. Delete local processed files
+        try:
+            processed_folder = Path('web/static/processed_docs')
+            doc_folder = processed_folder / f"{doc_id}_{checksum[:8]}"
+            if doc_folder.exists():
+                import shutil
+                shutil.rmtree(doc_folder)
+                deletion_result["local_files_deleted"] = True
+                logger.info("local_files_deleted", doc_id=doc_id, path=str(doc_folder))
+        except Exception as local_error:
+            logger.warning("local_deletion_failed", error=str(local_error), doc_id=doc_id)
+        
+        # 5. Delete original uploaded file
+        try:
+            if file_path and Path(file_path).exists():
+                Path(file_path).unlink()
+                deletion_result["original_file_deleted"] = True
+                logger.info("original_file_deleted", doc_id=doc_id, path=file_path)
+        except Exception as file_error:
+            logger.warning("original_file_deletion_failed", error=str(file_error), doc_id=doc_id)
+        
+        # 6. Delete from SQLite (最后删除，确保其他清理完成)
         success = db.delete_document(doc_id)
         if not success:
             raise HTTPException(status_code=404, detail="Failed to delete from database")
         
-        # 3. Delete from Elasticsearch by checksum (document_id)
-        try:
-            es_deleted = pipeline.vector_store.delete_by_metadata({"document_id": checksum})
-            logger.info("document_deleted", doc_id=doc_id, checksum=checksum, es_deleted=es_deleted)
-        except Exception as es_error:
-            logger.warning("es_deletion_failed", error=str(es_error), checksum=checksum)
-            # Continue even if ES deletion fails
+        logger.info("document_completely_deleted", **deletion_result)
         
         return JSONResponse(content={
             "status": "success", 
-            "message": f"Document {doc_id} deleted",
-            "es_deleted_count": es_deleted if 'es_deleted' in locals() else 0
+            "message": f"Document {doc_id} completely deleted",
+            **deletion_result
         })
         
     except HTTPException:
@@ -1340,31 +1434,83 @@ async def delete_document(doc_id: int):
 
 @app.delete("/documents")
 async def delete_all_documents():
-    """Delete all documents from both SQLite and Elasticsearch"""
+    """
+    Delete ALL documents completely from:
+    - SQLite database
+    - Elasticsearch index
+    - MinIO storage (if enabled)
+    - Local processed files
+    - Original uploaded files
+    """
     try:
-        # 1. Get all document checksums before deletion
+        # 1. Get all documents info before deletion
         all_docs = db.list_documents(limit=10000)
-        checksums = [doc['checksum'] for doc in all_docs if doc.get('checksum')]
         
-        # 2. Delete from SQLite
+        deletion_result = {
+            "total_docs": len(all_docs),
+            "es_deleted": 0,
+            "minio_deleted": 0,
+            "local_folders_deleted": 0,
+            "original_files_deleted": 0
+        }
+        
+        # 2. Delete each document's data
+        for doc in all_docs:
+            doc_id = doc.get('id')
+            checksum = doc.get('checksum', '')
+            filename = doc.get('filename', '')
+            file_path = doc.get('file_path', '')
+            
+            # Delete from Elasticsearch (使用正确的 document_id)
+            try:
+                count = pipeline.vector_store.delete_by_metadata({"document_id": str(doc_id)})
+                deletion_result["es_deleted"] += count
+            except Exception as es_error:
+                logger.warning("es_deletion_failed", error=str(es_error), doc_id=doc_id)
+            
+            # Delete from MinIO
+            try:
+                from src.minio_storage import minio_storage
+                if minio_storage.enabled and checksum:
+                    filename_base = Path(filename).stem.replace(' ', '_').replace('/', '_')
+                    minio_prefix = f"{filename_base}_{doc_id}_{checksum[:8]}"
+                    count = minio_storage.delete_directory(minio_prefix)
+                    deletion_result["minio_deleted"] += count
+            except Exception as minio_error:
+                logger.warning("minio_deletion_failed", error=str(minio_error), doc_id=doc_id)
+            
+            # Delete local processed files
+            try:
+                if checksum:
+                    processed_folder = Path('web/static/processed_docs')
+                    doc_folder = processed_folder / f"{doc_id}_{checksum[:8]}"
+                    if doc_folder.exists():
+                        import shutil
+                        shutil.rmtree(doc_folder)
+                        deletion_result["local_folders_deleted"] += 1
+            except Exception as local_error:
+                logger.warning("local_deletion_failed", error=str(local_error), doc_id=doc_id)
+            
+            # Delete original file
+            try:
+                if file_path and Path(file_path).exists():
+                    Path(file_path).unlink()
+                    deletion_result["original_files_deleted"] += 1
+            except Exception as file_error:
+                logger.warning("original_file_deletion_failed", error=str(file_error), doc_id=doc_id)
+        
+        # 3. Delete all from SQLite (最后删除)
         db.delete_all_documents()
         
-        # 3. Delete from Elasticsearch (all documents)
-        es_deleted_total = 0
-        for checksum in checksums:
-            try:
-                count = pipeline.vector_store.delete_by_metadata({"document_id": checksum})
-                es_deleted_total += count
-            except Exception as es_error:
-                logger.warning("es_deletion_failed", error=str(es_error), checksum=checksum)
+        # 4. Cancel all tasks
+        task_manager.tasks.clear()
         
-        logger.info("all_documents_deleted", sqlite_count=len(checksums), es_deleted=es_deleted_total)
+        logger.info("all_documents_completely_deleted", **deletion_result)
         
         return JSONResponse(content={
             "status": "success", 
-            "message": "All documents deleted",
-            "sqlite_deleted": len(checksums),
-            "es_deleted": es_deleted_total
+            "message": "All documents completely deleted",
+            **deletion_result
         })
     except Exception as e:
         logger.error("delete_all_documents_failed", error=str(e))
@@ -1481,6 +1627,290 @@ async def cleanup_tasks(keep_recent: int = 10):
         })
     except Exception as e:
         logger.error("cleanup_tasks_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/data-sync-check")
+async def check_data_synchronization():
+    """
+    检查 Database、Elasticsearch、MinIO 三者之间的数据同步状态
+    返回不一致的记录和统计信息
+    """
+    try:
+        from src.minio_storage import minio_storage
+        from elasticsearch.helpers import scan
+        
+        sync_report = {
+            "database_docs": 0,
+            "elasticsearch_docs": 0,
+            "minio_prefixes": 0,
+            "local_folders": 0,
+            "inconsistencies": [],
+            "summary": {}
+        }
+        
+        # 1. 从数据库获取所有文档
+        db_docs = db.list_documents(limit=10000)
+        sync_report["database_docs"] = len(db_docs)
+        
+        db_doc_ids = {str(doc.get('id')): doc for doc in db_docs}
+        
+        # 2. 从 Elasticsearch 获取所有不重复的 document_id
+        es_client = pipeline.vector_store.es_client
+        index_name = pipeline.vector_store.index_name
+        
+        es_document_ids = set()
+        try:
+            query = {"query": {"match_all": {}}}
+            for hit in scan(es_client, index=index_name, query=query, _source=['metadata.document_id']):
+                doc_id = hit['_source'].get('metadata', {}).get('document_id')
+                if doc_id:
+                    es_document_ids.add(str(doc_id))
+            
+            sync_report["elasticsearch_docs"] = len(es_document_ids)
+        except Exception as es_error:
+            logger.warning("es_scan_failed", error=str(es_error))
+            sync_report["elasticsearch_docs"] = "ERROR"
+        
+        # 3. 检查本地 processed_docs 文件夹
+        processed_folder = Path('web/static/processed_docs')
+        local_folders = set()
+        if processed_folder.exists():
+            for folder in processed_folder.iterdir():
+                if folder.is_dir():
+                    local_folders.add(folder.name)
+        
+        sync_report["local_folders"] = len(local_folders)
+        
+        # 4. 检查 MinIO（如果启用）
+        minio_prefixes = set()
+        if minio_storage.enabled:
+            try:
+                all_objects = minio_storage.list_objects(prefix="")
+                # 提取 prefix（第一层目录）
+                for obj_name in all_objects:
+                    prefix = obj_name.split('/')[0] if '/' in obj_name else obj_name
+                    minio_prefixes.add(prefix)
+                
+                sync_report["minio_prefixes"] = len(minio_prefixes)
+            except Exception as minio_error:
+                logger.warning("minio_scan_failed", error=str(minio_error))
+                sync_report["minio_prefixes"] = "ERROR"
+        else:
+            sync_report["minio_prefixes"] = "DISABLED"
+        
+        # 5. 查找不一致的数据
+        # 5.1 Database 中有，但 ES 中没有
+        for doc_id, doc in db_doc_ids.items():
+            if doc_id not in es_document_ids:
+                sync_report["inconsistencies"].append({
+                    "type": "missing_in_es",
+                    "doc_id": doc_id,
+                    "filename": doc.get('filename'),
+                    "checksum": doc.get('checksum', '')[:8]
+                })
+        
+        # 5.2 ES 中有，但 Database 中没有
+        for es_doc_id in es_document_ids:
+            if es_doc_id not in db_doc_ids:
+                sync_report["inconsistencies"].append({
+                    "type": "orphan_in_es",
+                    "doc_id": es_doc_id,
+                    "message": "ES中存在但Database中不存在"
+                })
+        
+        # 5.3 Database 中有，但本地文件夹不存在
+        for doc_id, doc in db_doc_ids.items():
+            checksum = doc.get('checksum', '')
+            expected_folder = f"{doc_id}_{checksum[:8]}"
+            if expected_folder not in local_folders:
+                sync_report["inconsistencies"].append({
+                    "type": "missing_local_files",
+                    "doc_id": doc_id,
+                    "filename": doc.get('filename'),
+                    "expected_folder": expected_folder
+                })
+        
+        # 6. 生成摘要
+        sync_report["summary"] = {
+            "total_inconsistencies": len(sync_report["inconsistencies"]),
+            "missing_in_es": len([i for i in sync_report["inconsistencies"] if i["type"] == "missing_in_es"]),
+            "orphan_in_es": len([i for i in sync_report["inconsistencies"] if i["type"] == "orphan_in_es"]),
+            "missing_local_files": len([i for i in sync_report["inconsistencies"] if i["type"] == "missing_local_files"]),
+            "sync_status": "SYNCED" if len(sync_report["inconsistencies"]) == 0 else "OUT_OF_SYNC"
+        }
+        
+        logger.info("data_sync_check_completed", **sync_report["summary"])
+        
+        return JSONResponse(content=sync_report)
+        
+    except Exception as e:
+        logger.error("data_sync_check_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/cleanup-elasticsearch")
+async def cleanup_elasticsearch_orphans():
+    """
+    清理 Elasticsearch 中的孤岛数据
+    删除所有在 ES 中存在但在 Database 中不存在的文档
+    """
+    try:
+        from elasticsearch.helpers import scan
+        
+        # 1. 获取数据库中所有的 document_id
+        db_docs = db.list_documents(limit=10000)
+        valid_doc_ids = {str(doc.get('id')) for doc in db_docs}
+        
+        # 2. 扫描 ES，找出孤岛数据
+        es_client = pipeline.vector_store.es_client
+        index_name = pipeline.vector_store.index_name
+        
+        orphan_doc_ids = set()
+        query = {"query": {"match_all": {}}}
+        
+        for hit in scan(es_client, index=index_name, query=query, _source=['metadata.document_id']):
+            doc_id = hit['_source'].get('metadata', {}).get('document_id')
+            if doc_id and str(doc_id) not in valid_doc_ids:
+                orphan_doc_ids.add(str(doc_id))
+        
+        # 3. 删除孤岛数据
+        deleted_count = 0
+        for orphan_id in orphan_doc_ids:
+            try:
+                count = pipeline.vector_store.delete_by_metadata({"document_id": orphan_id})
+                deleted_count += count
+            except Exception as e:
+                logger.warning("orphan_deletion_failed", doc_id=orphan_id, error=str(e))
+        
+        logger.info("es_orphans_cleaned", orphan_doc_ids=len(orphan_doc_ids), chunks_deleted=deleted_count)
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Cleaned {deleted_count} orphan chunks from Elasticsearch",
+            "orphan_documents": len(orphan_doc_ids),
+            "chunks_deleted": deleted_count
+        })
+        
+    except Exception as e:
+        logger.error("cleanup_es_orphans_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/cleanup-minio")
+async def cleanup_minio_orphans():
+    """
+    清理 MinIO 中的孤岛数据
+    删除所有在 MinIO 中存在但在 Database 中不存在的文件夹
+    """
+    try:
+        from src.minio_storage import minio_storage
+        
+        if not minio_storage.enabled:
+            return JSONResponse(content={
+                "status": "skipped",
+                "message": "MinIO is disabled"
+            })
+        
+        # 1. 获取数据库中所有文档的 MinIO prefix
+        db_docs = db.list_documents(limit=10000)
+        valid_prefixes = set()
+        
+        for doc in db_docs:
+            doc_id = doc.get('id')
+            checksum = doc.get('checksum', '')
+            filename = doc.get('filename', '')
+            
+            if checksum and filename:
+                filename_base = Path(filename).stem.replace(' ', '_').replace('/', '_')
+                prefix = f"{filename_base}_{doc_id}_{checksum[:8]}"
+                valid_prefixes.add(prefix)
+        
+        # 2. 获取 MinIO 中所有的 prefix
+        all_objects = minio_storage.list_objects(prefix="")
+        minio_prefixes = set()
+        
+        for obj_name in all_objects:
+            prefix = obj_name.split('/')[0] if '/' in obj_name else obj_name
+            minio_prefixes.add(prefix)
+        
+        # 3. 找出孤岛 prefix（在 MinIO 中但不在数据库中）
+        orphan_prefixes = minio_prefixes - valid_prefixes
+        
+        # 4. 删除孤岛数据
+        deleted_count = 0
+        for orphan_prefix in orphan_prefixes:
+            count = minio_storage.delete_directory(orphan_prefix)
+            deleted_count += count
+        
+        logger.info("minio_orphans_cleaned", 
+                   orphan_prefixes=len(orphan_prefixes), 
+                   files_deleted=deleted_count)
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Cleaned {deleted_count} orphan files from MinIO",
+            "orphan_prefixes": len(orphan_prefixes),
+            "files_deleted": deleted_count,
+            "cleaned_prefixes": list(orphan_prefixes)
+        })
+        
+    except Exception as e:
+        logger.error("cleanup_minio_orphans_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/cleanup-local-files")
+async def cleanup_local_orphan_files():
+    """
+    清理本地 processed_docs 中的孤岛文件夹
+    删除所有在本地存在但在 Database 中不存在的文件夹
+    """
+    try:
+        # 1. 获取数据库中所有文档的文件夹名
+        db_docs = db.list_documents(limit=10000)
+        valid_folders = set()
+        
+        for doc in db_docs:
+            doc_id = doc.get('id')
+            checksum = doc.get('checksum', '')
+            if checksum:
+                folder_name = f"{doc_id}_{checksum[:8]}"
+                valid_folders.add(folder_name)
+        
+        # 2. 扫描本地文件夹
+        processed_folder = Path('web/static/processed_docs')
+        orphan_folders = []
+        
+        if processed_folder.exists():
+            for folder in processed_folder.iterdir():
+                if folder.is_dir() and folder.name not in valid_folders:
+                    orphan_folders.append(folder)
+        
+        # 3. 删除孤岛文件夹
+        import shutil
+        deleted_count = 0
+        
+        for folder in orphan_folders:
+            try:
+                shutil.rmtree(folder)
+                deleted_count += 1
+            except Exception as e:
+                logger.warning("folder_deletion_failed", folder=str(folder), error=str(e))
+        
+        logger.info("local_orphans_cleaned", 
+                   orphan_folders=len(orphan_folders), 
+                   deleted=deleted_count)
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Cleaned {deleted_count} orphan folders from local storage",
+            "orphan_folders_found": len(orphan_folders),
+            "deleted": deleted_count
+        })
+        
+    except Exception as e:
+        logger.error("cleanup_local_orphans_failed", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1661,82 +2091,13 @@ async def health_check():
     return {"status": "healthy"}
 
 
-def check_required_services():
-    """检查必需的服务（MinIO、Elasticsearch）是否可用"""
-    import requests
-    issues = []
-    
-    # 检查 MinIO
-    if config.get('minio.enabled', False):
-        minio_endpoint = config.get('minio.endpoint', 'localhost:9000')
-        minio_url = f"http://{minio_endpoint}/minio/health/live"
-        try:
-            response = requests.get(minio_url, timeout=3)
-            if response.status_code == 200:
-                logger.info("✅ MinIO 连接正常", endpoint=minio_endpoint)
-            else:
-                issues.append(f"❌ MinIO 健康检查失败: HTTP {response.status_code}")
-                issues.append(f"   端点: {minio_endpoint}")
-        except requests.exceptions.ConnectionError:
-            issues.append("❌ MinIO 未运行")
-            issues.append(f"   请确保 MinIO 服务运行在: {minio_endpoint}")
-            issues.append("   启动命令: ./start_minio.sh")
-        except Exception as e:
-            issues.append(f"❌ MinIO 连接失败: {str(e)}")
-            issues.append(f"   端点: {minio_endpoint}")
-    else:
-        logger.warning("⚠️  MinIO 已禁用（minio.enabled=false），文件不会上传到对象存储")
-    
-    # 检查 Elasticsearch
-    es_url = config.get('elasticsearch.url', 'http://localhost:9200')
-    try:
-        response = requests.get(f"{es_url}/_cluster/health", timeout=3)
-        if response.status_code == 200:
-            health_data = response.json()
-            status = health_data.get('status', 'unknown')
-            if status in ['green', 'yellow']:
-                logger.info("✅ Elasticsearch 连接正常", status=status, url=es_url)
-            else:
-                issues.append(f"⚠️  Elasticsearch 状态异常: {status}")
-        else:
-            issues.append(f"❌ Elasticsearch 健康检查失败: HTTP {response.status_code}")
-    except requests.exceptions.ConnectionError:
-        issues.append("❌ Elasticsearch 未运行")
-        issues.append(f"   URL: {es_url}")
-        issues.append("   请确保 Elasticsearch 正在运行")
-    except Exception as e:
-        issues.append(f"❌ Elasticsearch 连接失败: {str(e)}")
-        issues.append(f"   URL: {es_url}")
-    
-    return issues
-
-
 if __name__ == "__main__":
     import uvicorn
-    import sys
-    
-    # 检查必需服务
-    logger.info("🔍 检查必需服务...")
-    service_issues = check_required_services()
-    
-    if service_issues:
-        logger.error("服务检查失败，无法启动应用")
-        print("\n" + "="*70)
-        print("⚠️  启动前检查失败")
-        print("="*70)
-        for issue in service_issues:
-            print(issue)
-        print("="*70)
-        print("\n请先解决以上问题后再启动应用。\n")
-        sys.exit(1)
-    
-    logger.info("✅ 所有必需服务检查通过")
     
     host = web_config.get('host', '0.0.0.0')
     port = web_config.get('port', 8000)
     
     logger.info("starting_web_server", host=host, port=port)
-    print(f"\n🚀 服务启动成功！访问: http://localhost:{port}\n")
     
     uvicorn.run(app, host=host, port=port)
 

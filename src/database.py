@@ -181,13 +181,14 @@ class DatabaseManager:
             session.close()
     
     def update_document_pages_data(self, doc_id: int, pages_data: list):
-        """Update document pages_data field"""
+        """Update document pages_data field and total_pages count"""
         import json
         session = self.get_session()
         try:
             doc = session.query(Document).filter(Document.id == doc_id).first()
             if doc:
                 doc.pages_data = json.dumps(pages_data)
+                doc.total_pages = len(pages_data)  # 🔥 同时更新页数
                 session.commit()
         finally:
             session.close()
