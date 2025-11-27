@@ -27,7 +27,7 @@ export default function Layout({ children }: LayoutProps) {
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
               <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">
-                SmartResume <span className="font-normal text-indigo-500">RAG</span>
+                NewRAG
               </h1>
             </div>
 
@@ -65,7 +65,7 @@ export default function Layout({ children }: LayoutProps) {
       
       {/* Footer */}
       <footer className="py-6 text-center text-sm text-slate-500 dark:text-slate-500">
-        <p>© 2024 SmartResume RAG. Powered by AI Ops.</p>
+        <p>© 2024 NewRAG. Powered by AI Ops.</p>
       </footer>
     </div>
   );

@@ -39,7 +39,7 @@ export default function StatsPage() {
     },
     {
       label: '向量存储占用',
-      value: `${data?.total_size_mb.toFixed(2) || 0} MB`,
+      value: `${(data?.total_size_mb || 0).toFixed(2)} MB`,
       icon: HardDrive,
       gradient: 'from-emerald-500 to-teal-500',
       shadow: 'shadow-emerald-500/20',
