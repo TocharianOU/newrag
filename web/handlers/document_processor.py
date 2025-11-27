@@ -121,6 +121,8 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
     # Create task in task manager
     task_manager.create_task(doc_id)
     
+    logger.info("🚀 process_document_background_called", doc_id=doc_id, filename=file_path.name, ocr_engine=ocr_engine, checksum=checksum[:8])
+    
     # Wait for processing slot (max 3 concurrent documents)
     with processing_semaphore:
         temp_extract_dir = None
@@ -136,7 +138,7 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                 filename=file_path.name
             )
             db.update_document_progress(doc_id, 0, "Initializing...")
-            logger.info("background_processing_started", doc_id=doc_id, filename=file_path.name)
+            logger.info("background_processing_started", doc_id=doc_id, filename=file_path.name, ocr_engine=ocr_engine)
             
             # Check for cancellation
             if not task_manager.wait_if_paused(doc_id):
@@ -144,6 +146,7 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
             
             # Determine file type and handle accordingly
             file_ext = file_path.suffix.lower()
+            logger.info("📄 file_type_detected", doc_id=doc_id, file_ext=file_ext, ocr_engine=ocr_engine)
             
             # Handle ZIP files - extract and process all PDFs
             if file_ext == '.zip':
@@ -381,7 +384,7 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
             
             elif file_ext in ['.jpg', '.jpeg', '.png']:
                 # Handle image files - use OCR pipeline (same as PDF but without page conversion)
-                logger.info("processing_image_file", doc_id=doc_id, filename=file_path.name)
+                logger.info("🖼️ processing_image_file", doc_id=doc_id, filename=file_path.name, ocr_engine=ocr_engine)
                 
                 task_manager.update_task(
                     doc_id,
@@ -404,17 +407,23 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                 doc_output_dir.mkdir(parents=True, exist_ok=True)
                 
                 # 运行 extract_document.py 提取文本
-                logger.info("running_ocr_extraction", doc_id=doc_id, image=file_path.name)
+                logger.info("🔍 running_ocr_extraction", doc_id=doc_id, image=file_path.name, ocr_engine=ocr_engine)
                 ocr_json_path = doc_output_dir / "image_ocr.json"
                 
                 extract_script = Path('document_ocr_pipeline/extract_document.py')
-                subprocess.run([
+                cmd = [
                     sys.executable,
                     str(extract_script),
                     str(file_path),
                     '--ocr-engine', ocr_engine,
                     '-o', str(ocr_json_path)
-                ], check=True)
+                ]
+                logger.info("📝 extract_command", doc_id=doc_id, cmd=' '.join(cmd))
+                
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                logger.info("✅ ocr_extraction_stdout", doc_id=doc_id, stdout=result.stdout[:500] if result.stdout else "")
+                if result.stderr:
+                    logger.warning("⚠️ ocr_extraction_stderr", doc_id=doc_id, stderr=result.stderr[:500])
                 
                 logger.info("ocr_extraction_completed", doc_id=doc_id)
                 
@@ -457,11 +466,14 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                 db.update_document_progress(doc_id, 60, "Building searchable content...", processed_pages=0, total_pages=1)
                 
                 # 读取 OCR 结果并构建 pages_data
+                logger.info("📖 reading_ocr_results", doc_id=doc_id, json_path=str(ocr_json_path))
                 with open(ocr_json_path, 'r', encoding='utf-8') as f:
                     ocr_data = json.load(f)
                 
                 # 提取文本内容
                 text_content = ocr_data.get('text', '')
+                text_blocks_count = len(ocr_data.get('text_blocks', []))
+                logger.info("📝 ocr_results_loaded", doc_id=doc_id, text_length=len(text_content), text_blocks=text_blocks_count, ocr_engine=ocr_engine)
                 
                 # 构建 pages_data（模拟 PDF 的单页结构）
                 pages_data = [{
@@ -474,6 +486,7 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                     'extraction_method': 'ocr',
                     'ocr_engine': ocr_engine
                 }]
+                logger.info("📋 pages_data_built", doc_id=doc_id, pages_count=len(pages_data))
                 
                 # 保存 pages_data
                 pages_data_json = doc_output_dir / "complete_document.json"
@@ -504,8 +517,12 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                 metadata['filename'] = file_path.name
                 metadata['checksum'] = checksum
                 
+                logger.info("🔄 starting_pipeline_indexing", doc_id=doc_id, metadata=metadata)
+                
                 # 使用 pipeline 索引（会读取 complete_document.json）
                 result = pipeline.process_file(str(file_path), metadata, processed_json_dir=str(doc_output_dir))
+                
+                logger.info("✅ pipeline_result", doc_id=doc_id, status=result.get('status'), num_chunks=result.get('num_chunks', 0), document_ids=result.get('document_ids'))
                 
                 # Check for cancellation after indexing
                 if not task_manager.wait_if_paused(doc_id):
@@ -524,10 +541,11 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                 if result.get('status') == 'completed':
                     if not result.get('document_ids'):
                         error_msg = 'Image processing completed but no documents were indexed'
-                        logger.error("no_documents_indexed", doc_id=doc_id)
+                        logger.error("❌ no_documents_indexed", doc_id=doc_id)
                         task_manager.complete_task(doc_id, success=False, error_message=error_msg)
                         db.update_document_status(doc_id, 'failed', error_message=error_msg)
                     else:
+                        logger.info("🎉 marking_as_completed", doc_id=doc_id, num_chunks=result.get('num_chunks', 0))
                         task_manager.complete_task(doc_id, success=True)
                         db.update_document_status(
                             doc_id,
@@ -535,9 +553,10 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                             num_chunks=result.get('num_chunks', 0),
                             pages_data=json.dumps(pages_data)
                         )
-                        logger.info("image_processing_completed", doc_id=doc_id, num_chunks=result.get('num_chunks', 0))
+                        logger.info("✅ image_processing_completed", doc_id=doc_id, num_chunks=result.get('num_chunks', 0))
                 else:
                     error_msg = result.get('error', 'Unknown error during image processing')
+                    logger.error("❌ pipeline_failed", doc_id=doc_id, error=error_msg)
                     task_manager.complete_task(doc_id, success=False, error_message=error_msg)
                     db.update_document_status(doc_id, 'failed', error_message=error_msg)
             
@@ -552,7 +571,11 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
         
         except subprocess.CalledProcessError as e:
             error_msg = f"OCR processing failed: {str(e)}"
-            logger.error("adaptive_ocr_failed", error=str(e), doc_id=doc_id)
+            logger.error("❌ subprocess_failed", error=str(e), returncode=e.returncode, 
+                        cmd=' '.join(e.cmd) if hasattr(e, 'cmd') else 'unknown',
+                        stdout=e.stdout[:500] if hasattr(e, 'stdout') and e.stdout else '',
+                        stderr=e.stderr[:500] if hasattr(e, 'stderr') and e.stderr else '',
+                        doc_id=doc_id, ocr_engine=ocr_engine)
             task_manager.complete_task(doc_id, success=False, error_message=error_msg)
             db.update_document_status(doc_id, 'failed', error_message=error_msg)
         

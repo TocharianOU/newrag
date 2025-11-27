@@ -543,7 +543,7 @@ async def upload_file(
             metadata['description'] = description
         
         # Start background processing
-        logger.info("starting_background_processing", doc_id=doc_id, filename=file.filename)
+        logger.info("starting_background_processing", doc_id=doc_id, filename=file.filename, ocr_engine=ocr_engine, file_type=file_ext)
         
         # Start background thread
         thread = threading.Thread(
