@@ -99,7 +99,7 @@ export default function HomePage() {
                   点击或拖拽文件到此处
                 </p>
                 <p className="text-sm text-slate-500 mt-1">
-                  单次最大支持 50MB
+                  单次最大支持 500MB
                 </p>
               </div>
             </div>
@@ -159,11 +159,12 @@ export default function HomePage() {
                     onChange={(e) => setOcrEngine(e.target.value)}
                     className="input-field w-full appearance-none"
                   >
-                    <option value="easy">EasyOCR (推荐)</option>
-                    <option value="paddle">PaddleOCR (中文更好)</option>
+                    <option value="easy">EasyOCR - 最快</option>
+                    <option value="paddle">PaddleOCR - 最精确</option>
+                    <option value="vision">LLM Vision - 最适配</option>
                   </select>
                   <p className="text-xs text-slate-500 mt-2">
-                    如果文档主要是中文，建议选择 PaddleOCR。
+                    EasyOCR 速度最快；PaddleOCR 识别最精确；LLM Vision 对复杂布局适配最好。
                   </p>
                 </div>
               </div>

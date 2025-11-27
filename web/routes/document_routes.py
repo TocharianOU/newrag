@@ -5,6 +5,8 @@ from typing import Optional, List
 import structlog
 import hashlib
 import zipfile
+import os
+import threading
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, File, Form, UploadFile
 from fastapi.responses import JSONResponse
@@ -12,7 +14,12 @@ from src.task_manager import task_manager, TaskStatus
 from src.database import DatabaseManager
 import shutil
 from src.pipeline import ProcessingPipeline
+from src.config import config
 from web.handlers.document_processor import process_document_background
+
+web_config = config.web_config
+upload_folder = Path(web_config.get('upload_folder', './uploads'))
+upload_folder.mkdir(parents=True, exist_ok=True)
 
 
 db = DatabaseManager()
