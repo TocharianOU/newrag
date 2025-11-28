@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.DEV ? 'http://localhost:8080' : '',
+  baseURL: '/api', // 所有请求统一加 /api 前缀，触发 Vite 代理转发
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',

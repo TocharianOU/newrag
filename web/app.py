@@ -98,8 +98,33 @@ class MetadataUpdate(BaseModel):
 # Routes
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    """Render main page"""
-    return templates.TemplateResponse("index.html", {"request": request})
+    """Render API status page (Frontend is separate)"""
+    backend_port = web_config.get('port', 8080)
+    frontend_port = web_config.get('frontend_port', 3000)
+    
+    html_content = f"""
+    <html>
+        <head>
+            <title>SmartResume Backend API</title>
+            <style>
+                body {{ font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f0f2f5; }}
+                .container {{ text-align: center; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+                h1 {{ color: #333; }}
+                p {{ color: #666; }}
+                a {{ color: #007bff; text-decoration: none; font-weight: bold; }}
+                a:hover {{ text-decoration: underline; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🚀 Backend API is Running</h1>
+                <p>This is the backend service port ({backend_port}).</p>
+                <p>👉 Please visit the <b>React Frontend</b> at: <a href="http://localhost:{frontend_port}">http://localhost:{frontend_port}</a></p>
+            </div>
+        </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 
 @app.post("/search", response_model=SearchResponse)

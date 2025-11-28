@@ -250,8 +250,8 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle', use_vlm=True):
             try:
                 ocr_result = ocr_extractor.extract_from_image(str(preview_path))
                 
-                # 保存 OCR JSON
-                page_ocr_json = output_dir / f"page_{page_num:03d}_ocr.json"
+                # 保存 OCR JSON (使用 _global_ocr.json 命名以兼容前端 bbox 匹配)
+                page_ocr_json = output_dir / f"page_{page_num:03d}_global_ocr.json"
                 with open(page_ocr_json, 'w', encoding='utf-8') as f:
                     json.dump(ocr_result, f, ensure_ascii=False, indent=2)
                     

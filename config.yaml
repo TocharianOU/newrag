@@ -182,6 +182,7 @@ component_extraction:
 web:
   host: 0.0.0.0
   port: 8080
+  frontend_port: 3000  # 前端开发服务器端口
   upload_folder: ./uploads
   max_content_length: 524288000  # 500MB in bytes
   allowed_extensions:
