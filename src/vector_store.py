@@ -119,6 +119,30 @@ class VectorStore:
                 if 'minio_urls' in doc.metadata:
                     del doc.metadata['minio_urls']
                 
+                # Handle structured_content to avoid ES explosion
+                # Only keep it for the first page/chunk to prevent duplication across hundreds of chunks
+                if 'structured_content' in doc.metadata:
+                    # Check page number (1-based)
+                    page_num = doc.metadata.get('page_number', 1)
+                    # Check chunk index (0-based, if available)
+                    chunk_idx = doc.metadata.get('chunk_index', 0)
+                    
+                    # Remove structured_content from non-first pages or subsequent chunks of page 1
+                    # Logic: Keep only if (Page 1 AND Chunk 0) OR (No Page info AND Chunk 0)
+                    # If structured_content is massive, we only want it ONCE per file.
+                    should_keep = False
+                    
+                    if page_num == 1:
+                        if 'chunk_index' in doc.metadata:
+                            if chunk_idx == 0:
+                                should_keep = True
+                        else:
+                            # If no chunk index, assume it's the only chunk for page 1 (or first one we see)
+                            should_keep = True
+                    
+                    if not should_keep:
+                        del doc.metadata['structured_content']
+                
                 valid_documents.append(doc)
                 logger.debug(
                     "document_validated",
@@ -228,9 +252,11 @@ class VectorStore:
                         for i, err in enumerate(batch_error.errors[:3]):
                             if isinstance(err, dict):
                                 # Extract the actual error reason from ES response
+                                # Usually bulk errors are in format: {'index': {'_index': '...', 'status': 400, 'error': {...}}}
+                                index_error = err.get('index', {}).get('error') or err.get('create', {}).get('error') or err
                                 error_info = {
                                     'doc_index': i,
-                                    'error': err
+                                    'error_summary': str(index_error)[:1000]  # Limit error length
                                 }
                                 error_details['es_error_details'].append(error_info)
                         

@@ -36,7 +36,7 @@ router = APIRouter(prefix="", tags=["documents"])
 # ============================================================
 
 @router.get("/documents")
-async def list_documents(limit: int = 50, offset: int = 0, status: Optional[str] = None):
+async def list_documents(limit: int = 50, offset: int = 0, status: Optional[str] = None, include_archives: bool = False):
     """
     List uploaded documents
     
@@ -56,7 +56,9 @@ async def list_documents(limit: int = 50, offset: int = 0, status: Optional[str]
     - POST /documents/{doc_id}/cleanup-minio
     """
     try:
-        docs = db.list_documents(limit=limit, offset=offset, status=status)
+        # 默认不显示 ZIP 压缩包本身，除非 include_archives=True
+        exclude_types = None if include_archives else ['zip']
+        docs = db.list_documents(limit=limit, offset=offset, status=status, exclude_file_types=exclude_types)
         return JSONResponse(content={
             "documents": [doc.to_dict() for doc in docs],
             "total": len(docs)

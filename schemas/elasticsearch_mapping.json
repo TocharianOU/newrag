@@ -232,6 +232,27 @@
           },
           "minio_base_url": {
             "type": "keyword"
+          },
+          "structured_content": {
+            "type": "nested",
+            "properties": {
+              "key": {
+                "type": "keyword",
+                "ignore_above": 256
+              },
+              "value": {
+                "type": "text",
+                "fields": {
+                  "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 256
+                  }
+                }
+              },
+              "sheet_name": {
+                "type": "keyword"
+              }
+            }
           }
         }
       },

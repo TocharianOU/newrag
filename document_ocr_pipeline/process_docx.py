@@ -120,7 +120,7 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle'):
     import pdfplumber
     import cv2
     import numpy as np
-    
+
     pages_data = []
     total_paragraphs = 0
     total_tables = 0
@@ -128,7 +128,7 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle'):
     print(f"\n{'='*70}")
     print(f"📄 步骤 3: 逐页提取内容 (文本 + 表格 + OCR)")
     print(f"{'='*70}")
-    
+        
     with pdfplumber.open(temp_pdf) as pdf:
         page_count = len(pdf.pages)
         print(f"  📚 总页数: {page_count}")
@@ -145,7 +145,7 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle'):
             preview_path = output_dir / preview_image
             cv2.imwrite(str(preview_path), cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR))
             print(f"  🖼️  预览图: {preview_image}")
-            
+        
             # ---------------- 3.2 提取文本 (High Quality) ----------------
             # layout=True 尝试保持物理布局
             text_content = page.extract_text(layout=True) or ""
@@ -163,7 +163,7 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle'):
                     md = extract_table_to_markdown(tbl)
                     if md:
                         table_md_list.append(md)
-            
+    
             # ---------------- 3.4 组装页面文本 (Text + Tables) ----------------
             final_page_text = text_content
             
@@ -249,7 +249,7 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle'):
     complete_json = output_dir / "complete_adaptive_ocr.json"
     with open(complete_json, 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
-        
+    
     # 2. complete_document.json (ES 索引格式)
     pages_for_index = []
     for page in pages_data:
@@ -307,12 +307,12 @@ def main():
     if not docx_path.exists():
         print(f"Error: File not found: {docx_path}")
         return 1
-        
+    
     if args.output:
         output_dir = Path(args.output)
     else:
         output_dir = Path(f"{docx_path.stem}_docx_processed")
-        
+    
     try:
         process_docx(docx_path, output_dir, args.ocr_engine)
         return 0

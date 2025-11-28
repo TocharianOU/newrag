@@ -111,14 +111,14 @@ export default function DocumentsPage() {
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                       doc.status === 'completed' 
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800'
-                        : doc.status === 'processing'
+                        : (doc.status === 'processing' || doc.status === 'pending')
                         ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800 animate-pulse'
                         : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-800'
                     }`}>
                       {doc.status === 'completed' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>}
-                      {doc.status === 'processing' && <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />}
+                      {(doc.status === 'processing' || doc.status === 'pending') && <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />}
                       {doc.status === 'failed' && <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5"></span>}
-                      {doc.status}
+                      {doc.status === 'pending' ? 'processing' : doc.status}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">

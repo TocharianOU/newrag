@@ -196,6 +196,8 @@ web:
     - html
     - zip
     - pptx
+    - xlsx
+    - xls
   
   # CORS 配置
   cors:

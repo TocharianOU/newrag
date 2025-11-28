@@ -84,7 +84,12 @@ class DatabaseManager:
         db_file = Path(db_path)
         db_file.parent.mkdir(parents=True, exist_ok=True)
         
-        self.engine = create_engine(f'sqlite:///{db_path}')
+        # Use check_same_thread=False for SQLite and ensure proper encoding
+        self.engine = create_engine(
+            f'sqlite:///{db_path}',
+            connect_args={'check_same_thread': False},
+            echo=False
+        )
         Base.metadata.create_all(self.engine)
         self.SessionLocal = sessionmaker(bind=self.engine)
     
@@ -214,7 +219,8 @@ class DatabaseManager:
         self,
         limit: int = 50,
         offset: int = 0,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        exclude_file_types: Optional[List[str]] = None
     ) -> List[Document]:
         """List documents"""
         session = self.get_session()
@@ -222,6 +228,8 @@ class DatabaseManager:
             query = session.query(Document)
             if status:
                 query = query.filter(Document.status == status)
+            if exclude_file_types:
+                query = query.filter(Document.file_type.notin_(exclude_file_types))
             return query.order_by(Document.uploaded_at.desc()).limit(limit).offset(offset).all()
         finally:
             session.close()

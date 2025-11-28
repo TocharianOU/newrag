@@ -25,8 +25,8 @@ pipeline = ProcessingPipeline()
 web_config = config.web_config
 upload_folder = Path(web_config.get('upload_folder', './uploads'))
 
-# Concurrent processing control (limit to 3 documents processing at the same time)
-processing_semaphore = threading.Semaphore(3)
+# Concurrent processing control (limit to 5 documents processing at the same time)
+processing_semaphore = threading.Semaphore(5)
 
 # Create processed folder path globally
 processed_folder = Path('web/static/processed_docs')
@@ -384,6 +384,546 @@ def process_single_pdf(doc_id: int, pdf_path: Path, metadata: dict, ocr_engine: 
         raise
 
 
+def process_single_pptx(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str, parent_task_id: Optional[int] = None):
+    """Process a single PPTX file"""
+    try:
+        logger.info("processing_pptx_file", doc_id=doc_id, filename=file_path.name)
+        
+        task_manager.update_task(
+            doc_id,
+            status=TaskStatus.RUNNING,
+            stage=TaskStage.OCR_PROCESSING,
+            progress_percentage=10,
+            message=f"Processing PPTX: {file_path.name}...",
+            filename=file_path.name
+        )
+        db.update_document_progress(doc_id, 10, f"Starting PPTX processing for {file_path.name}...")
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Create output directory for this document
+        doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
+        doc_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Run process_pptx.py to extract text and images
+        db.update_document_progress(doc_id, 20, "Extracting PPTX content...")
+        
+        pptx_script = Path('document_ocr_pipeline/process_pptx.py')
+        result = subprocess.run([
+            sys.executable,
+            str(pptx_script),
+            str(file_path),
+            '-o', str(doc_output_dir),
+            '--ocr-engine', ocr_engine
+        ], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            logger.error("pptx_processing_failed", error=result.stderr, doc_id=doc_id)
+            raise ValueError(f"PPTX processing failed: {result.stderr}")
+        
+        logger.info("pptx_extraction_completed", doc_id=doc_id)
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Load the generated complete_adaptive_ocr.json
+        complete_json_path = doc_output_dir / "complete_adaptive_ocr.json"
+        if not complete_json_path.exists():
+            raise ValueError("PPTX processing did not generate complete_adaptive_ocr.json")
+        
+        with open(complete_json_path, 'r', encoding='utf-8') as f:
+            complete_data = json.load(f)
+        
+        # Build pages_data for database (similar to PDF processing)
+        pages_data = []
+        for page in complete_data.get('pages', []):
+            page_num = page['page_number']
+            stage1 = page.get('stage1_global', {})
+            stage3 = page.get('stage3_vlm', {})
+            
+            # Extract image filename from stage1
+            image_filename = stage1.get('image', f'page_{page_num:03d}_preview.png')
+            
+            # Build page data structure (使用 page_num 字段名与 PDF 保持一致)
+            page_data = {
+                'page_num': page_num,
+                'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{image_filename}",
+                'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/page_{page_num:03d}_visualized.png",
+                'text_count': len(stage3.get('text_combined', '').split()),
+                'components': []  # PPTX 暂无组件提取
+            }
+            pages_data.append(page_data)
+        
+        # Update database with pages_data
+        db.update_document_pages_data(doc_id, pages_data)
+        logger.info("pptx_pages_data_saved", doc_id=doc_id, total_pages=len(pages_data))
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Update progress
+        db.update_document_progress(doc_id, 60, "Indexing to vector store...")
+        task_manager.update_task(
+            doc_id,
+            stage=TaskStage.INDEXING,
+            progress_percentage=60,
+            message="Indexing to vector store..."
+        )
+        
+        # Index to vector store using pipeline (与 PDF/DOCX 保持一致的命名)
+        metadata['document_id'] = doc_id
+        metadata['filename'] = file_path.name  # 使用原始文件名
+        metadata['checksum'] = checksum
+        metadata['pages_data'] = pages_data
+        metadata['source'] = str(file_path)
+        
+        pipeline.process_file(
+            file_path=str(file_path),
+            metadata=metadata,
+            processed_json_dir=str(doc_output_dir)
+        )
+        
+        logger.info("pptx_indexed", doc_id=doc_id)
+        
+        # Mark as completed if not child task (parent handles its own completion)
+        # But we should update DB status for this specific doc ID
+        db.update_document_status(doc_id, 'completed')
+        if not parent_task_id:
+            db.update_document_progress(doc_id, 100, "Completed")
+        task_manager.complete_task(doc_id, success=True)
+        
+        logger.info("pptx_processing_completed", doc_id=doc_id, filename=file_path.name)
+
+    except InterruptedError:
+        raise
+    except Exception as e:
+        logger.error("pptx_processing_failed", error=str(e), doc_id=doc_id)
+        task_manager.complete_task(doc_id, success=False, error_message=str(e))
+        db.update_document_status(doc_id, 'failed', error_message=str(e))
+        raise
+
+
+def process_single_docx(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str, parent_task_id: Optional[int] = None):
+    """Process a single DOCX file"""
+    try:
+        logger.info("processing_docx_file", doc_id=doc_id, filename=file_path.name)
+        
+        task_manager.update_task(
+            doc_id,
+            status=TaskStatus.RUNNING,
+            stage=TaskStage.OCR_PROCESSING,
+            progress_percentage=10,
+            message=f"Processing DOCX: {file_path.name}...",
+            filename=file_path.name
+        )
+        db.update_document_progress(doc_id, 10, f"Starting DOCX processing for {file_path.name}...")
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Create output directory for this document
+        doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
+        doc_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Run process_docx.py to extract text and images
+        db.update_document_progress(doc_id, 20, "Extracting DOCX content...")
+        
+        docx_script = Path('document_ocr_pipeline/process_docx.py')
+        result = subprocess.run([
+            sys.executable,
+            str(docx_script),
+            str(file_path),
+            '-o', str(doc_output_dir),
+            '--ocr-engine', ocr_engine
+        ], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            logger.error("docx_processing_failed", error=result.stderr, doc_id=doc_id)
+            raise ValueError(f"DOCX processing failed: {result.stderr}")
+        
+        logger.info("docx_extraction_completed", doc_id=doc_id)
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Load the generated complete_document.json
+        complete_doc_path = doc_output_dir / "complete_document.json"
+        if not complete_doc_path.exists():
+            raise ValueError("DOCX processing did not generate complete_document.json")
+        
+        with open(complete_doc_path, 'r', encoding='utf-8') as f:
+            complete_data = json.load(f)
+        
+        # Build pages_data for database
+        pages_data = []
+        for page in complete_data.get('pages', []):
+            page_num = page.get('page_number', 1)
+            content = page.get('content', {})
+            text_content = content.get('full_text_cleaned', '')
+            
+            # Build page data structure
+            page_data = {
+                'page_num': page_num,
+                'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/page_{page_num:03d}_300dpi.png",
+                'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/page_{page_num:03d}_visualized.png",
+                'text_count': len(text_content.split()),
+                'components': []  # DOCX 暂无组件提取
+            }
+            pages_data.append(page_data)
+        
+        # Update database with pages_data
+        db.update_document_pages_data(doc_id, pages_data)
+        logger.info("docx_pages_data_saved", doc_id=doc_id, total_pages=len(pages_data))
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Update progress
+        db.update_document_progress(doc_id, 60, "Indexing to vector store...")
+        task_manager.update_task(
+            doc_id,
+            stage=TaskStage.INDEXING,
+            progress_percentage=60,
+            message="Indexing to vector store..."
+        )
+        
+        # Index to vector store using pipeline
+        metadata['document_id'] = doc_id
+        metadata['filename'] = file_path.name
+        metadata['checksum'] = checksum
+        metadata['pages_data'] = pages_data
+        metadata['source'] = str(file_path)
+        
+        pipeline.process_file(
+            file_path=str(file_path),
+            metadata=metadata,
+            processed_json_dir=str(doc_output_dir)
+        )
+        
+        logger.info("docx_indexed", doc_id=doc_id)
+        
+        # Mark as completed
+        db.update_document_status(doc_id, 'completed')
+        if not parent_task_id:
+            db.update_document_progress(doc_id, 100, "Completed")
+        task_manager.complete_task(doc_id, success=True)
+        
+        logger.info("docx_processing_completed", doc_id=doc_id, filename=file_path.name)
+
+    except InterruptedError:
+        raise
+    except Exception as e:
+        logger.error("docx_processing_failed", error=str(e), doc_id=doc_id)
+        task_manager.complete_task(doc_id, success=False, error_message=str(e))
+        db.update_document_status(doc_id, 'failed', error_message=str(e))
+        raise
+
+
+def process_single_excel(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str, parent_task_id: Optional[int] = None):
+    """Process a single Excel file"""
+    try:
+        logger.info("processing_excel_file", doc_id=doc_id, filename=file_path.name)
+        
+        task_manager.update_task(
+            doc_id,
+            status=TaskStatus.RUNNING,
+            stage=TaskStage.OCR_PROCESSING,
+            progress_percentage=10,
+            message=f"Processing Excel: {file_path.name}...",
+            filename=file_path.name
+        )
+        db.update_document_progress(doc_id, 10, f"Starting Excel processing for {file_path.name}...")
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Create output directory for this document
+        doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
+        doc_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Run process_excel.py
+        db.update_document_progress(doc_id, 20, "Extracting Excel content...")
+        
+        excel_script = Path('document_ocr_pipeline/process_excel.py')
+        result = subprocess.run([
+            sys.executable,
+            str(excel_script),
+            str(file_path),
+            '-o', str(doc_output_dir)
+        ], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            logger.error("excel_processing_failed", error=result.stderr, doc_id=doc_id)
+            raise ValueError(f"Excel processing failed: {result.stderr}")
+        
+        logger.info("excel_extraction_completed", doc_id=doc_id)
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Load the generated complete_document.json
+        complete_doc_path = doc_output_dir / "complete_document.json"
+        if not complete_doc_path.exists():
+            raise ValueError("Excel processing did not generate complete_document.json")
+        
+        with open(complete_doc_path, 'r', encoding='utf-8') as f:
+            complete_data = json.load(f)
+        
+        # Build pages_data for database
+        pages_data = []
+        for page in complete_data.get('pages', []):
+            page_num = page.get('page_number', 1)
+            content = page.get('content', {})
+            text_content = content.get('full_text_cleaned', '')
+            
+            # Build page data structure
+            page_data = {
+                'page_num': page_num,
+                'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/page_{page_num:03d}_300dpi.png",
+                'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/page_{page_num:03d}_visualized.png", # 如果有的话
+                'text_count': len(text_content.split()),
+                'components': []
+            }
+            pages_data.append(page_data)
+        
+        # Update database with pages_data
+        db.update_document_pages_data(doc_id, pages_data)
+        logger.info("excel_pages_data_saved", doc_id=doc_id, total_pages=len(pages_data))
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Update progress
+        db.update_document_progress(doc_id, 60, "Indexing to vector store...")
+        task_manager.update_task(
+            doc_id,
+            stage=TaskStage.INDEXING,
+            progress_percentage=60,
+            message="Indexing to vector store..."
+        )
+        
+        # Index to vector store using pipeline
+        metadata['document_id'] = doc_id
+        metadata['filename'] = file_path.name
+        metadata['checksum'] = checksum
+        metadata['pages_data'] = pages_data
+        metadata['source'] = str(file_path)
+        
+        # 重要：将 structured_content 传递给 metadata
+        # structured_content 位于 complete_document.json 的顶层
+        if 'structured_content' in complete_data:
+            logger.info("adding_structured_content_to_metadata", doc_id=doc_id, count=len(complete_data['structured_content']))
+            metadata['structured_content'] = complete_data['structured_content']
+        
+        pipeline.process_file(
+            file_path=str(file_path),
+            metadata=metadata,
+            processed_json_dir=str(doc_output_dir)
+        )
+        
+        logger.info("excel_indexed", doc_id=doc_id)
+        
+        # Mark as completed
+        db.update_document_status(doc_id, 'completed')
+        if not parent_task_id:
+            db.update_document_progress(doc_id, 100, "Completed")
+        task_manager.complete_task(doc_id, success=True)
+        
+        logger.info("excel_processing_completed", doc_id=doc_id, filename=file_path.name)
+
+    except InterruptedError:
+        raise
+    except Exception as e:
+        logger.error("excel_processing_failed", error=str(e), doc_id=doc_id)
+        task_manager.complete_task(doc_id, success=False, error_message=str(e))
+        db.update_document_status(doc_id, 'failed', error_message=str(e))
+        raise
+
+
+def process_single_image(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str, parent_task_id: Optional[int] = None):
+    """Process a single Image file"""
+    try:
+        logger.info("🖼️ processing_image_file", doc_id=doc_id, filename=file_path.name, ocr_engine=ocr_engine)
+        
+        task_manager.update_task(
+            doc_id,
+            status=TaskStatus.RUNNING,
+            stage=TaskStage.OCR_PROCESSING,
+            progress_percentage=10,
+            message=f"Processing {file_path.name}...",
+            filename=file_path.name
+        )
+        db.update_document_progress(doc_id, 10, f"Starting intelligent OCR for {file_path.name}...")
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # 创建输出目录
+        doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
+        doc_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 使用新的 process_image.py 脚本（支持 VLM 修正）
+        logger.info("🚀 running_intelligent_image_processing", doc_id=doc_id, image=file_path.name, ocr_engine=ocr_engine)
+        
+        process_script = Path('document_ocr_pipeline/process_image.py')
+        cmd = [
+            sys.executable,
+            str(process_script),
+            str(file_path),
+            '--ocr-engine', ocr_engine,
+            '--output-dir', str(doc_output_dir)
+        ]
+        logger.info("📝 process_command", doc_id=doc_id, cmd=' '.join(cmd))
+        
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        logger.info("✅ image_processing_stdout", doc_id=doc_id, stdout=result.stdout[:500] if result.stdout else "")
+        if result.stderr:
+            logger.warning("⚠️ image_processing_stderr", doc_id=doc_id, stderr=result.stderr[:500])
+        
+        logger.info("image_processing_completed", doc_id=doc_id)
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # 更新进度：读取处理结果
+        task_manager.update_task(
+            doc_id,
+            stage=TaskStage.VLM_EXTRACTION,
+            progress_percentage=60,
+            message="Building searchable content...",
+            total_pages=1,
+            processed_pages=0
+        )
+        db.update_document_progress(doc_id, 60, "Building searchable content...", processed_pages=0, total_pages=1)
+        
+        # 读取生成的 complete_adaptive_ocr.json
+        complete_json_path = doc_output_dir / "complete_adaptive_ocr.json"
+        if not complete_json_path.exists():
+            raise RuntimeError(f"Image processing output not found: {complete_json_path}")
+        
+        with open(complete_json_path, 'r', encoding='utf-8') as f:
+            complete_data = json.load(f)
+        
+        # 读取 complete_document.json (用于 ES 索引)
+        complete_doc_path = doc_output_dir / "complete_document.json"
+        if not complete_doc_path.exists():
+            raise RuntimeError(f"Image document JSON not found: {complete_doc_path}")
+        
+        with open(complete_doc_path, 'r', encoding='utf-8') as f:
+            doc_data = json.load(f)
+        
+        pages_list = doc_data.get('pages', [])
+        if not pages_list:
+            raise RuntimeError("No pages found in image processing output")
+        
+        page_data = pages_list[0]
+        
+        # 构建 pages_data（用于数据库）
+        pages_data = [{
+            'page_number': 1,
+            'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/image_preview.png",
+            'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/image_visualized.png",
+            'text': page_data.get('text', ''),
+            'text_count': page_data.get('avg_ocr_confidence', 0),  # Store confidence
+            'components': [],
+            'extraction_method': page_data.get('extraction_method', 'ocr'),
+            'ocr_engine': ocr_engine
+        }]
+        
+        logger.info("📋 pages_data_built_from_intelligent_processing",
+                   doc_id=doc_id,
+                   text_length=len(page_data.get('text', '')),
+                   avg_confidence=page_data.get('avg_ocr_confidence', 0),
+                   vlm_refined=complete_data.get('pages', [{}])[0].get('statistics', {}).get('vlm_refined', False))
+        
+        task_manager.update_task(
+            doc_id,
+            processed_pages=1
+        )
+        db.update_document_progress(doc_id, 70, "Processing completed", processed_pages=1, total_pages=1)
+        
+        # Check for cancellation before indexing
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # 更新进度：索引到 Elasticsearch
+        task_manager.update_task(
+            doc_id,
+            stage=TaskStage.INDEXING,
+            progress_percentage=80,
+            message="Indexing to Elasticsearch..."
+        )
+        db.update_document_progress(doc_id, 80, "Indexing to Elasticsearch...")
+        
+        # 添加文档标识到 metadata
+        metadata['document_id'] = doc_id
+        metadata['filename'] = file_path.name
+        metadata['checksum'] = checksum
+        
+        logger.info("🔄 starting_pipeline_indexing", doc_id=doc_id, metadata=metadata)
+        
+        # 使用 pipeline 索引（会读取 complete_document.json）
+        result = pipeline.process_file(str(file_path), metadata, processed_json_dir=str(doc_output_dir))
+        
+        logger.info("✅ pipeline_result", doc_id=doc_id, status=result.get('status'), num_chunks=result.get('num_chunks', 0), document_ids=result.get('document_ids'))
+        
+        # Check for cancellation after indexing
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # 更新进度：完成
+        task_manager.update_task(
+            doc_id,
+            stage=TaskStage.FINALIZING,
+            progress_percentage=95,
+            message="Finalizing..."
+        )
+        db.update_document_progress(doc_id, 95, "Finalizing...")
+        
+        # 更新数据库
+        if result.get('status') == 'completed':
+            if not result.get('document_ids'):
+                error_msg = 'Image processing completed but no documents were indexed'
+                logger.error("❌ no_documents_indexed", doc_id=doc_id)
+                task_manager.complete_task(doc_id, success=False, error_message=error_msg)
+                db.update_document_status(doc_id, 'failed', error_message=error_msg)
+            else:
+                logger.info("🎉 marking_as_completed", doc_id=doc_id, num_chunks=result.get('num_chunks', 0))
+                task_manager.complete_task(doc_id, success=True)
+                db.update_document_status(
+                    doc_id,
+                    'completed',
+                    num_chunks=result.get('num_chunks', 0),
+                    pages_data=json.dumps(pages_data)
+                )
+                logger.info("✅ image_processing_completed", doc_id=doc_id, num_chunks=result.get('num_chunks', 0))
+        else:
+            error_msg = result.get('error', 'Unknown error during image processing')
+            logger.error("❌ pipeline_failed", doc_id=doc_id, error=error_msg)
+            task_manager.complete_task(doc_id, success=False, error_message=error_msg)
+            db.update_document_status(doc_id, 'failed', error_message=error_msg)
+    
+    except InterruptedError:
+        raise
+    except Exception as e:
+        logger.error("image_processing_failed", error=str(e), doc_id=doc_id)
+        task_manager.complete_task(doc_id, success=False, error_message=str(e))
+        db.update_document_status(doc_id, 'failed', error_message=str(e))
+        raise
+
+
 def process_document_background(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str):
     """Background task to process document with full control"""
     # Create task in task manager
@@ -391,7 +931,7 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
     
     logger.info("🚀 process_document_background_called", doc_id=doc_id, filename=file_path.name, ocr_engine=ocr_engine, checksum=checksum[:8])
     
-    # Wait for processing slot (max 3 concurrent documents)
+    # Wait for processing slot (max 5 concurrent documents)
     with processing_semaphore:
         temp_extract_dir = None
         
@@ -416,7 +956,7 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
             file_ext = file_path.suffix.lower()
             logger.info("📄 file_type_detected", doc_id=doc_id, file_ext=file_ext, ocr_engine=ocr_engine)
             
-            # Handle ZIP files - extract and process all PDFs
+            # Handle ZIP files - extract and process all supported files
             if file_ext == '.zip':
                 import zipfile
                 
@@ -437,86 +977,135 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                 # Extract ZIP
                 try:
                     with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                        zip_ref.extractall(temp_extract_dir)
+                        # Handle encoding issues in ZIP filenames (common with macOS-created ZIPs)
+                        for zip_info in zip_ref.infolist():
+                            # Try to fix filename encoding if needed
+                            try:
+                                # First try: assume filename is correct UTF-8
+                                corrected_name = zip_info.filename
+                            except:
+                                # If fails, try to decode as CP437 (DOS) and re-encode as UTF-8
+                                try:
+                                    corrected_name = zip_info.filename.encode('cp437').decode('utf-8')
+                                except:
+                                    # Last resort: keep original
+                                    corrected_name = zip_info.filename
+                            
+                            # Extract with corrected name
+                            zip_info.filename = corrected_name
+                            zip_ref.extract(zip_info, temp_extract_dir)
                     
-                    # Find all PDF files in extracted content, ignoring hidden files and __MACOSX
-                    pdf_files = []
+                    # Find all supported files
+                    supported_extensions = ['.pdf', '.pptx', '.docx', '.doc', '.xlsx', '.xls', '.jpg', '.jpeg', '.png']
+                    found_files = []
+                    
                     for p in temp_extract_dir.rglob('*'):
-                        if p.is_file() and p.suffix.lower() == '.pdf':
+                        if p.is_file() and p.suffix.lower() in supported_extensions:
                             # Check if any part of the path is hidden or __MACOSX
                             parts = p.relative_to(temp_extract_dir).parts
                             if not any(part.startswith('.') or part == '__MACOSX' for part in parts):
-                                pdf_files.append(p)
+                                found_files.append(p)
                     
-                    if not pdf_files:
-                        raise ValueError("No PDF files found in ZIP archive")
+                    if not found_files:
+                        raise ValueError("No supported files found in ZIP archive")
                     
-                    logger.info("found_pdfs_in_zip", count=len(pdf_files), doc_id=doc_id)
+                    logger.info("found_files_in_zip", count=len(found_files), doc_id=doc_id)
                     
                     # Update parent task with total files
                     task_manager.update_task(
                         doc_id,
-                        total_files=len(pdf_files),
+                        total_files=len(found_files),
                         processed_files=0,
-                        message=f"Found {len(pdf_files)} PDF files in ZIP"
+                        message=f"Found {len(found_files)} files in ZIP. Initializing tasks..."
                     )
                     
-                    # Process each PDF as a sub-task
-                    for idx, pdf_path in enumerate(pdf_files, 1):
-                        # Check for cancellation
-                        if not task_manager.wait_if_paused(doc_id):
-                            raise InterruptedError("Task was cancelled by user")
+                    # Phase 1: Create all tasks and DB records first (Show all as Pending immediately)
+                    pending_tasks = []
+                    for idx, f_path in enumerate(found_files, 1):
+                        f_ext = f_path.suffix.lower()
                         
-                        # Create sub-task (use negative IDs to avoid conflicts)
-                        child_doc_id = -(doc_id * 1000 + idx)
                         child_checksum = f"{checksum}_{idx}"
                         
-                        # Create child task
-                        task_manager.create_task(child_doc_id)
-                        task_manager.add_child_task(doc_id, child_doc_id)
-                        
-                        # Create database record for child
+                        # Create database record for child FIRST (to get real ID)
                         child_doc = db.create_document(
-                            filename=pdf_path.name,
-                            file_path=str(pdf_path),
-                            file_type='pdf',
-                            file_size=pdf_path.stat().st_size,
+                            filename=f_path.name,
+                            file_path=str(f_path),
+                            file_type=f_ext.lstrip('.'),
+                            file_size=f_path.stat().st_size,
                             checksum=child_checksum,
                             category=metadata.get('category'),
                             tags=metadata.get('tags'),
                             author=metadata.get('author'),
-                            description=f"From ZIP: {file_path.name}",
+                            description=f"From ZIP: {file_path.name} / {f_path.name}",
                             ocr_engine=ocr_engine
                         )
                         
+                        # Use the database-generated ID as child_doc_id
+                        child_doc_id = child_doc.id
+                        
+                        # Create child task with real ID
+                        task_manager.create_task(child_doc_id)
+                        task_manager.add_child_task(doc_id, child_doc_id)
+                        
+                        # Store info for processing
+                        pending_tasks.append({
+                            'child_doc_id': child_doc_id,
+                            'file_path': f_path,
+                            'file_ext': f_ext,
+                            'checksum': child_checksum,
+                            'idx': idx
+                        })
+                        
+                        # Initialize task status as pending
+                        task_manager.update_task(
+                            child_doc_id,
+                            status=TaskStatus.PENDING,
+                            message="Waiting in queue...",
+                            progress_percentage=0,
+                            filename=f_path.name
+                        )
+
+                    # Phase 2: Process files sequentially
+                    for task_info in pending_tasks:
+                        idx = task_info['idx']
+                        f_path = task_info['file_path']
+                        f_ext = task_info['file_ext']
+                        child_doc_id = task_info['child_doc_id']
+                        child_checksum = task_info['checksum']
+                        
+                        # Check for cancellation
+                        if not task_manager.wait_if_paused(doc_id):
+                            raise InterruptedError("Task was cancelled by user")
+                        
                         # Update parent progress
-                        parent_progress = 10 + (80 * (idx - 1) / len(pdf_files))
+                        parent_progress = 10 + (80 * (idx - 1) / len(found_files))
                         task_manager.update_task(
                             doc_id,
                             progress_percentage=int(parent_progress),
-                            message=f"Processing file {idx}/{len(pdf_files)}: {pdf_path.name}",
+                            message=f"Processing file {idx}/{len(found_files)}: {f_path.name}",
                             processed_files=idx - 1
                         )
                         
-                        # Process the PDF (use child_doc_id for task_manager, child_doc.id for database)
+                        # Process the file based on type
                         try:
-                            process_single_pdf(
-                                child_doc_id,  # Use negative ID for task manager
-                                pdf_path,
-                                metadata,
-                                ocr_engine,
-                                child_checksum,
-                                parent_task_id=doc_id
-                            )
+                            if f_ext == '.pdf':
+                                process_single_pdf(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
+                            elif f_ext == '.pptx':
+                                process_single_pptx(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
+                            elif f_ext in ['.docx', '.doc']:
+                                process_single_docx(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
+                            elif f_ext in ['.xlsx', '.xls']:
+                                process_single_excel(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
+                            elif f_ext in ['.jpg', '.jpeg', '.png']:
+                                process_single_image(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
                             
-                            # Mark child as completed
-                            task_manager.complete_task(child_doc_id, success=True)
-                            db.update_document_status(child_doc.id, 'completed')  # Database uses positive ID
+                            # Child task status is already updated in the processing function
+                            # No need to update again here
                             
                         except Exception as e:
-                            logger.error("child_pdf_failed", error=str(e), child_id=child_doc_id, pdf=pdf_path.name)
+                            logger.error("child_file_failed", error=str(e), child_id=child_doc_id, file=f_path.name)
                             task_manager.complete_task(child_doc_id, success=False, error_message=str(e))
-                            db.update_document_status(child_doc.id, 'failed', error_message=str(e))
+                            db.update_document_status(child_doc_id, 'failed', error_message=str(e))
                         
                         # Update parent processed count
                         task_manager.update_task(
@@ -524,10 +1113,10 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                             processed_files=idx
                         )
                     
-                    # All PDFs processed
+                    # All files processed
                     task_manager.complete_task(doc_id, success=True)
                     db.update_document_status(doc_id, 'completed')
-                    logger.info("zip_processing_completed", doc_id=doc_id, total_files=len(pdf_files))
+                    logger.info("zip_processing_completed", doc_id=doc_id, total_files=len(found_files))
                     return
                     
                 except zipfile.BadZipFile:
@@ -538,391 +1127,23 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                 process_single_pdf(doc_id, file_path, metadata, ocr_engine, checksum)
             
             elif file_ext == '.pptx':
-                # Handle PPTX files - use process_pptx.py
-                logger.info("processing_pptx_file", doc_id=doc_id, filename=file_path.name)
-                
-                task_manager.update_task(
-                    doc_id,
-                    status=TaskStatus.RUNNING,
-                    stage=TaskStage.OCR_PROCESSING,
-                    progress_percentage=10,
-                    message=f"Processing PPTX: {file_path.name}...",
-                    filename=file_path.name
-                )
-                db.update_document_progress(doc_id, 10, f"Starting PPTX processing for {file_path.name}...")
-                
-                # Check for cancellation
-                if not task_manager.wait_if_paused(doc_id):
-                    raise InterruptedError("Task was cancelled by user")
-                
-                # Create output directory for this document
-                doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
-                doc_output_dir.mkdir(parents=True, exist_ok=True)
-                
-                # Run process_pptx.py to extract text and images
-                db.update_document_progress(doc_id, 20, "Extracting PPTX content...")
-                
-                pptx_script = Path('document_ocr_pipeline/process_pptx.py')
-                result = subprocess.run([
-                    sys.executable,
-                    str(pptx_script),
-                    str(file_path),
-                    '-o', str(doc_output_dir),
-                    '--ocr-engine', ocr_engine
-                ], capture_output=True, text=True)
-                
-                if result.returncode != 0:
-                    logger.error("pptx_processing_failed", error=result.stderr, doc_id=doc_id)
-                    raise ValueError(f"PPTX processing failed: {result.stderr}")
-                
-                logger.info("pptx_extraction_completed", doc_id=doc_id)
-                
-                # Check for cancellation
-                if not task_manager.wait_if_paused(doc_id):
-                    raise InterruptedError("Task was cancelled by user")
-                
-                # Load the generated complete_adaptive_ocr.json
-                complete_json_path = doc_output_dir / "complete_adaptive_ocr.json"
-                if not complete_json_path.exists():
-                    raise ValueError("PPTX processing did not generate complete_adaptive_ocr.json")
-                
-                with open(complete_json_path, 'r', encoding='utf-8') as f:
-                    complete_data = json.load(f)
-                
-                # Build pages_data for database (similar to PDF processing)
-                pages_data = []
-                for page in complete_data.get('pages', []):
-                    page_num = page['page_number']
-                    stage1 = page.get('stage1_global', {})
-                    stage2 = page.get('stage2_ocr', {})
-                    stage3 = page.get('stage3_vlm', {})
-                    
-                    # Extract image filename from stage1
-                    image_filename = stage1.get('image', f'page_{page_num:03d}_preview.png')
-                    
-                    # Build page data structure (使用 page_num 字段名与 PDF 保持一致)
-                    page_data = {
-                        'page_num': page_num,
-                        'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/{image_filename}",
-                        'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/page_{page_num:03d}_visualized.png",
-                        'text_count': len(stage3.get('text_combined', '').split()),
-                        'components': []  # PPTX 暂无组件提取
-                    }
-                    pages_data.append(page_data)
-                
-                # Update database with pages_data
-                db.update_document_pages_data(doc_id, pages_data)
-                logger.info("pptx_pages_data_saved", doc_id=doc_id, total_pages=len(pages_data))
-                
-                # Check for cancellation
-                if not task_manager.wait_if_paused(doc_id):
-                    raise InterruptedError("Task was cancelled by user")
-                
-                # Update progress
-                db.update_document_progress(doc_id, 60, "Indexing to vector store...")
-                task_manager.update_task(
-                    doc_id,
-                    stage=TaskStage.INDEXING,
-                    progress_percentage=60,
-                    message="Indexing to vector store..."
-                )
-                
-                # Index to vector store using pipeline (与 PDF/DOCX 保持一致的命名)
-                metadata['document_id'] = doc_id
-                metadata['filename'] = file_path.name  # 使用原始文件名
-                metadata['checksum'] = checksum
-                metadata['pages_data'] = pages_data
-                metadata['source'] = str(file_path)
-                
-                pipeline.process_file(
-                    file_path=str(file_path),
-                    metadata=metadata,
-                    processed_json_dir=str(doc_output_dir)
-                )
-                
-                logger.info("pptx_indexed", doc_id=doc_id)
-                
-                # Mark as completed
-                db.update_document_status(doc_id, 'completed')
-                db.update_document_progress(doc_id, 100, "Completed")
-                task_manager.complete_task(doc_id, success=True)
-                
-                logger.info("pptx_processing_completed", doc_id=doc_id, filename=file_path.name)
+                # Handle PPTX files
+                process_single_pptx(doc_id, file_path, metadata, ocr_engine, checksum)
             
             elif file_ext in ['.docx', '.doc']:
-                # Handle DOCX files - use process_docx.py
-                logger.info("processing_docx_file", doc_id=doc_id, filename=file_path.name)
-                
-                task_manager.update_task(
-                    doc_id,
-                    status=TaskStatus.RUNNING,
-                    stage=TaskStage.OCR_PROCESSING,
-                    progress_percentage=10,
-                    message=f"Processing DOCX: {file_path.name}...",
-                    filename=file_path.name
-                )
-                db.update_document_progress(doc_id, 10, f"Starting DOCX processing for {file_path.name}...")
-                
-                # Check for cancellation
-                if not task_manager.wait_if_paused(doc_id):
-                    raise InterruptedError("Task was cancelled by user")
-                
-                # Create output directory for this document
-                doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
-                doc_output_dir.mkdir(parents=True, exist_ok=True)
-                
-                # Run process_docx.py to extract text and images
-                db.update_document_progress(doc_id, 20, "Extracting DOCX content...")
-                
-                docx_script = Path('document_ocr_pipeline/process_docx.py')
-                result = subprocess.run([
-                    sys.executable,
-                    str(docx_script),
-                    str(file_path),
-                    '-o', str(doc_output_dir),
-                    '--ocr-engine', ocr_engine
-                ], capture_output=True, text=True)
-                
-                if result.returncode != 0:
-                    logger.error("docx_processing_failed", error=result.stderr, doc_id=doc_id)
-                    raise ValueError(f"DOCX processing failed: {result.stderr}")
-                
-                logger.info("docx_extraction_completed", doc_id=doc_id)
-                
-                # Check for cancellation
-                if not task_manager.wait_if_paused(doc_id):
-                    raise InterruptedError("Task was cancelled by user")
-                
-                # Load the generated complete_document.json
-                complete_doc_path = doc_output_dir / "complete_document.json"
-                if not complete_doc_path.exists():
-                    raise ValueError("DOCX processing did not generate complete_document.json")
-                
-                with open(complete_doc_path, 'r', encoding='utf-8') as f:
-                    complete_data = json.load(f)
-                
-                # Build pages_data for database
-                pages_data = []
-                for page in complete_data.get('pages', []):
-                    page_num = page.get('page_number', 1)
-                    content = page.get('content', {})
-                    text_content = content.get('full_text_cleaned', '')
-                    
-                    # Build page data structure
-                    page_data = {
-                        'page_num': page_num,
-                        'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/page_{page_num:03d}_preview.png",
-                        'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/page_{page_num:03d}_visualized.png",
-                        'text_count': len(text_content.split()),
-                        'components': []  # DOCX 暂无组件提取
-                    }
-                    pages_data.append(page_data)
-                
-                # Update database with pages_data
-                db.update_document_pages_data(doc_id, pages_data)
-                logger.info("docx_pages_data_saved", doc_id=doc_id, total_pages=len(pages_data))
-                
-                # Check for cancellation
-                if not task_manager.wait_if_paused(doc_id):
-                    raise InterruptedError("Task was cancelled by user")
-                
-                # Update progress
-                db.update_document_progress(doc_id, 60, "Indexing to vector store...")
-                task_manager.update_task(
-                    doc_id,
-                    stage=TaskStage.INDEXING,
-                    progress_percentage=60,
-                    message="Indexing to vector store..."
-                )
-                
-                # Index to vector store using pipeline
-                metadata['document_id'] = doc_id
-                metadata['filename'] = file_path.name
-                metadata['checksum'] = checksum
-                metadata['pages_data'] = pages_data
-                metadata['source'] = str(file_path)
-                
-                pipeline.process_file(
-                    file_path=str(file_path),
-                    metadata=metadata,
-                    processed_json_dir=str(doc_output_dir)
-                )
-                
-                logger.info("docx_indexed", doc_id=doc_id)
-                
-                # Mark as completed
-                db.update_document_status(doc_id, 'completed')
-                db.update_document_progress(doc_id, 100, "Completed")
-                task_manager.complete_task(doc_id, success=True)
-                
-                logger.info("docx_processing_completed", doc_id=doc_id, filename=file_path.name)
+                # Handle DOCX files
+                process_single_docx(doc_id, file_path, metadata, ocr_engine, checksum)
+            
+            elif file_ext in ['.xlsx', '.xls']:
+                # Handle Excel files
+                process_single_excel(doc_id, file_path, metadata, ocr_engine, checksum)
             
             elif file_ext in ['.jpg', '.jpeg', '.png']:
-                # Handle image files - use new intelligent OCR pipeline with VLM
-                logger.info("🖼️ processing_image_file", doc_id=doc_id, filename=file_path.name, ocr_engine=ocr_engine)
-                
-                task_manager.update_task(
-                    doc_id,
-                    status=TaskStatus.RUNNING,
-                    stage=TaskStage.OCR_PROCESSING,
-                    progress_percentage=10,
-                    message=f"Processing {file_path.name}...",
-                    filename=file_path.name
-                )
-                db.update_document_progress(doc_id, 10, f"Starting intelligent OCR for {file_path.name}...")
-                
-                # Check for cancellation
-                if not task_manager.wait_if_paused(doc_id):
-                    raise InterruptedError("Task was cancelled by user")
-                
-                # 创建输出目录
-                doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
-                doc_output_dir.mkdir(parents=True, exist_ok=True)
-                
-                # 使用新的 process_image.py 脚本（支持 VLM 修正）
-                logger.info("🚀 running_intelligent_image_processing", doc_id=doc_id, image=file_path.name, ocr_engine=ocr_engine)
-                
-                process_script = Path('document_ocr_pipeline/process_image.py')
-                cmd = [
-                    sys.executable,
-                    str(process_script),
-                    str(file_path),
-                    '--ocr-engine', ocr_engine,
-                    '--output-dir', str(doc_output_dir)
-                ]
-                logger.info("📝 process_command", doc_id=doc_id, cmd=' '.join(cmd))
-                
-                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-                logger.info("✅ image_processing_stdout", doc_id=doc_id, stdout=result.stdout[:500] if result.stdout else "")
-                if result.stderr:
-                    logger.warning("⚠️ image_processing_stderr", doc_id=doc_id, stderr=result.stderr[:500])
-                
-                logger.info("image_processing_completed", doc_id=doc_id)
-                
-                # Check for cancellation
-                if not task_manager.wait_if_paused(doc_id):
-                    raise InterruptedError("Task was cancelled by user")
-                
-                # 更新进度：读取处理结果
-                task_manager.update_task(
-                    doc_id,
-                    stage=TaskStage.VLM_EXTRACTION,
-                    progress_percentage=60,
-                    message="Building searchable content...",
-                    total_pages=1,
-                    processed_pages=0
-                )
-                db.update_document_progress(doc_id, 60, "Building searchable content...", processed_pages=0, total_pages=1)
-                
-                # 读取生成的 complete_adaptive_ocr.json
-                complete_json_path = doc_output_dir / "complete_adaptive_ocr.json"
-                if not complete_json_path.exists():
-                    raise RuntimeError(f"Image processing output not found: {complete_json_path}")
-                
-                with open(complete_json_path, 'r', encoding='utf-8') as f:
-                    complete_data = json.load(f)
-                
-                # 读取 complete_document.json (用于 ES 索引)
-                complete_doc_path = doc_output_dir / "complete_document.json"
-                if not complete_doc_path.exists():
-                    raise RuntimeError(f"Image document JSON not found: {complete_doc_path}")
-                
-                with open(complete_doc_path, 'r', encoding='utf-8') as f:
-                    doc_data = json.load(f)
-                
-                pages_list = doc_data.get('pages', [])
-                if not pages_list:
-                    raise RuntimeError("No pages found in image processing output")
-                
-                page_data = pages_list[0]
-                
-                # 构建 pages_data（用于数据库）
-                pages_data = [{
-                    'page_number': 1,
-                    'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/image_preview.png",
-                    'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/image_visualized.png",
-                    'text': page_data.get('text', ''),
-                    'text_count': page_data.get('avg_ocr_confidence', 0),  # Store confidence
-                    'components': [],
-                    'extraction_method': page_data.get('extraction_method', 'ocr'),
-                    'ocr_engine': ocr_engine
-                }]
-                
-                logger.info("📋 pages_data_built_from_intelligent_processing",
-                           doc_id=doc_id,
-                           text_length=len(page_data.get('text', '')),
-                           avg_confidence=page_data.get('avg_ocr_confidence', 0),
-                           vlm_refined=complete_data.get('pages', [{}])[0].get('statistics', {}).get('vlm_refined', False))
-                
-                task_manager.update_task(
-                    doc_id,
-                    processed_pages=1
-                )
-                db.update_document_progress(doc_id, 70, "Processing completed", processed_pages=1, total_pages=1)
-                
-                # Check for cancellation before indexing
-                if not task_manager.wait_if_paused(doc_id):
-                    raise InterruptedError("Task was cancelled by user")
-                
-                # 更新进度：索引到 Elasticsearch
-                task_manager.update_task(
-                    doc_id,
-                    stage=TaskStage.INDEXING,
-                    progress_percentage=80,
-                    message="Indexing to Elasticsearch..."
-                )
-                db.update_document_progress(doc_id, 80, "Indexing to Elasticsearch...")
-                
-                # 添加文档标识到 metadata
-                metadata['document_id'] = doc_id
-                metadata['filename'] = file_path.name
-                metadata['checksum'] = checksum
-                
-                logger.info("🔄 starting_pipeline_indexing", doc_id=doc_id, metadata=metadata)
-                
-                # 使用 pipeline 索引（会读取 complete_document.json）
-                result = pipeline.process_file(str(file_path), metadata, processed_json_dir=str(doc_output_dir))
-                
-                logger.info("✅ pipeline_result", doc_id=doc_id, status=result.get('status'), num_chunks=result.get('num_chunks', 0), document_ids=result.get('document_ids'))
-                
-                # Check for cancellation after indexing
-                if not task_manager.wait_if_paused(doc_id):
-                    raise InterruptedError("Task was cancelled by user")
-                
-                # 更新进度：完成
-                task_manager.update_task(
-                    doc_id,
-                    stage=TaskStage.FINALIZING,
-                    progress_percentage=95,
-                    message="Finalizing..."
-                )
-                db.update_document_progress(doc_id, 95, "Finalizing...")
-                
-                # 更新数据库
-                if result.get('status') == 'completed':
-                    if not result.get('document_ids'):
-                        error_msg = 'Image processing completed but no documents were indexed'
-                        logger.error("❌ no_documents_indexed", doc_id=doc_id)
-                        task_manager.complete_task(doc_id, success=False, error_message=error_msg)
-                        db.update_document_status(doc_id, 'failed', error_message=error_msg)
-                    else:
-                        logger.info("🎉 marking_as_completed", doc_id=doc_id, num_chunks=result.get('num_chunks', 0))
-                        task_manager.complete_task(doc_id, success=True)
-                        db.update_document_status(
-                            doc_id,
-                            'completed',
-                            num_chunks=result.get('num_chunks', 0),
-                            pages_data=json.dumps(pages_data)
-                        )
-                        logger.info("✅ image_processing_completed", doc_id=doc_id, num_chunks=result.get('num_chunks', 0))
-                else:
-                    error_msg = result.get('error', 'Unknown error during image processing')
-                    logger.error("❌ pipeline_failed", doc_id=doc_id, error=error_msg)
-                    task_manager.complete_task(doc_id, success=False, error_message=error_msg)
-                    db.update_document_status(doc_id, 'failed', error_message=error_msg)
+                # Handle image files
+                process_single_image(doc_id, file_path, metadata, ocr_engine, checksum)
             
             else:
-                raise ValueError(f"Unsupported file type: {file_ext}. Supported: PDF, ZIP, JPG, JPEG, PNG, PPTX, DOCX")
+                raise ValueError(f"Unsupported file type: {file_ext}. Supported: PDF, ZIP, JPG, JPEG, PNG, PPTX, DOCX, XLSX, XLS")
         
         except InterruptedError as e:
             # Task was cancelled by user
