@@ -271,6 +271,13 @@ class DocumentProcessor:
                 
                 return documents
             elif file_ext in ['.docx', '.doc']:
+                # Check if we have pre-processed JSON (like PPTX/PDF)
+                if processed_json_dir:
+                    complete_json = Path(processed_json_dir) / "complete_document.json"
+                    if complete_json.exists():
+                        logger.info("loading_docx_from_preprocessed_json", json_path=str(complete_json))
+                        return self._load_from_complete_json(complete_json)
+
                 # Try to split Word by pages using page breaks
                 try:
                     return self._split_word_by_pages(file_path)
@@ -295,11 +302,17 @@ class DocumentProcessor:
             elif file_ext == '.pptx':
                 # Check if we have pre-processed JSON from PPTX pipeline (same structure as PDF)
                 if processed_json_dir:
-                    complete_json = Path(processed_json_dir) / "complete_adaptive_ocr.json"
+                    complete_json = Path(processed_json_dir) / "complete_document.json"
                     if complete_json.exists():
                         logger.info("loading_pptx_from_preprocessed_json", json_path=str(complete_json))
+                        return self._load_from_complete_json(complete_json)
+                    
+                    # Fallback to complete_adaptive_ocr.json (old format)
+                    complete_json_old = Path(processed_json_dir) / "complete_adaptive_ocr.json"
+                    if complete_json_old.exists():
+                        logger.info("loading_pptx_from_preprocessed_json_old_format", json_path=str(complete_json_old))
                         # Load PPTX data from complete_adaptive_ocr.json
-                        with open(complete_json, 'r', encoding='utf-8') as f:
+                        with open(complete_json_old, 'r', encoding='utf-8') as f:
                             pptx_data = json.load(f)
                         
                         documents = []
@@ -318,7 +331,8 @@ class DocumentProcessor:
                                     'extraction_method': 'pptx_ocr_pipeline',
                                     'ocr_engine': pptx_data.get('ocr_engine', 'unknown'),
                                     'has_title': page.get('statistics', {}).get('has_title', False),
-                                    'total_images': page.get('statistics', {}).get('total_images', 0)
+                                    'total_images': page.get('statistics', {}).get('total_images', 0),
+                                    'avg_ocr_confidence': page.get('statistics', {}).get('avg_ocr_confidence', 0.0)
                                 }
                             )
                             documents.append(doc)
@@ -385,12 +399,15 @@ class DocumentProcessor:
                                 metadata={
                                     'source': str(file_path),
                                     'file_type': 'image',
-                                    'extraction_method': 'ocr',
-                                    'ocr_engine': page_data.get('ocr_engine', 'unknown')
+                                    'extraction_method': page_data.get('extraction_method', 'ocr'),
+                                    'ocr_engine': page_data.get('ocr_engine', 'unknown'),
+                                    'avg_ocr_confidence': page_data.get('avg_ocr_confidence', 0.0)
                                 }
                             )
                             
-                            logger.info("image_loaded_from_ocr", text_length=len(text_content))
+                            logger.info("image_loaded_from_ocr", 
+                                       text_length=len(text_content),
+                                       avg_confidence=page_data.get('avg_ocr_confidence', 0))
                             return [doc]
                 
                 # Fallback: Use vision model for images (if no pre-processed JSON)
@@ -441,7 +458,15 @@ class DocumentProcessor:
             logger.info("📖 Reading pre-processed JSON (skipping VLM)", json_path=str(json_path))
             
             with open(json_path, 'r', encoding='utf-8') as f:
-                pages_data = json.load(f)
+                data = json.load(f)
+            
+            # Support both formats: {pages: [...]} or [...]
+            if isinstance(data, dict) and 'pages' in data:
+                pages_data = data['pages']
+            elif isinstance(data, list):
+                pages_data = data
+            else:
+                raise ValueError(f"Invalid JSON format in {json_path}: expected {{pages: [...]}} or [...]")
             
             logger.info("✅ Successfully loaded complete_document.json", num_pages=len(pages_data))
             
@@ -716,17 +741,22 @@ class DocumentProcessor:
             metadata = page_json.get('metadata', {})
             
             # Basic info from metadata
-            flattened['drawing_number'] = metadata.get('document_id', '')
-            flattened['project_name'] = metadata.get('title', '')
+            if isinstance(metadata, dict):
+                flattened['drawing_number'] = metadata.get('document_id', '')
+                flattened['project_name'] = metadata.get('title', '')
+            else:
+                flattened['drawing_number'] = ''
+                flattened['project_name'] = ''
             
-            # Extract from key_fields
-            key_fields = content.get('key_fields', [])
-            for field in key_fields:
-                field_name = field.get('field', '')
-                field_value = field.get('value', '')
-                if 'number' in field_name.lower() or 'id' in field_name.lower():
-                    if not flattened['drawing_number']:
-                        flattened['drawing_number'] = field_value
+            # Extract from key_fields (only if content is dict)
+            if isinstance(content, dict):
+                key_fields = content.get('key_fields', [])
+                for field in key_fields:
+                    field_name = field.get('field', '')
+                    field_value = field.get('value', '')
+                    if 'number' in field_name.lower() or 'id' in field_name.lower():
+                        if not flattened['drawing_number']:
+                            flattened['drawing_number'] = field_value
             
             # Equipment and components (empty for non-industrial docs)
             flattened['equipment_tags'] = []
@@ -734,17 +764,22 @@ class DocumentProcessor:
             flattened['all_components'] = ''
             flattened['component_details'] = []
             
-            # Table cells from tables
+            # Table cells from tables (only if content is dict)
             table_cells = []
-            for table in content.get('tables', []):
-                if isinstance(table, dict):
-                    # Add description if available
-                    if 'description' in table:
-                        table_cells.append(table['description'])
+            if isinstance(content, dict):
+                for table in content.get('tables', []):
+                    if isinstance(table, dict):
+                        # Add description if available
+                        if 'description' in table:
+                            table_cells.append(table['description'])
             flattened['table_cells'] = table_cells
             
             # All text tokens
-            full_text = content.get('full_text_cleaned', '') or content.get('full_text_raw', '')
+            if isinstance(content, dict):
+                full_text = content.get('full_text_cleaned', '') or content.get('full_text_raw', '')
+            else:
+                # content is already a string (from process_pdf_vlm.py)
+                full_text = str(content) if content else ''
             flattened['all_text_tokens'] = full_text
         
         else:
@@ -825,18 +860,23 @@ class DocumentProcessor:
         if 'content' in page_json:
             content = page_json['content']
             
-            # Use full_text_cleaned as primary content
-            if 'full_text_cleaned' in content and content['full_text_cleaned']:
-                parts.append(content['full_text_cleaned'])
-            elif 'full_text_raw' in content and content['full_text_raw']:
-                parts.append(content['full_text_raw'])
-            
-            # Add key fields
-            for field in content.get('key_fields', []):
-                field_name = field.get('field', '')
-                field_value = field.get('value', '')
-                if field_name and field_value:
-                    parts.append(f"{field_name}: {field_value}")
+            if isinstance(content, dict):
+                # Use full_text_cleaned as primary content
+                if 'full_text_cleaned' in content and content['full_text_cleaned']:
+                    parts.append(content['full_text_cleaned'])
+                elif 'full_text_raw' in content and content['full_text_raw']:
+                    parts.append(content['full_text_raw'])
+                
+                # Add key fields
+                for field in content.get('key_fields', []):
+                    field_name = field.get('field', '')
+                    field_value = field.get('value', '')
+                    if field_name and field_value:
+                        parts.append(f"{field_name}: {field_value}")
+            else:
+                # content is a string
+                if content:
+                    parts.append(str(content))
             
             # Add page description
             if 'page_analysis' in page_json:

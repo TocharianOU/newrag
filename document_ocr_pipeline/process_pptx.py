@@ -13,12 +13,192 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 import io
 from PIL import Image
 import subprocess
+import re
 
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from document_ocr_pipeline.extract_document import DocumentExtractor
 from document_ocr_pipeline.visualize_extraction import visualize_extraction
+
+# 尝试导入 VLM (可选依赖)
+try:
+    from src.models import VisionModel
+    HAS_VLM = True
+except ImportError:
+    HAS_VLM = False
+    print("⚠️  VLM 模块未安装，将跳过智能文本修正功能")
+
+
+def detect_problem_content(text_blocks):
+    """
+    检测是否需要 VLM 修正
+    
+    返回: (需要修正, 原因, 统计信息)
+    """
+    if not text_blocks:
+        return False, "无文本块", {}
+    
+    # 统计信息
+    confidences = [block.get('confidence', 0) for block in text_blocks]
+    avg_confidence = sum(confidences) / len(confidences) if confidences else 1.0
+    low_conf_count = len([c for c in confidences if c < 0.7])
+    low_conf_ratio = low_conf_count / len(confidences) if confidences else 0
+    
+    all_text = ' '.join([block.get('text', '') for block in text_blocks])
+    
+    # 检测特殊字符/乱码
+    garbled_chars = len(re.findall(r'[□■�？?旬]', all_text))
+    garbled_ratio = garbled_chars / max(len(all_text), 1)
+    
+    # 检测文件列表特征
+    has_file_extensions = bool(re.search(r'\.(dmg|pkg|tar|gz|zip|app|png|jpg)', all_text, re.IGNORECASE))
+    has_tree_symbols = any(char in all_text for char in ['三', '├', '└', '│', '─'])
+    has_slash = '/' in all_text
+    
+    is_file_list = has_file_extensions and (has_tree_symbols or has_slash)
+    
+    # 检测短行多行特征（文件列表典型特征）
+    lines = all_text.split('\n')
+    short_lines = [line for line in lines if 0 < len(line.strip()) < 50]
+    is_multi_short_lines = len(short_lines) > 5
+    
+    # 检测思维导图/关系图（树形符号密度）
+    tree_symbols = sum(all_text.count(s) for s in ['├', '└', '│', '──', '─'])
+    arrow_symbols = sum(all_text.count(s) for s in ['→', '←', '↓', '↑', '⇒', '⇐', '▶', '◀'])
+    is_mindmap = (tree_symbols > 5 or arrow_symbols > 3) and len(text_blocks) > 8
+    
+    stats = {
+        'avg_confidence': avg_confidence,
+        'low_conf_ratio': low_conf_ratio,
+        'garbled_ratio': garbled_ratio,
+        'is_file_list': is_file_list,
+        'is_multi_short_lines': is_multi_short_lines,
+        'is_mindmap': is_mindmap,
+        'tree_symbols_count': tree_symbols,
+        'arrow_symbols_count': arrow_symbols
+    }
+    
+    # 触发条件（满足任一）
+    # 注释严格条件，采用更宽松的策略让 VLM 有机会介入修正
+    # if avg_confidence < 0.5:  # 平均置信度阈值
+    #     return True, f"平均置信度过低 ({avg_confidence:.2f})", stats
+    # elif garbled_ratio > 0.03:  # 乱码字符阈值
+    #     return True, f"检测到乱码字符 ({garbled_ratio:.1%})", stats
+    
+    # 宽松介入策略（60-80% 覆盖率）
+    if avg_confidence < 0.8:  # 80% 以下就修正
+        return True, f"识别质量可提升 (置信度 {avg_confidence:.2f})", stats
+    elif garbled_ratio > 0.005:  # 0.5% 乱码即触发
+        return True, f"检测到乱码 ({garbled_ratio:.1%})", stats
+    elif stats.get('is_mindmap', False):  # 思维导图
+        return True, "检测到思维导图/关系图", stats
+    elif is_file_list or is_multi_short_lines:  # 特殊格式
+        return True, "检测到列表结构", stats
+    
+    return False, "质量良好", stats
+
+
+def refine_text_with_vlm(image_path, ocr_text, vlm_model, context_hint="", confidence_info=None):
+    """
+    使用 VLM 修正 OCR 文本
+    
+    Args:
+        image_path: 图片路径
+        ocr_text: OCR 原始文本
+        vlm_model: VisionModel 实例
+        context_hint: 上下文提示（如"文件列表"）
+        confidence_info: 置信度信息 dict (avg_confidence, garbled_ratio)
+    
+    Returns:
+        修正后的文本
+    """
+    if not HAS_VLM or not vlm_model:
+        return ocr_text
+    
+    try:
+        # 构建质量提示信息
+        quality_note = ""
+        correction_level = ""
+        content_type_hint = ""
+        if confidence_info:
+            avg_conf = confidence_info.get('avg_confidence', 0)
+            garbled = confidence_info.get('garbled_ratio', 0)
+            is_mindmap = confidence_info.get('is_mindmap', False)
+            is_file_list = confidence_info.get('is_file_list', False)
+            
+            if avg_conf < 0.5:
+                quality_note = f"\n注意：OCR 识别质量较低（平均置信度 {avg_conf:.1%}），可能存在较多错误。"
+                correction_level = "【激进修正模式】识别质量很低，需要大幅修正错别字和结构格式"
+            elif avg_conf < 0.7:
+                correction_level = "【中等修正模式】适度修正明显的错别字，保留大部分原文和结构格式"
+            else:
+                correction_level = "【保守修正模式】仅修正明显错误，保留格式和边距，保留原有结构格式"
+            
+            if garbled > 0.03:
+                quality_note += f"\n注意：检测到 {garbled:.1%} 的乱码字符，请参考图片修正。"
+            
+            # 内容类型提示
+            if is_mindmap:
+                content_type_hint = "\n⚠️ **这是思维导图/关系图**，必须保留所有层级关系、分支结构、箭头方向！"
+            elif is_file_list:
+                content_type_hint = "\n⚠️ **这是文件列表/目录**，必须保留层级缩进和符号！"
+        
+        prompt = f"""请根据图片和 OCR 识别结果，修正以下文本中的错误：
+
+OCR 原始结果：
+{ocr_text}
+
+识别质量信息：
+{quality_note}
+{correction_level}
+{content_type_hint}
+
+修正要求：
+1. **错别字修正**（必须参考图片）：
+   - 容器监控/应用监控/数据库监控 等IT术语
+   - 常见错误：客器→容器、申间→空间、V志→日志、禺→域
+   - 专有名词：CyberArk、Kong、API Gateway、CMDB
+
+2. **格式保留**（禁止修改）：
+   - 树形符号：├ │ └ ── 
+   - 箭头符号：→ ← ↓ ↑ ⇒ ▶
+   - 缩进层级：必须与原文一致
+   - 换行位置：保持原有布局
+
+3. **结构修复**（思维导图/关系图重点）：
+   - **补充丢失的层级符号**（/, -, |, ├, └）
+   - **恢复父子关系**（如 A → B → C 的流向）
+   - **保持分支结构**（多个子节点必须全部展示）
+   - 合并被错误分割的词语
+
+4. **禁止行为**：
+   - 不要添加原图中没有的内容
+   - 不要改变节点之间的连接关系
+   - 不要合并应该分开的分支
+   - 不要删除看似重复但实际存在的内容
+
+{f'提示：这是一个{context_hint}' if context_hint else ''}
+
+请直接返回修正后的文本内容，不要有其他解释。"""
+
+        result = vlm_model.extract_text_from_image(
+            image_path=str(image_path),
+            prompt=prompt
+        )
+        
+        refined_text = result.get('text', ocr_text).strip()
+        
+        # 简单验证：如果修正后文本太短或太长（与原文相差10倍），可能有问题
+        if len(refined_text) < len(ocr_text) * 0.3 or len(refined_text) > len(ocr_text) * 5:
+            print(f"      ⚠️  VLM 修正结果异常，保持原文本")
+            return ocr_text
+        
+        return refined_text
+        
+    except Exception as e:
+        print(f"      ⚠️  VLM 修正失败: {e}")
+        return ocr_text
 
 
 def extract_slide_content(slide, slide_num, output_dir, ocr_engine='paddle'):
@@ -75,8 +255,159 @@ def extract_slide_content(slide, slide_num, output_dir, ocr_engine='paddle'):
     print(f"    ✓ 文本段落: {len(extracted_text['body'])} 个")
     print(f"    ✓ 表格: {len(extracted_text['tables'])} 个")
     
-    # ==================== 阶段 2: 处理图片（OCR） ====================
-    print(f"  🖼️  阶段2: 处理图片内容...")
+    # ==================== 阶段 1.5: 全页 OCR (用于获取坐标) ====================
+    print(f"  👁️  阶段1.5: 全页 OCR (获取布局坐标)...")
+    
+    preview_image = f"page_{slide_num:03d}_preview.png"
+    preview_path = output_dir / preview_image
+    global_ocr_path = output_dir / f"page_{slide_num:03d}_global_ocr.json"
+    visualized_image = f"page_{slide_num:03d}_visualized.png"
+    visualized_path = output_dir / visualized_image
+    
+    if preview_path.exists():
+        try:
+            # 对全页预览图运行 OCR (300 DPI)
+            extractor = DocumentExtractor(ocr_engine=ocr_engine)
+            global_ocr_result = extractor.extract_from_image(str(preview_path))
+            
+            with open(global_ocr_path, 'w', encoding='utf-8') as f:
+                json.dump(global_ocr_result, f, ensure_ascii=False, indent=2)
+            
+            # 生成可视化图
+            visualize_extraction(str(preview_path), str(global_ocr_path), str(visualized_path))
+            
+            print(f"    ✓ 全页 OCR 完成: {len(global_ocr_result.get('text_blocks', []))} 个文本块")
+            print(f"    ✓ 坐标数据已保存: {global_ocr_path.name}")
+            
+            # ==================== 阶段 1.6: 大字检测与 150 DPI 补充识别 ====================
+            text_blocks = global_ocr_result.get('text_blocks', [])
+            if text_blocks:
+                # 获取图片尺寸
+                with Image.open(preview_path) as img:
+                    img_width, img_height = img.size
+                    img_area = img_width * img_height
+                
+                # 计算整体置信度统计
+                confidences = [block.get('confidence', 0) for block in text_blocks]
+                avg_confidence = sum(confidences) / len(confidences) if confidences else 1.0
+                low_conf_ratio = len([c for c in confidences if c < 0.7]) / len(confidences) if confidences else 0
+                
+                # 检测是否存在"疑似大字区域"
+                large_blocks = []
+                for block in text_blocks:
+                    bbox = block.get('bbox', [0, 0, 0, 0])
+                    if len(bbox) == 4:
+                        x1, y1, x2, y2 = bbox
+                        block_width = x2 - x1
+                        block_height = y2 - y1
+                        block_area = block_width * block_height
+                        
+                        # 判断条件：单个文字块面积 > 图片面积的 10%，或尺寸 > 300x300 px
+                        if block_area > img_area * 0.1 or (block_width > 300 and block_height > 300):
+                            large_blocks.append(block)
+                
+                # 触发 150 DPI 缩小识别的条件（二选一）：
+                # 1. 检测到大字块
+                # 2. 整体置信度低（平均 < 0.65 或 超过 50% 的块 < 0.7）
+                should_try_150dpi = (
+                    len(large_blocks) > 0 or 
+                    avg_confidence < 0.65 or 
+                    low_conf_ratio > 0.5
+                )
+                
+                if should_try_150dpi:
+                    if large_blocks:
+                        print(f"    🔍 检测到 {len(large_blocks)} 个大字区域，尝试 150 DPI 缩小识别...")
+                    else:
+                        print(f"    🔍 整体置信度较低 (平均: {avg_confidence:.2f}, 低置信度占比: {low_conf_ratio:.1%})，尝试 150 DPI 缩小识别...")
+                    
+                    # 生成 150 DPI 缩小版图片（缩小到原来的 50%）
+                    preview_150dpi_path = output_dir / f"page_{slide_num:03d}_preview_150dpi.png"
+                    with Image.open(preview_path) as img:
+                        new_size = (img_width // 2, img_height // 2)
+                        img_150dpi = img.resize(new_size, Image.LANCZOS)
+                        img_150dpi.save(preview_150dpi_path)
+                    
+                    # 对 150 DPI 图片运行 OCR
+                    ocr_150dpi_result = extractor.extract_from_image(str(preview_150dpi_path))
+                    
+                    # 将 150 DPI 的坐标还原到 300 DPI（坐标 x2）
+                    for block in ocr_150dpi_result.get('text_blocks', []):
+                        if 'bbox' in block and len(block['bbox']) == 4:
+                            block['bbox'] = [coord * 2 for coord in block['bbox']]
+                    
+                    # 合并结果：优先使用高置信度的
+                    merged_blocks = []
+                    used_150dpi_indices = set()
+                    
+                    for block_300 in text_blocks:
+                        bbox_300 = block_300.get('bbox', [0, 0, 0, 0])
+                        best_match = block_300
+                        
+                        # 检查是否有 150 DPI 的结果覆盖同一区域且置信度更高
+                        for idx, block_150 in enumerate(ocr_150dpi_result.get('text_blocks', [])):
+                            if idx in used_150dpi_indices:
+                                continue
+                            
+                            bbox_150 = block_150.get('bbox', [0, 0, 0, 0])
+                            
+                            # 判断两个框是否重叠（IoU > 0.3）
+                            x1_300, y1_300, x2_300, y2_300 = bbox_300
+                            x1_150, y1_150, x2_150, y2_150 = bbox_150
+                            
+                            x_overlap = max(0, min(x2_300, x2_150) - max(x1_300, x1_150))
+                            y_overlap = max(0, min(y2_300, y2_150) - max(y1_300, y1_150))
+                            overlap_area = x_overlap * y_overlap
+                            
+                            area_300 = (x2_300 - x1_300) * (y2_300 - y1_300)
+                            area_150 = (x2_150 - x1_150) * (y2_150 - y1_150)
+                            union_area = area_300 + area_150 - overlap_area
+                            
+                            if union_area > 0:
+                                iou = overlap_area / union_area
+                                if iou > 0.3:  # 重叠度 > 30%
+                                    # 优先使用高置信度的结果
+                                    conf_300 = block_300.get('confidence', 0)
+                                    conf_150 = block_150.get('confidence', 0)
+                                    
+                                    if conf_150 > conf_300:
+                                        best_match = block_150
+                                        used_150dpi_indices.add(idx)
+                                    break
+                        
+                        merged_blocks.append(best_match)
+                    
+                    # 添加未匹配的 150 DPI 结果
+                    for idx, block_150 in enumerate(ocr_150dpi_result.get('text_blocks', [])):
+                        if idx not in used_150dpi_indices:
+                            merged_blocks.append(block_150)
+                    
+                    # 更新结果
+                    improvement_count = len([b for b in merged_blocks if b.get('confidence', 0) > 0.9])
+                    original_high_conf = len([b for b in text_blocks if b.get('confidence', 0) > 0.9])
+                    
+                    if improvement_count > original_high_conf:
+                        global_ocr_result['text_blocks'] = merged_blocks
+                        with open(global_ocr_path, 'w', encoding='utf-8') as f:
+                            json.dump(global_ocr_result, f, ensure_ascii=False, indent=2)
+                        
+                        # 重新生成可视化
+                        visualize_extraction(str(preview_path), str(global_ocr_path), str(visualized_path))
+                        
+                        print(f"    ✓ 150 DPI 补充识别完成: 合并后 {len(merged_blocks)} 个文本块 (高置信度: {original_high_conf} → {improvement_count})")
+                    else:
+                        print(f"    ℹ️  150 DPI 识别未带来明显改善，保持原结果")
+                
+        except Exception as e:
+            print(f"    ⚠️ 全页 OCR 失败: {e}")
+            # 如果失败，创建一个空的 OCR 结果以防报错
+            with open(global_ocr_path, 'w', encoding='utf-8') as f:
+                json.dump({"text_blocks": []}, f)
+    else:
+        print(f"    ⚠️ 预览图不存在，跳过全页 OCR: {preview_path.name}")
+    
+    # ==================== 阶段 2: 处理嵌入图片（OCR） ====================
+    print(f"  🖼️  阶段2: 处理嵌入图片内容...")
     
     images = []
     image_ocr_results = []
@@ -91,41 +422,41 @@ def extract_slide_content(slide, slide_num, output_dir, ocr_engine='paddle'):
             with open(image_path, "wb") as f:
                 f.write(image.blob)
             
-            with Image.open(io.BytesIO(image.blob)) as img:
-                width, height = img.size
-            
-            images.append({
-                "id": idx,
-                "path": str(image_path),
-                "format": image.ext,
-                "size": [width, height]
-            })
-            
-            print(f"    ✓ 图片 {idx}: {width}x{height} ({image.ext})")
-            
-            # 对图片运行 OCR
-            ocr_json_path = output_dir / f"page_{slide_num:03d}_img_{idx}_ocr.json"
             try:
+                with Image.open(io.BytesIO(image.blob)) as img:
+                    width, height = img.size
+                
+                images.append({
+                    "id": idx,
+                    "path": str(image_path),
+                    "format": image.ext,
+                    "size": [width, height]
+                })
+                
+                print(f"    ✓ 嵌入图片 {idx}: {width}x{height} ({image.ext})")
+                
+                # 对图片运行 OCR
+                img_ocr_json_path = output_dir / f"page_{slide_num:03d}_img_{idx}_ocr.json"
                 extractor = DocumentExtractor(ocr_engine=ocr_engine)
                 ocr_result = extractor.extract_from_image(str(image_path))
                 
-                with open(ocr_json_path, 'w', encoding='utf-8') as f:
+                with open(img_ocr_json_path, 'w', encoding='utf-8') as f:
                     json.dump(ocr_result, f, ensure_ascii=False, indent=2)
                 
                 # 生成可视化
-                vis_path = output_dir / f"page_{slide_num:03d}_img_{idx}_visualized.png"
-                visualize_extraction(str(image_path), str(ocr_json_path), str(vis_path))
+                img_vis_path = output_dir / f"page_{slide_num:03d}_img_{idx}_visualized.png"
+                visualize_extraction(str(image_path), str(img_ocr_json_path), str(img_vis_path))
                 
                 image_ocr_results.append({
                     "image_id": idx,
-                    "ocr_json": str(ocr_json_path),
-                    "visualized": str(vis_path),
+                    "ocr_json": str(img_ocr_json_path),
+                    "visualized": str(img_vis_path),
                     "text_blocks_count": len(ocr_result.get('text_blocks', []))
                 })
                 
                 print(f"      ✓ OCR: {len(ocr_result.get('text_blocks', []))} 个文本块")
             except Exception as e:
-                print(f"      ✗ OCR失败: {e}")
+                print(f"      ✗ 图片处理失败: {e}")
     
     # ==================== 阶段 3: VLM 处理（带文本上下文） ====================
     print(f"  🤖 阶段3: VLM 综合分析...")
@@ -205,8 +536,11 @@ def extract_slide_content(slide, slide_num, output_dir, ocr_engine='paddle'):
         for row in table:
             all_text.append(' | '.join(row))
     
+    # ==================== 阶段 3.5: VLM 智能文本修正（按需触发） ====================
     # 添加图片OCR文本（只保留高置信度）
-    MIN_CONFIDENCE = 0.85
+    MIN_CONFIDENCE = 0.15
+    vlm_model = None
+    
     for ocr_res in image_ocr_results:
         try:
             with open(ocr_res['ocr_json'], 'r', encoding='utf-8') as f:
@@ -217,7 +551,68 @@ def extract_slide_content(slide, slide_num, output_dir, ocr_engine='paddle'):
                         block for block in ocr_data['text_blocks']
                         if block.get('confidence', 0) >= MIN_CONFIDENCE and block.get('text')
                     ]
-                    if high_confidence_blocks:
+                    
+                    # 检测是否需要 VLM 修正
+                    all_blocks = ocr_data['text_blocks']
+                    needs_refinement, reason, stats = detect_problem_content(all_blocks)
+                    
+                    if needs_refinement and high_confidence_blocks:
+                        print(f"      🔍 触发 VLM 修正 - {reason}")
+                        print(f"         (平均置信度: {stats['avg_confidence']:.2f}, 乱码率: {stats['garbled_ratio']:.1%})")
+                        
+                        # 延迟初始化 VLM（只有需要时才加载）
+                        if vlm_model is None and HAS_VLM:
+                            try:
+                                vlm_model = VisionModel()
+                                print(f"      ✓ VLM 模型已加载")
+                            except Exception as e:
+                                print(f"      ⚠️  VLM 初始化失败: {e}")
+                        
+                        if vlm_model:
+                            # 获取原始图片路径
+                            img_id = ocr_res['image_id']
+                            img_path = None
+                            for img_info in images:
+                                if img_info['id'] == img_id:
+                                    img_path = img_info['path']
+                                    break
+                            
+                            if img_path:
+                                # 原始 OCR 文本
+                                original_text = ' '.join([block['text'] for block in high_confidence_blocks])
+                                
+                                # VLM 修正
+                                context_hint = "文件列表" if stats.get('is_file_list') else ""
+                                confidence_info = {
+                                    'avg_confidence': stats['avg_confidence'],
+                                    'garbled_ratio': stats['garbled_ratio'],
+                                    'is_mindmap': stats.get('is_mindmap', False),
+                                    'is_file_list': stats.get('is_file_list', False)
+                                }
+                                refined_text = refine_text_with_vlm(
+                                    image_path=img_path,
+                                    ocr_text=original_text,
+                                    vlm_model=vlm_model,
+                                    context_hint=context_hint,
+                                    confidence_info=confidence_info
+                                )
+                                
+                                if refined_text != original_text:
+                                    print(f"      ✓ VLM 修正完成 ({len(original_text)} → {len(refined_text)} 字符)")
+                                    all_text.append(f"[图片 {ocr_res['image_id']}-VLM修正] {refined_text}")
+                                else:
+                                    all_text.append(f"[图片 {ocr_res['image_id']}-高置信度] " + original_text)
+                            else:
+                                # 找不到图片路径，使用原始文本
+                                image_texts = [block['text'] for block in high_confidence_blocks]
+                                all_text.append(f"[图片 {ocr_res['image_id']}-高置信度] " + ' '.join(image_texts))
+                        else:
+                            # VLM 不可用，使用原始文本
+                            image_texts = [block['text'] for block in high_confidence_blocks]
+                            all_text.append(f"[图片 {ocr_res['image_id']}-高置信度] " + ' '.join(image_texts))
+                    
+                    elif high_confidence_blocks:
+                        # 质量良好，直接使用 OCR 文本
                         image_texts = [block['text'] for block in high_confidence_blocks]
                         all_text.append(f"[图片 {ocr_res['image_id']}-高置信度] " + ' '.join(image_texts))
                     
@@ -230,57 +625,73 @@ def extract_slide_content(slide, slide_num, output_dir, ocr_engine='paddle'):
     
     combined_text = '\n\n'.join(all_text)
     
+    # 计算整体OCR置信度（包括全局OCR和图片OCR）
+    all_confidences = []
+    
+    # 从全局OCR获取置信度
+    try:
+        global_ocr_path = output_dir / f"page_{slide_num:03d}_global_ocr.json"
+        if global_ocr_path.exists():
+            with open(global_ocr_path, 'r', encoding='utf-8') as f:
+                global_ocr = json.load(f)
+                for block in global_ocr.get('text_blocks', []):
+                    conf = block.get('confidence', 0)
+                    if conf > 0:
+                        all_confidences.append(conf)
+    except Exception:
+        pass
+    
+    # 从图片OCR获取置信度
+    for ocr_res in image_ocr_results:
+        try:
+            with open(ocr_res['ocr_json'], 'r', encoding='utf-8') as f:
+                ocr_data = json.load(f)
+                for block in ocr_data.get('text_blocks', []):
+                    conf = block.get('confidence', 0)
+                    if conf > 0:
+                        all_confidences.append(conf)
+        except Exception:
+            pass
+    
+    avg_ocr_confidence = sum(all_confidences) / len(all_confidences) if all_confidences else 0.0
+    
     # 统计信息
     slide_data['statistics'] = {
         "total_text_blocks": len(all_text),
         "total_images": len(images),
         "has_title": bool(extracted_text['title']),
         "has_tables": len(extracted_text['tables']) > 0,
-        "has_notes": bool(extracted_text['notes'])
+        "has_notes": bool(extracted_text['notes']),
+        "avg_ocr_confidence": round(avg_ocr_confidence, 3)  # 添加平均置信度
     }
     
     # Stage1 信息（模拟 PDF 的结构）
-    # 优先使用 LibreOffice 渲染的预览图（page_XXX_preview.png）
-    preview_image = f"page_{slide_num:03d}_preview.png"
-    preview_path = output_dir / preview_image
-    
-    # 如果预览图不存在，降级使用第一张提取的图片
-    if not preview_path.exists() and images:
-        first_image_path = Path(images[0]['path'])
-        preview_image = first_image_path.name
-    
     slide_data['stage1_global'] = {
         "image": preview_image,
-        "ocr_json": str(text_json_path),
-        "text_source": "direct_extraction"
+        "ocr_json": f"page_{slide_num:03d}_global_ocr.json", # 指向包含坐标的 OCR 结果
+        "text_source": "direct_extraction_plus_ocr"
     }
     
-    # Stage2 OCR 可视化信息（使用预览图，但不重新 OCR）
-    # 如果预览图存在，直接复制作为可视化结果；否则使用第一张图片的可视化
-    preview_path = output_dir / preview_image
-    visualized_image = f"page_{slide_num:03d}_visualized.png"
-    visualized_path = output_dir / visualized_image
+    # Stage2 OCR 可视化信息
+    # 注意：visualized_path 已经在阶段 1.5 中通过 visualize_extraction 生成
+    # 不要覆盖它，否则绿色 OCR 框会丢失
     
-    if preview_path.exists():
-        # 直接复制预览图作为可视化结果（因为我们已经有完整的 LibreOffice 渲染图）
-        import shutil
-        shutil.copy2(preview_path, visualized_path)
-    elif images and image_ocr_results:
-        # 降级：使用第一张图片的 OCR 可视化
-        first_vis = next((r['visualized'] for r in image_ocr_results if r['image_id'] == images[0]['id']), None)
-        if first_vis and Path(first_vis).exists():
+    if not visualized_path.exists():
+        # 只有在生成失败时才降级处理
+        if preview_path.exists():
             import shutil
-            shutil.copy2(first_vis, visualized_path)
-    
-    slide_data['stage2_ocr'] = {
-        "ocr_json": str(text_json_path),  # 文本提取结果
-        "visualized": str(visualized_path) if visualized_path.exists() else ""
-    }
+            shutil.copy2(preview_path, visualized_path)
+        elif images and image_ocr_results:
+            # 降级：使用第一张图片的 OCR 可视化
+            first_vis = next((r['visualized'] for r in image_ocr_results if r['image_id'] == images[0]['id']), None)
+            if first_vis and Path(first_vis).exists():
+                import shutil
+                shutil.copy2(first_vis, visualized_path)
     
     # Stage3 VLM 信息
     slide_data['stage3_vlm'] = {
-        "vlm_prompt": str(vlm_prompt_path),
-        "vlm_context": str(vlm_context_path),
+        "vlm_prompt": str(vlm_prompt_path.name),
+        "vlm_context": str(vlm_context_path.name),
         "text_combined": combined_text
     }
     
@@ -395,12 +806,53 @@ def process_pptx(pptx_path, output_dir, ocr_engine='paddle'):
     with open(complete_json, 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     
+    # 生成 complete_document.json（用于 ES 索引，标准格式）
+    pages_for_index = []
+    for page in result['pages']:
+        page_num = page['page_number']
+        stage1 = page.get('stage1_global', {})
+        stage3 = page.get('stage3_vlm', {})
+        stats = page.get('statistics', {})
+        
+        # 获取图片路径
+        image_filename = stage1.get('image', f'page_{page_num:03d}_preview.png')
+        image_path = output_dir / image_filename
+        
+        # 获取文本内容
+        text_combined = stage3.get('text_combined', '')
+        
+        pages_for_index.append({
+            'page_number': page_num,
+            'image_path': str(image_path),
+            'image_filename': image_filename,
+            'content': {
+                'full_text_cleaned': text_combined,
+                'full_text_raw': text_combined,
+                'key_fields': [],
+                'tables': []
+            },
+            'ocr_data': {
+                'text_blocks': []
+            },
+            'metadata': {
+                'extraction_method': 'pptx_ocr_pipeline',
+                'ocr_engine': ocr_engine,
+                'avg_ocr_confidence': stats.get('avg_ocr_confidence', 0.0),
+                'vlm_refined': False
+            }
+        })
+    
+    complete_document_path = output_dir / "complete_document.json"
+    with open(complete_document_path, 'w', encoding='utf-8') as f:
+        json.dump({'pages': pages_for_index}, f, ensure_ascii=False, indent=2)
+    
     print(f"\n{'='*70}")
     print(f"✅ 处理完成！")
     print(f"{'='*70}")
     print(f"📊 统计:")
     print(f"  - 总页数: {total_slides}")
     print(f"  - 输出文件: {complete_json}")
+    print(f"  - 索引文件: {complete_document_path}")
     print(f"  - 输出目录: {output_dir.absolute()}")
     
     return result
@@ -434,4 +886,3 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         sys.exit(1)
-

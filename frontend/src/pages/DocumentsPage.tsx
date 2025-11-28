@@ -135,7 +135,7 @@ export default function DocumentsPage() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center text-sm text-slate-500">
                       <Calendar size={14} className="mr-1.5" />
-                      {new Date(doc.created_at).toLocaleDateString('zh-CN')}
+                      {doc.created_at ? new Date(doc.created_at).toLocaleDateString('zh-CN') : '-'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

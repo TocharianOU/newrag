@@ -7,16 +7,41 @@ export interface SearchRequest {
   use_hybrid?: boolean;
 }
 
+export interface PageData {
+  page_num: number;
+  image_path: string;
+  visualized_path: string;
+  ocr_json_path: string;
+  text_count: number;
+  components: string[];
+}
+
+export interface MatchedBBox {
+  text: string;
+  confidence: number;
+  bbox: [number, number, number, number]; // [x1, y1, x2, y2]
+}
+
 export interface SearchResult {
   id: string;
   text: string;
+  content?: string;     // Some backends return 'content'
+  highlighted?: string; // Search highlighting
   score: number;
+  matched_bboxes?: MatchedBBox[];
   metadata: {
     document_id?: string;
     filename?: string;
+    filepath?: string;
+    file_type?: string;
     page_number?: number;
+    page?: number; // Alternative to page_number
     category?: string;
+    author?: string;
     tags?: string[];
+    extraction_method?: string;
+    ocr_engine?: string;
+    pages_data?: PageData[];
     [key: string]: any;
   };
 }
@@ -41,4 +66,3 @@ export const searchAPI = {
     return response.data;
   },
 };
-

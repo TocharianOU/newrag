@@ -65,7 +65,7 @@ export default function Layout({ children }: LayoutProps) {
       
       {/* Footer */}
       <footer className="py-6 text-center text-sm text-slate-500 dark:text-slate-500">
-        <p>© 2024 NewRAG. Powered by AI Ops.</p>
+        <p>© 2025 NewRAG. Powered by Newmind Technology.</p>
       </footer>
     </div>
   );

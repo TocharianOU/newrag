@@ -37,7 +37,7 @@ except ImportError:
 class DocumentExtractor:
     """Extract text from documents with layout awareness"""
     
-    def __init__(self, use_layout_detection: bool = False, ocr_engine: str = 'easy'):
+    def __init__(self, use_layout_detection: bool = False, ocr_engine: str = 'vision'):
         """
         Initialize document extractor
         
@@ -57,9 +57,13 @@ class DocumentExtractor:
             self.ocr_reader = PaddleOCR(
                 lang='ch',  # 中英混合
                 use_textline_orientation=True,  # 启用文本方向检测（识别倒立文字）
+                # det_limit_side_len=960,  # 默认值 960，速度最快
+                det_db_thresh=0.3,  # 检测阈值
+                det_db_box_thresh=0.5,  # 框阈值
+                det_db_unclip_ratio=1.6,  # 框扩张系数（保留稍微大一点的框以优化大字）
             )
             self.ocr_type = 'paddle'
-            print("✓ PaddleOCR initialized (中英混合 + 多方向文字检测)")
+            print("✓ PaddleOCR initialized (中英混合 + 速度优先)")
         # EasyOCR (默认，最稳定)
         elif ocr_engine == 'easy' and HAS_EASYOCR:
             self.ocr_reader = easyocr.Reader(
@@ -88,10 +92,11 @@ class DocumentExtractor:
                 
                 self.ocr_reader = PaddleOCR(
                     lang='ch',
-                    use_textline_orientation=True
+                    use_textline_orientation=True,
+                    det_db_unclip_ratio=1.6
                 )
                 self.ocr_type = 'paddle'
-                print("✓ PaddleOCR initialized (fallback + 多方向检测)")
+                print("✓ PaddleOCR initialized (fallback + 速度优先)")
             else:
                 raise ImportError("未找到可用的 OCR 引擎\n请安装: pip install easyocr 或 pip install paddleocr")
     
@@ -563,8 +568,8 @@ def main():
     parser = argparse.ArgumentParser(description="Extract text from documents using OCR and layout detection")
     parser.add_argument("input_file", help="Path to input file (image or PDF)")
     parser.add_argument("-o", "--output", help="Output JSON file path (default: input_file.json)")
-    parser.add_argument("--ocr-engine", choices=['vision', 'paddle', 'easy'], default='easy',
-                       help="OCR engine: 'easy' (EasyOCR, 默认), 'paddle' (PaddleOCR, 多方向), 'vision' (Apple Vision, 增强版-多角度)")
+    parser.add_argument("--ocr-engine", choices=['vision', 'paddle', 'easy'], default='vision',
+                       help="OCR engine: 'vision' (Apple Vision, 默认), 'paddle' (PaddleOCR), 'easy' (EasyOCR)")
     parser.add_argument("--no-layout", action="store_true", help="Disable layout detection")
     parser.add_argument("--pretty", action="store_true", help="Pretty print the results to console")
     

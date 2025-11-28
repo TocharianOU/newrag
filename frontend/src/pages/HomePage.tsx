@@ -5,7 +5,7 @@ import { documentAPI } from '../api/documents';
 
 export default function HomePage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [ocrEngine, setOcrEngine] = useState('easy');
+  const [ocrEngine, setOcrEngine] = useState('vision');
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -159,12 +159,12 @@ export default function HomePage() {
                     onChange={(e) => setOcrEngine(e.target.value)}
                     className="input-field w-full appearance-none"
                   >
-                    <option value="easy">EasyOCR - 最快</option>
+                    <option value="vision">Apple Vision - 最适配 (推荐)</option>
                     <option value="paddle">PaddleOCR - 最精确</option>
-                    <option value="vision">LLM Vision - 最适配</option>
+                    <option value="easy">EasyOCR - 最快</option>
                   </select>
                   <p className="text-xs text-slate-500 mt-2">
-                    EasyOCR 速度最快；PaddleOCR 识别最精确；LLM Vision 对复杂布局适配最好。
+                    EasyOCR 速度最快；PaddleOCR 识别最精确；Apple Vision 对复杂布局适配最好。
                   </p>
                 </div>
               </div>

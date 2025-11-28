@@ -62,12 +62,39 @@ class MinIOStorage:
             return
         
         try:
-            if not self.client.bucket_exists(bucket_name=self.bucket_name):
+            bucket_exists = self.client.bucket_exists(bucket_name=self.bucket_name)
+            
+            if not bucket_exists:
                 logger.info(f"Creating bucket: {self.bucket_name}")
                 self.client.make_bucket(bucket_name=self.bucket_name)
                 logger.info(f"✅ Bucket created: {self.bucket_name}")
+            
+            # Set public read-only policy for the bucket
+            # This allows anonymous users to download files (GET), but not upload/delete
+            policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"AWS": ["*"]},
+                        "Action": ["s3:GetObject"],
+                        "Resource": [f"arn:aws:s3:::{self.bucket_name}/*"]
+                    }
+                ]
+            }
+            
+            self.client.set_bucket_policy(
+                bucket_name=self.bucket_name,
+                policy=json.dumps(policy)
+            )
+            
+            if not bucket_exists:
+                logger.info(f"✅ Bucket policy set to public read-only: {self.bucket_name}")
+            else:
+                logger.debug(f"✅ Bucket policy verified/updated: {self.bucket_name}")
+                
         except S3Error as e:
-            logger.error("Failed to create bucket", error=str(e), bucket=self.bucket_name)
+            logger.error("Failed to create/configure bucket", error=str(e), bucket=self.bucket_name)
             raise
     
     def upload_file(self, local_path: Path, object_name: str, 

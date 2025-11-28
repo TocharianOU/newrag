@@ -66,8 +66,9 @@ class Document(Base):
             'error_message': self.error_message,
             'ocr_engine': self.ocr_engine,
             'pages_data': json.loads(self.pages_data) if self.pages_data else None,
-            'uploaded_at': self.uploaded_at.isoformat() if self.uploaded_at else None,
-            'processed_at': self.processed_at.isoformat() if self.processed_at else None,
+            # Frontend expects created_at and updated_at
+            'created_at': self.uploaded_at.isoformat() if self.uploaded_at else None,
+            'updated_at': self.processed_at.isoformat() if self.processed_at else None,
             'progress_percentage': self.progress_percentage or 0,
             'progress_message': self.progress_message or '',
             'total_pages': self.total_pages or 0,
