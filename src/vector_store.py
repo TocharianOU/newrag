@@ -578,12 +578,13 @@ class VectorStore:
             logger.error("hybrid_search_failed", error=str(e), query=query)
             raise
     
-    def delete_by_metadata(self, filter_dict: Dict[str, Any]) -> int:
+    def delete_by_metadata(self, filter_dict: Dict[str, Any], fallback_filters: Optional[Dict[str, Any]] = None) -> int:
         """
-        Delete documents by metadata filter
+        Delete documents by metadata filter, with optional fallback for legacy data
         
         Args:
-            filter_dict: Metadata filters
+            filter_dict: Primary metadata filters
+            fallback_filters: Optional fallback filters for documents that don't have primary fields
         
         Returns:
             Number of documents deleted
@@ -605,8 +606,29 @@ class VectorStore:
             )
             
             deleted_count = response.get('deleted', 0)
-            
             logger.info("documents_deleted", filter=filter_dict, count=deleted_count)
+            
+            # If no documents were deleted and fallback filters provided, try fallback
+            if deleted_count == 0 and fallback_filters:
+                logger.info("trying_fallback_deletion", fallback_filters=fallback_filters)
+                fallback_query = {
+                    "query": {
+                        "bool": {
+                            "must": [
+                                {"term": {f"metadata.{k}": v}} for k, v in fallback_filters.items()
+                            ]
+                        }
+                    }
+                }
+                
+                fallback_response = self.es_client.delete_by_query(
+                    index=self.index_name,
+                    body=fallback_query
+                )
+                
+                fallback_deleted = fallback_response.get('deleted', 0)
+                deleted_count += fallback_deleted
+                logger.info("fallback_documents_deleted", filter=fallback_filters, count=fallback_deleted)
             
             return deleted_count
         

@@ -320,6 +320,8 @@ def main():
                        help="OCR engine: 'easy' (默认), 'paddle' (多方向-慢但准), 'vision' (多角度-快且准)")
     parser.add_argument("--confidence", type=float, default=0.7,
                        help="Confidence threshold for refinement (default: 0.7)")
+    parser.add_argument("--output-dir", type=str, default=None,
+                       help="Output directory (default: PDF_name_adaptive)")
     
     args = parser.parse_args()
     
@@ -333,9 +335,12 @@ def main():
     os.chdir(base_dir)
     
     # 创建输出目录
-    output_dir = input_file.stem.replace(' ', '_') + "_adaptive"
-    output_path = Path(output_dir)
-    output_path.mkdir(exist_ok=True)
+    if args.output_dir:
+        output_path = Path(args.output_dir)
+    else:
+        output_dir = input_file.stem.replace(' ', '_') + "_adaptive"
+        output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
     
     print("="*80)
     print("🚀 Adaptive Two-Stage OCR Pipeline")

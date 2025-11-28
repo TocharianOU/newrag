@@ -286,6 +286,7 @@ async def delete_document(doc_id: int):
     - MinIO storage (if enabled)
     - Local processed files
     - Original uploaded files
+    - Child documents (if this is a ZIP parent)
     """
     try:
         # 1. Get document info before deletion
@@ -306,13 +307,84 @@ async def delete_document(doc_id: int):
             "es_deleted": 0,
             "minio_deleted": 0,
             "local_files_deleted": False,
-            "original_file_deleted": False
+            "original_file_deleted": False,
+            "child_docs_deleted": 0
         }
         
-        # 2. Delete from Elasticsearch by document_id (正确方式！)
+        # 1.5. If this is a ZIP parent, collect child task IDs and delete them first
+        child_task_ids = []
+        task = task_manager.get_task(doc_id)
+        if task and task.child_task_ids:
+            child_task_ids = list(task.child_task_ids)
+            logger.info("found_child_tasks", parent_id=doc_id, child_ids=child_task_ids)
+        
+        # Delete all child documents first
+        for child_id in child_task_ids:
+            try:
+                # Get child document info
+                child_doc = db.get_document(child_id)
+                if not child_doc:
+                    logger.warning("child_doc_not_found_in_db", child_id=child_id)
+                    continue
+                
+                # Cancel child task
+                task_manager.cancel_task(child_id)
+                
+                # Delete from ES
+                try:
+                    child_es_deleted = pipeline.vector_store.delete_by_metadata({"document_id": str(child_id)})
+                    deletion_result["es_deleted"] += child_es_deleted
+                    logger.info("child_es_deleted", child_id=child_id, count=child_es_deleted)
+                except Exception as es_error:
+                    logger.warning("child_es_deletion_failed", error=str(es_error), child_id=child_id)
+                
+                # Delete from MinIO
+                try:
+                    from src.minio_storage import minio_storage
+                    if minio_storage.enabled and child_doc.checksum:
+                        child_filename_base = Path(child_doc.filename).stem.replace(' ', '_').replace('/', '_')
+                        child_minio_prefix = f"{child_filename_base}_{child_id}_{child_doc.checksum[:8]}"
+                        child_minio_deleted = minio_storage.delete_directory(child_minio_prefix)
+                        deletion_result["minio_deleted"] += child_minio_deleted
+                        logger.info("child_minio_deleted", child_id=child_id, prefix=child_minio_prefix, count=child_minio_deleted)
+                except Exception as minio_error:
+                    logger.warning("child_minio_deletion_failed", error=str(minio_error), child_id=child_id)
+                
+                # Delete local processed files
+                try:
+                    processed_folder = Path('web/static/processed_docs')
+                    child_doc_folder = processed_folder / f"{child_id}_{child_doc.checksum[:8]}"
+                    if child_doc_folder.exists():
+                        import shutil
+                        shutil.rmtree(child_doc_folder)
+                        logger.info("child_local_files_deleted", child_id=child_id, path=str(child_doc_folder))
+                except Exception as local_error:
+                    logger.warning("child_local_deletion_failed", error=str(local_error), child_id=child_id)
+                
+                # Delete original file
+                try:
+                    if child_doc.file_path and Path(child_doc.file_path).exists():
+                        Path(child_doc.file_path).unlink()
+                        logger.info("child_original_file_deleted", child_id=child_id, path=child_doc.file_path)
+                except Exception as file_error:
+                    logger.warning("child_original_file_deletion_failed", error=str(file_error), child_id=child_id)
+                
+                # Delete from database
+                db.delete_document(child_id)
+                deletion_result["child_docs_deleted"] += 1
+                logger.info("child_doc_deleted", child_id=child_id)
+                
+            except Exception as child_error:
+                logger.error("child_deletion_failed", error=str(child_error), child_id=child_id)
+        
+        # 2. Delete parent document from Elasticsearch by document_id (with fallback for legacy data)
         try:
-            es_deleted = pipeline.vector_store.delete_by_metadata({"document_id": str(doc_id)})
-            deletion_result["es_deleted"] = es_deleted
+            # Try primary deletion by document_id, fallback to checksum for legacy data
+            es_deleted = pipeline.vector_store.delete_by_metadata(
+                {"document_id": str(doc_id)},
+                fallback_filters={"checksum": checksum} if checksum else None
+            )
+            deletion_result["es_deleted"] += es_deleted
             logger.info("es_deleted", doc_id=doc_id, count=es_deleted)
         except Exception as es_error:
             logger.warning("es_deletion_failed", error=str(es_error), doc_id=doc_id)
@@ -401,9 +473,12 @@ async def delete_all_documents():
             filename = doc.get('filename', '')
             file_path = doc.get('file_path', '')
             
-            # Delete from Elasticsearch (使用正确的 document_id)
+            # Delete from Elasticsearch (使用正确的 document_id, with fallback for legacy data)
             try:
-                count = pipeline.vector_store.delete_by_metadata({"document_id": str(doc_id)})
+                count = pipeline.vector_store.delete_by_metadata(
+                    {"document_id": str(doc_id)},
+                    fallback_filters={"checksum": checksum} if checksum else None
+                )
                 deletion_result["es_deleted"] += count
             except Exception as es_error:
                 logger.warning("es_deletion_failed", error=str(es_error), doc_id=doc_id)

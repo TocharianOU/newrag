@@ -205,6 +205,47 @@ class VisionModel:
         else:
             raise ValueError(f"Unsupported vision provider: {self.provider}")
     
+    def chat(self, prompt: str, images: List[str] = None) -> str:
+        """
+        General chat method with image support
+        
+        Args:
+            prompt: Text prompt
+            images: List of base64 encoded image strings
+            
+        Returns:
+            Response text
+        """
+        if not self.enabled:
+            return "Vision model is disabled"
+            
+        try:
+            messages = []
+            content = [{"type": "text", "text": prompt}]
+            
+            if images:
+                for img_base64 in images:
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{img_base64}"
+                        }
+                    })
+            
+            messages.append({"role": "user", "content": content})
+            
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                max_tokens=self.max_tokens,
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            logger.error("vision_chat_failed", error=str(e))
+            raise
+
     def extract_text_from_image(
         self,
         image_path: str,

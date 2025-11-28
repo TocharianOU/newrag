@@ -16,12 +16,71 @@ from pathlib import Path
 import io
 import subprocess
 import shutil
+import base64
 
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from document_ocr_pipeline.extract_document import DocumentExtractor
 from document_ocr_pipeline.visualize_extraction import visualize_extraction
+try:
+    from src.models import VisionModel
+except ImportError:
+    print("⚠️ Warning: Could not import VisionModel. VLM features will be disabled.")
+    VisionModel = None
+
+def encode_image_to_base64(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
+
+def refine_page_with_vlm(image_path, xml_text, ocr_text, vlm_model):
+    """
+    使用 VLM 智能重组页面内容：以 XML 文本为骨架，将 OCR 识别的图片内容插入正确位置
+    """
+    if not vlm_model:
+        return None
+
+    prompt = f"""
+你是一个专业的文档内容修复专家。
+我将提供一页文档的截图、通过代码提取的精准文本（XML Text）以及 OCR 识别的补充文本（OCR Text）。
+
+【核心任务】
+你的目标是生成一份内容完整、准确的文档。请遵循以下**严格的双重标准**：
+
+1. **针对 XML Text（骨架部分）**：
+   - 🛡️ **绝对冻结**：这是从文档源码直接提取的，具有最高优先级。
+   - 🚫 **禁止修改**：即使你发现拼写错误或格式问题，也**绝对不要修改**任何字符。必须原样保留。
+
+2. **针对 OCR Text（图片内容部分）**：
+   - 🩹 **智能修复**：这是从图片识别的，可能包含识别错误。
+   - ✨ **纠错指令**：在将 OCR 内容插入 XML 骨架之前，请结合图片视觉信息和你的知识库，**修复明显的 OCR 错误**。
+     - 重点关注：技术术语（如 Elasticseatch → Elasticsearch）、品牌名称（如 Kibaha → Kibana）、标点符号。
+     - 不要过度联想，只修正肉眼可见的明显错误。
+
+【操作步骤】
+1. 以 XML Text 为基础，保持其结构不动。
+2. 从 OCR Text 中提取出 XML Text 缺失的图片/插图文字。
+3. 对提取出的 OCR 文字进行**智能纠错**。
+4. 将纠错后的内容插入到 XML Text 的正确视觉位置（参考 Image）。
+5. 输出最终的完整 Markdown 文本。
+
+【XML Text】
+{xml_text}
+
+【OCR Text】
+{ocr_text}
+
+请直接输出最终的合并文本（Markdown格式），不要包含任何解释。
+"""
+    try:
+        print("    🤖 调用 VLM 进行智能重组...")
+        base64_image = encode_image_to_base64(image_path)
+        response = vlm_model.chat(prompt, [base64_image])
+        return response
+    except Exception as e:
+        print(f"    ❌ VLM 重组失败: {e}")
+        return None
+
 
 def extract_table_to_markdown(table):
     """
@@ -64,13 +123,24 @@ def extract_table_to_markdown(table):
         
     return "\n".join(markdown_lines)
 
-def process_docx(docx_path, output_dir, ocr_engine='paddle'):
+def process_docx(docx_path, output_dir, ocr_engine='paddle', use_vlm=True):
     """
     完整处理 DOCX 文件 (通过 PDF 中转)
     """
     print(f"🚀 开始处理 DOCX (方案B: PDF中转): {docx_path}")
     print(f"📂 输出目录: {output_dir}")
     print(f"🔧 OCR引擎: {ocr_engine}")
+    print(f"🧠 VLM融合: {'开启' if use_vlm else '关闭'}")
+    
+    # 初始化 VLM
+    vlm_model = None
+    if use_vlm and VisionModel:
+        try:
+            vlm_model = VisionModel()
+            print("  ✓ VLM 模型初始化成功")
+        except Exception as e:
+            print(f"  ⚠️ VLM 初始化失败: {e}")
+            use_vlm = False
     
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -164,19 +234,19 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle'):
                     if md:
                         table_md_list.append(md)
     
-            # ---------------- 3.4 组装页面文本 (Text + Tables) ----------------
-            final_page_text = text_content
+            # ---------------- 3.4 准备 XML 基础文本 ----------------
+            xml_base_text = text_content
             
             if table_md_list:
                 table_section = "\n\n【表格数据 (Markdown)】\n" + "\n\n".join(table_md_list)
-                # 将表格追加到文本末尾 (或者根据位置插入，这里简化为追加)
-                final_page_text += table_section
+                xml_base_text += table_section
                 print(f"    ✓ 已转换 {len(table_md_list)} 个表格为 Markdown")
                 
             # ---------------- 3.5 OCR 补充 (针对图片/扫描件) ----------------
-            # 只有当页面文本很少（可能是扫描件）时，才强制依赖 OCR 文本
-            # 但为了保险，我们总是运行 OCR 以获取 bounding box 和应对复杂情况
             print(f"  🔍 运行 OCR...")
+            ocr_full_text = ""
+            avg_confidence = 0.0
+            
             try:
                 ocr_result = ocr_extractor.extract_from_image(str(preview_path))
                 
@@ -194,16 +264,6 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle'):
                 ocr_texts = [b.get('text', '') for b in ocr_text_blocks if b.get('text', '').strip()]
                 ocr_full_text = "\n".join(ocr_texts)
                 
-                # 智能合并策略：
-                # 如果直接提取的文本很少，说明可能是纯图，使用 OCR 文本作为主力
-                if len(text_content) < 50 and len(ocr_full_text) > 50:
-                    print("    ⚠️  页面文本极少，采用 OCR 结果为主")
-                    final_page_text = f"{final_page_text}\n\n【OCR 识别内容】\n{ocr_full_text}"
-                else:
-                    # 否则作为补充
-                    final_page_text += f"\n\n【视觉识别补充 (OCR)】\n{ocr_full_text}"
-                    
-                avg_confidence = 0.0
                 if ocr_text_blocks:
                     confs = [b.get('confidence', 0) for b in ocr_text_blocks]
                     avg_confidence = sum(confs) / len(confs)
@@ -211,9 +271,37 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle'):
             except Exception as e:
                 print(f"  ❌ OCR 出错: {e}")
                 ocr_text_blocks = []
-                avg_confidence = 0.0
 
-            # ---------------- 3.6 构建 Page Data ----------------
+            # ---------------- 3.6 智能融合 (XML + OCR + VLM) ----------------
+            final_page_text = ""
+            vlm_success = False
+            
+            # 条件：启用了 VLM，且 OCR 识别到了内容，且 OCR 内容比 XML 内容多或者相当（说明有图片文字）
+            # 或者只要有 OCR 内容我们就尝试融合，让 VLM 决定是否需要补充
+            if use_vlm and vlm_model and len(ocr_full_text) > 20:
+                print("  🧠 尝试使用 VLM 进行内容融合...")
+                refined_text = refine_page_with_vlm(str(preview_path), xml_base_text, ocr_full_text, vlm_model)
+                if refined_text:
+                    final_page_text = refined_text
+                    vlm_success = True
+                    print("    ✓ VLM 融合成功")
+            
+            # 如果 VLM 未启用或失败，使用传统的回退策略
+            if not final_page_text:
+                if vlm_model: 
+                    print("    ⚠️ VLM 未返回结果，回退到传统拼接模式")
+                
+                final_page_text = xml_base_text
+                # 智能合并策略：
+                # 如果直接提取的文本很少，说明可能是纯图，使用 OCR 文本作为主力
+                if len(xml_base_text) < 50 and len(ocr_full_text) > 50:
+                    print("    ⚠️  页面文本极少，采用 OCR 结果为主")
+                    final_page_text = f"{final_page_text}\n\n【OCR 识别内容】\n{ocr_full_text}"
+                elif len(ocr_full_text) > 0:
+                    # 否则作为补充
+                    final_page_text += f"\n\n【视觉识别补充 (OCR)】\n{ocr_full_text}"
+
+            # ---------------- 3.7 构建 Page Data ----------------
             page_data = {
                 "page_number": page_num,
                 "statistics": {
@@ -223,10 +311,11 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle'):
                 },
                 "stage1_global": {
                     "image": preview_image,
-                    "text_source": "pdfplumber+ocr"
+                    "text_source": "xml+vlm" if vlm_success else "xml+ocr_fallback"
                 },
                 "stage3_vlm": {
-                    "text_combined": final_page_text
+                    "text_combined": final_page_text,
+                    "vlm_refined": vlm_success
                 }
             }
             pages_data.append(page_data)
@@ -274,7 +363,7 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle'):
                 'extraction_method': 'docx_via_pdfplumber',
                 'ocr_engine': ocr_engine,
                 'avg_ocr_confidence': page['statistics']['avg_ocr_confidence'],
-                'vlm_refined': False
+                'vlm_refined': page['stage3_vlm'].get('vlm_refined', False)
             }
         })
         
@@ -300,6 +389,7 @@ def main():
     parser.add_argument('-o', '--output', help='Output directory', default=None)
     parser.add_argument('--ocr-engine', choices=['easy', 'paddle', 'vision'], 
                        default='paddle', help='OCR engine to use')
+    parser.add_argument('--no-vlm', action='store_true', help='Disable VLM refinement')
     
     args = parser.parse_args()
     
@@ -314,7 +404,7 @@ def main():
         output_dir = Path(f"{docx_path.stem}_docx_processed")
     
     try:
-        process_docx(docx_path, output_dir, args.ocr_engine)
+        process_docx(docx_path, output_dir, args.ocr_engine, use_vlm=not args.no_vlm)
         return 0
     except Exception as e:
         print(f"❌ Fatal Error: {e}")

@@ -265,11 +265,17 @@ class DatabaseManager:
             failed = session.query(Document).filter(Document.status == 'failed').count()
             processing = session.query(Document).filter(Document.status == 'processing').count()
             
+            # Calculate total pages across all documents
+            from sqlalchemy import func
+            total_pages_result = session.query(func.sum(Document.total_pages)).scalar()
+            total_pages = total_pages_result or 0
+            
             return {
                 'total': total,
                 'completed': completed,
                 'failed': failed,
-                'processing': processing
+                'processing': processing,
+                'total_pages': total_pages
             }
         finally:
             session.close()

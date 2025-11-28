@@ -31,14 +31,14 @@ export default function StatsPage() {
       shadow: 'shadow-blue-500/20',
     },
     {
-      label: '知识切片总数',
-      value: (data?.total_chunks || 0).toLocaleString(),
+      label: '总页数',
+      value: (data?.total_pages || 0).toLocaleString(),
       icon: Layers,
       gradient: 'from-violet-500 to-purple-500',
       shadow: 'shadow-violet-500/20',
     },
     {
-      label: '向量存储占用',
+      label: 'MinIO 存储占用',
       value: `${(data?.total_size_mb || 0).toFixed(2)} MB`,
       icon: HardDrive,
       gradient: 'from-emerald-500 to-teal-500',

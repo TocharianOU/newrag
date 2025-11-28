@@ -186,13 +186,18 @@ def process_single_pdf(doc_id: int, pdf_path: Path, metadata: dict, ocr_engine: 
         if not task_manager.wait_if_paused(doc_id):
             raise InterruptedError("Task was cancelled by user")
         
-        # Run intelligent PDF processing with VLM
+        # Prepare output directory
+        doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
+        doc_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Run intelligent PDF processing with VLM, directly output to final directory
         pdf_vlm_script = Path('document_ocr_pipeline/process_pdf_vlm.py')
         subprocess.run([
             sys.executable,
             str(pdf_vlm_script),
             str(pdf_path),
-            '--ocr-engine', ocr_engine
+            '--ocr-engine', ocr_engine,
+            '--output-dir', str(doc_output_dir)
         ], check=True)
         
         # Check for cancellation after OCR
@@ -205,22 +210,6 @@ def process_single_pdf(doc_id: int, pdf_path: Path, metadata: dict, ocr_engine: 
             message="OCR completed, processing pages..."
         )
         db.update_document_progress(doc_id, 50, "OCR completed, processing pages...")
-        
-        # Find the generated output directory
-        temp_output_dir = Path(pdf_path.stem.replace(' ', '_') + "_adaptive")
-        
-        if not temp_output_dir.exists():
-            raise RuntimeError(f"OCR output directory not found: {temp_output_dir}")
-        
-        # Check for cancellation before moving files
-        if not task_manager.wait_if_paused(doc_id):
-            raise InterruptedError("Task was cancelled by user")
-        
-        # Move to static folder with doc ID
-        doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
-        if doc_output_dir.exists():
-            shutil.rmtree(doc_output_dir)
-        shutil.move(str(temp_output_dir), str(doc_output_dir))
         
         # Update progress: Loading pages data
         task_manager.update_task(

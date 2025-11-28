@@ -2,11 +2,11 @@ import apiClient from './client';
 
 export interface Stats {
   total_documents: number;
-  total_chunks: number;
+  total_pages: number;
   total_size_mb: number;
   documents_by_type: Record<string, number>;
   documents_by_status: Record<string, number>;
-  recent_uploads: Array<{
+  recent_uploads?: Array<{
     filename: string;
     created_at: string;
     status: string;

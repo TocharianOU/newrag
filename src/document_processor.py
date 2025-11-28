@@ -271,14 +271,20 @@ class DocumentProcessor:
                 
                 return documents
             elif file_ext in ['.docx', '.doc']:
-                # Check if we have pre-processed JSON (like PPTX/PDF)
+                # Check if we have pre-processed JSON (e.g. from new OCR pipeline)
                 if processed_json_dir:
                     complete_json = Path(processed_json_dir) / "complete_document.json"
                     if complete_json.exists():
                         logger.info("loading_docx_from_preprocessed_json", json_path=str(complete_json))
                         return self._load_from_complete_json(complete_json)
-
-                # Try to split Word by pages using page breaks
+                    else:
+                        # Try adaptive OCR json as fallback
+                        complete_adaptive_json = Path(processed_json_dir) / "complete_adaptive_ocr.json"
+                        if complete_adaptive_json.exists():
+                            logger.info("loading_docx_from_adaptive_json", json_path=str(complete_adaptive_json))
+                            return self._load_from_complete_json(complete_adaptive_json)
+                
+                # Fallback: Try to split Word by pages using page breaks
                 try:
                     return self._split_word_by_pages(file_path)
                 except Exception as e:
@@ -302,17 +308,11 @@ class DocumentProcessor:
             elif file_ext == '.pptx':
                 # Check if we have pre-processed JSON from PPTX pipeline (same structure as PDF)
                 if processed_json_dir:
-                    complete_json = Path(processed_json_dir) / "complete_document.json"
+                    complete_json = Path(processed_json_dir) / "complete_adaptive_ocr.json"
                     if complete_json.exists():
                         logger.info("loading_pptx_from_preprocessed_json", json_path=str(complete_json))
-                        return self._load_from_complete_json(complete_json)
-                    
-                    # Fallback to complete_adaptive_ocr.json (old format)
-                    complete_json_old = Path(processed_json_dir) / "complete_adaptive_ocr.json"
-                    if complete_json_old.exists():
-                        logger.info("loading_pptx_from_preprocessed_json_old_format", json_path=str(complete_json_old))
                         # Load PPTX data from complete_adaptive_ocr.json
-                        with open(complete_json_old, 'r', encoding='utf-8') as f:
+                        with open(complete_json, 'r', encoding='utf-8') as f:
                             pptx_data = json.load(f)
                         
                         documents = []
@@ -460,13 +460,13 @@ class DocumentProcessor:
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
-            # Support both formats: {pages: [...]} or [...]
+            # Handle new format {"pages": [...]} vs old format [...]
             if isinstance(data, dict) and 'pages' in data:
                 pages_data = data['pages']
             elif isinstance(data, list):
                 pages_data = data
             else:
-                raise ValueError(f"Invalid JSON format in {json_path}: expected {{pages: [...]}} or [...]")
+                raise ValueError(f"Unknown JSON structure in {json_path}")
             
             logger.info("✅ Successfully loaded complete_document.json", num_pages=len(pages_data))
             
@@ -490,8 +490,12 @@ class DocumentProcessor:
             for page_data in pages_data:
                 page_num = page_data.get('page_number', len(documents) + 1)
                 
-                # Convert VLM JSON to searchable text
-                page_content = self._flatten_to_searchable_text(page_data)
+                # Handle new format content extraction
+                if 'content' in page_data and 'full_text_cleaned' in page_data['content']:
+                    page_content = page_data['content']['full_text_cleaned']
+                else:
+                    # Fallback to old flattening logic
+                    page_content = self._flatten_to_searchable_text(page_data)
                 
                 # Load OCR data for MCP tool (will be serialized to JSON string in vector_store)
                 ocr_data = {}
@@ -512,17 +516,24 @@ class DocumentProcessor:
                         except Exception as e:
                             logger.warning(f"failed_to_load_ocr_json_for_page_{page_num}", error=str(e))
                 
-                # Create Document with full metadata (will be serialized as JSON strings for ES)
+                # Merge metadata
+                metadata = {
+                    'page': page_num,
+                    'page_number': page_num,
+                    'page_json': page_data,  # Will be serialized to page_json_raw
+                    'ocr_data': ocr_data,    # Will be serialized to ocr_data_raw
+                    'page_type': page_data.get('metadata', {}).get('page_type', 'mixed'),
+                    'extraction_method': page_data.get('metadata', {}).get('extraction_method', 'vlm_refined')
+                }
+                
+                # Add VLM refined flag
+                if page_data.get('metadata', {}).get('vlm_refined'):
+                    metadata['vlm_refined'] = True
+                
+                # Create Document
                 doc = Document(
                     page_content=page_content,
-                    metadata={
-                        'page': page_num,
-                        'page_number': page_num,
-                        'page_json': page_data,  # Will be serialized to page_json_raw
-                        'ocr_data': ocr_data,    # Will be serialized to ocr_data_raw
-                        'page_type': page_data.get('document_info', {}).get('document_type', 'drawing'),
-                        'extraction_method': 'vlm_refined'
-                    }
+                    metadata=metadata
                 )
                 
                 documents.append(doc)
@@ -860,23 +871,18 @@ class DocumentProcessor:
         if 'content' in page_json:
             content = page_json['content']
             
-            if isinstance(content, dict):
-                # Use full_text_cleaned as primary content
-                if 'full_text_cleaned' in content and content['full_text_cleaned']:
-                    parts.append(content['full_text_cleaned'])
-                elif 'full_text_raw' in content and content['full_text_raw']:
-                    parts.append(content['full_text_raw'])
-                
-                # Add key fields
-                for field in content.get('key_fields', []):
-                    field_name = field.get('field', '')
-                    field_value = field.get('value', '')
-                    if field_name and field_value:
-                        parts.append(f"{field_name}: {field_value}")
-            else:
-                # content is a string
-                if content:
-                    parts.append(str(content))
+            # Use full_text_cleaned as primary content
+            if 'full_text_cleaned' in content and content['full_text_cleaned']:
+                parts.append(content['full_text_cleaned'])
+            elif 'full_text_raw' in content and content['full_text_raw']:
+                parts.append(content['full_text_raw'])
+            
+            # Add key fields
+            for field in content.get('key_fields', []):
+                field_name = field.get('field', '')
+                field_value = field.get('value', '')
+                if field_name and field_value:
+                    parts.append(f"{field_name}: {field_value}")
             
             # Add page description
             if 'page_analysis' in page_json:

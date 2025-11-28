@@ -319,6 +319,53 @@ class MinIOStorage:
                         prefix=prefix)
             return []
     
+    def get_storage_stats(self) -> Dict[str, Any]:
+        """
+        Get storage statistics from MinIO
+        
+        Returns:
+            Dictionary containing storage statistics
+        """
+        if not self.enabled or not self.client:
+            return {
+                'total_size_bytes': 0,
+                'total_size_mb': 0,
+                'object_count': 0
+            }
+        
+        try:
+            objects = self.client.list_objects(
+                bucket_name=self.bucket_name,
+                recursive=True
+            )
+            
+            total_size = 0
+            object_count = 0
+            
+            for obj in objects:
+                total_size += obj.size
+                object_count += 1
+            
+            total_size_mb = total_size / (1024 * 1024)
+            
+            logger.info("MinIO storage stats retrieved",
+                       total_size_mb=f"{total_size_mb:.2f}",
+                       object_count=object_count)
+            
+            return {
+                'total_size_bytes': total_size,
+                'total_size_mb': round(total_size_mb, 2),
+                'object_count': object_count
+            }
+        except Exception as e:
+            logger.error("Failed to get storage stats from MinIO",
+                        error=str(e))
+            return {
+                'total_size_bytes': 0,
+                'total_size_mb': 0,
+                'object_count': 0
+            }
+    
     @staticmethod
     def _get_content_type(file_path: Path) -> str:
         """Determine content type from file extension"""

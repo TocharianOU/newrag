@@ -190,6 +190,10 @@ async def get_stats():
         # Get database stats
         db_stats = db.get_stats()
         
+        # Get MinIO storage stats
+        from src.minio_storage import minio_storage
+        minio_stats = minio_storage.get_storage_stats()
+        
         # Get ES index info
         es_client = pipeline.vector_store.es_client
         index_name = pipeline.vector_store.index_name
@@ -217,11 +221,36 @@ async def get_stats():
             index_info['status'] = 'not_created'
             index_info['document_count'] = 0
         
+        # Build response with new stats structure
         combined_stats = {
-            **es_stats,
+            # Main stats for dashboard cards
+            'total_documents': db_stats.get('total', 0),
+            'total_pages': db_stats.get('total_pages', 0),
+            'total_size_mb': minio_stats.get('total_size_mb', 0),
+            
+            # Breakdown by document type (from ES)
+            'documents_by_type': {},
+            
+            # Breakdown by status (from database)
+            'documents_by_status': {
+                'completed': db_stats.get('completed', 0),
+                'processing': db_stats.get('processing', 0),
+                'failed': db_stats.get('failed', 0)
+            },
+            
+            # Additional detailed stats
             'database': db_stats,
+            'minio': minio_stats,
+            'elasticsearch': es_stats,
             'index': index_info
         }
+        
+        # Add document type distribution from ES if available
+        if 'file_types' in es_stats:
+            for file_type in es_stats['file_types']:
+                type_name = file_type.get('name', 'unknown')
+                type_count = file_type.get('count', 0)
+                combined_stats['documents_by_type'][type_name] = type_count
         
         return JSONResponse(content=combined_stats)
     

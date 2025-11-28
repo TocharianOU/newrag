@@ -330,7 +330,8 @@ def main():
         sys.executable,
         str(adaptive_script),
         str(pdf_path),
-        '--ocr-engine', args.ocr_engine
+        '--ocr-engine', args.ocr_engine,
+        '--output-dir', str(output_dir)
     ], check=True, cwd=project_root)
     
     # 读取生成的 complete_adaptive_ocr.json
