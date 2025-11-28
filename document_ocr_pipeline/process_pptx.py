@@ -259,7 +259,7 @@ def extract_slide_content(slide, slide_num, output_dir, ocr_engine='paddle'):
     # ==================== 阶段 1.5: 全页 OCR (用于获取坐标) ====================
     print(f"  👁️  阶段1.5: 全页 OCR (获取布局坐标)...")
     
-    preview_image = f"page_{slide_num:03d}_preview.png"
+    preview_image = f"page_{slide_num:03d}_300dpi.png"
     preview_path = output_dir / preview_image
     global_ocr_path = output_dir / f"page_{slide_num:03d}_global_ocr.json"
     visualized_image = f"page_{slide_num:03d}_visualized.png"
@@ -759,8 +759,8 @@ def process_pptx(pptx_path, output_dir, ocr_engine='paddle'):
                     img = page.to_image(resolution=300)
                     img_array = np.array(img.original)
                     
-                    # 保存为 page_XXX_preview.png（与 PDF 流程命名一致）
-                    preview_path = output_dir / f"page_{page_num:03d}_preview.png"
+                    # 保存为 page_XXX_300dpi.png（与 PDF 流程命名一致）
+                    preview_path = output_dir / f"page_{page_num:03d}_300dpi.png"
                     cv2.imwrite(str(preview_path), cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR))
                     
                     height, width = img_array.shape[:2]
@@ -819,7 +819,7 @@ def process_pptx(pptx_path, output_dir, ocr_engine='paddle'):
         stats = page.get('statistics', {})
         
         # 获取图片路径
-        image_filename = stage1.get('image', f'page_{page_num:03d}_preview.png')
+        image_filename = stage1.get('image', f'page_{page_num:03d}_300dpi.png')
         image_path = output_dir / image_filename
         
         # 获取文本内容

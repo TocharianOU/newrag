@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Search, Upload, BarChart3, FileText, Sparkles } from 'lucide-react';
+import { Search, Upload, BarChart3, FileText, Sparkles, Server } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -13,6 +13,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/search', label: '智能检索', icon: Search },
     { path: '/documents', label: '文档库', icon: FileText },
     { path: '/stats', label: '数据大屏', icon: BarChart3 },
+    { path: '/mcp', label: 'MCP服务', icon: Server },
   ];
 
   return (

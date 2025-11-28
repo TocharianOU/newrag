@@ -518,13 +518,13 @@ class DocumentProcessor:
                 
                 # Merge metadata
                 metadata = {
-                    'page': page_num,
-                    'page_number': page_num,
-                    'page_json': page_data,  # Will be serialized to page_json_raw
-                    'ocr_data': ocr_data,    # Will be serialized to ocr_data_raw
+                        'page': page_num,
+                        'page_number': page_num,
+                        'page_json': page_data,  # Will be serialized to page_json_raw
+                        'ocr_data': ocr_data,    # Will be serialized to ocr_data_raw
                     'page_type': page_data.get('metadata', {}).get('page_type', 'mixed'),
                     'extraction_method': page_data.get('metadata', {}).get('extraction_method', 'vlm_refined')
-                }
+                    }
                 
                 # Add VLM refined flag
                 if page_data.get('metadata', {}).get('vlm_refined'):

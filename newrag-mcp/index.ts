@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /*
- * SmartResume RAG Search MCP Server
- * 专为SmartResume RAG项目设计的Elasticsearch搜索服务
+ * NewRAG Search MCP Server
+ * 专为 NewRAG 项目设计的Elasticsearch搜索服务
  */
 
 import { z } from "zod";
@@ -98,6 +98,10 @@ interface RagConfig {
       vector_weight: number;
       bm25_weight: number;
     };
+  };
+  mcp?: {
+    host?: string;
+    port?: number;
   };
 }
 
@@ -208,7 +212,7 @@ export async function createElasticsearchMcpServer(
   const esClient = new Client(clientOptions);
 
   const server = new McpServer({
-    name: "smartresume-rag-search",
+    name: "newrag-search",
     version: "1.0.0",
   });
 
@@ -688,13 +692,29 @@ const config: ElasticsearchConfig = {
 async function main() {
   try {
     const useHttp = process.env.MCP_TRANSPORT === "http";
-    const httpPort = parseInt(process.env.MCP_HTTP_PORT || "3000");
-    const httpHost = process.env.MCP_HTTP_HOST || "localhost";
+    
+    // 优先使用环境变量，其次使用配置文件，最后使用默认值
+    let httpPort = parseInt(process.env.MCP_HTTP_PORT || "0");
+    let httpHost = process.env.MCP_HTTP_HOST || "";
+
+    if (httpPort === 0 && ragConfig?.mcp?.port) {
+      httpPort = ragConfig.mcp.port;
+    }
+    if (httpPort === 0) {
+      httpPort = 3000;
+    }
+
+    if (!httpHost && ragConfig?.mcp?.host) {
+      httpHost = ragConfig.mcp.host;
+    }
+    if (!httpHost) {
+      httpHost = "localhost";
+    }
 
     if (useHttp) {
       // HTTP模式
       process.stderr.write(
-        `🚀 Starting SmartResume RAG Search MCP Server (HTTP mode) on ${httpHost}:${httpPort}\n`
+        `🚀 Starting NewRAG Search MCP Server (HTTP mode) on ${httpHost}:${httpPort}\n`
       );
 
       const app = express();
@@ -705,7 +725,7 @@ async function main() {
       app.get("/health", (req, res) => {
         res.json({
           status: "ok",
-          service: "smartresume-rag-search",
+          service: "newrag-search",
           transport: "streamable-http",
           elasticsearch_url: config.url,
           rag_config_loaded: ragConfig !== null,
@@ -787,7 +807,7 @@ async function main() {
       });
 
       app.listen(httpPort, httpHost, () => {
-        console.log(`\n✓ SmartResume RAG Search MCP Server is running`);
+        console.log(`\n✓ NewRAG Search MCP Server is running`);
         console.log(`  Endpoint: http://${httpHost}:${httpPort}/mcp`);
         console.log(`  Health: http://${httpHost}:${httpPort}/health`);
         console.log(`  Elasticsearch: ${config.url}`);
@@ -803,7 +823,7 @@ async function main() {
       });
     } else {
       // Stdio模式 (默认)
-      process.stderr.write(`🚀 Starting SmartResume RAG Search MCP Server (Stdio mode)\n`);
+      process.stderr.write(`🚀 Starting NewRAG Search MCP Server (Stdio mode)\n`);
 
       const transport = new StdioServerTransport();
       const server = await createElasticsearchMcpServer(config, ragConfig);

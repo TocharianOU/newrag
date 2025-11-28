@@ -434,7 +434,7 @@ def process_single_pptx(doc_id: int, file_path: Path, metadata: dict, ocr_engine
             stage3 = page.get('stage3_vlm', {})
             
             # Extract image filename from stage1
-            image_filename = stage1.get('image', f'page_{page_num:03d}_preview.png')
+            image_filename = stage1.get('image', f'page_{page_num:03d}_300dpi.png')
             
             # Build page data structure (使用 page_num 字段名与 PDF 保持一致)
             page_data = {
@@ -822,7 +822,7 @@ def process_single_image(doc_id: int, file_path: Path, metadata: dict, ocr_engin
         # 构建 pages_data（用于数据库）
         pages_data = [{
             'page_number': 1,
-            'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/image_preview.png",
+            'image_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/page_001_300dpi.png",
             'visualized_path': f"/static/processed_docs/{doc_id}_{checksum[:8]}/image_visualized.png",
             'text': page_data.get('text', ''),
             'text_count': page_data.get('avg_ocr_confidence', 0),  # Store confidence
@@ -985,7 +985,7 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                             zip_ref.extract(zip_info, temp_extract_dir)
                     
                     # Find all supported files
-                    supported_extensions = ['.pdf', '.pptx', '.docx', '.doc', '.xlsx', '.xls', '.jpg', '.jpeg', '.png']
+                    supported_extensions = ['.pdf', '.pptx', '.ppt', '.odp', '.docx', '.doc', '.odt', '.xlsx', '.xls', '.ods', '.jpg', '.jpeg', '.png']
                     found_files = []
                     
                     for p in temp_extract_dir.rglob('*'):
@@ -1081,9 +1081,10 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                                 process_single_pdf(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
                             elif f_ext == '.pptx':
                                 process_single_pptx(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
-                            elif f_ext in ['.docx', '.doc']:
+                            elif f_ext in ['.docx', '.doc', '.odt', '.txt', '.md']:
                                 process_single_docx(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
-                            elif f_ext in ['.xlsx', '.xls']:
+                            elif f_ext in ['.xlsx', '.xls', '.ods', '.odp', '.ppt']:
+                                # Route ODS, ODP, PPT to Excel processor (Generic LibreOffice -> PDF -> VLM)
                                 process_single_excel(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
                             elif f_ext in ['.jpg', '.jpeg', '.png']:
                                 process_single_image(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
@@ -1119,12 +1120,12 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                 # Handle PPTX files
                 process_single_pptx(doc_id, file_path, metadata, ocr_engine, checksum)
             
-            elif file_ext in ['.docx', '.doc']:
-                # Handle DOCX files
+            elif file_ext in ['.docx', '.doc', '.odt', '.txt', '.md']:
+                # Handle DOCX/TXT/MD files
                 process_single_docx(doc_id, file_path, metadata, ocr_engine, checksum)
             
-            elif file_ext in ['.xlsx', '.xls']:
-                # Handle Excel files
+            elif file_ext in ['.xlsx', '.xls', '.ods', '.odp', '.ppt']:
+                # Handle Excel/ODS/ODP/PPT files (Generic PDF conversion)
                 process_single_excel(doc_id, file_path, metadata, ocr_engine, checksum)
             
             elif file_ext in ['.jpg', '.jpeg', '.png']:
@@ -1132,7 +1133,7 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                 process_single_image(doc_id, file_path, metadata, ocr_engine, checksum)
             
             else:
-                raise ValueError(f"Unsupported file type: {file_ext}. Supported: PDF, ZIP, JPG, JPEG, PNG, PPTX, DOCX, XLSX, XLS")
+                raise ValueError(f"Unsupported file type: {file_ext}. Supported: PDF, ZIP, JPG, PNG, PPTX, DOCX, XLSX, ODT, ODS, ODP")
         
         except InterruptedError as e:
             # Task was cancelled by user

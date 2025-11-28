@@ -1,4 +1,4 @@
-# SmartResume RAG Search MCP Server 使用指南
+# NewRAG Search MCP Server 使用指南
 
 ## 快速开始
 
@@ -19,7 +19,7 @@ npm run build
 npm start
 ```
 
-## 在 Cursor/Claude Desktop 中配置
+## 在 NewChat/Cursor 中配置
 
 ### Cursor 配置
 在 Cursor 的 MCP 设置中添加：
@@ -27,7 +27,7 @@ npm start
 ```json
 {
   "mcpServers": {
-    "smartresume-rag-search": {
+    "newrag-search": {
       "command": "node",
       "args": ["/Users/ablatazmat/Downloads/SmartResume/newrag-mcp/dist/index.js"],
       "env": {
@@ -38,13 +38,13 @@ npm start
 }
 ```
 
-### Claude Desktop 配置
-在 `~/Library/Application Support/Claude/claude_desktop_config.json` 中添加：
+### NewChat 配置
+在 NewChat 的 MCP 设置中添加：
 
 ```json
 {
   "mcpServers": {
-    "smartresume-rag-search": {
+    "newrag-search": {
       "command": "node",
       "args": ["/Users/ablatazmat/Downloads/SmartResume/newrag-mcp/dist/index.js"],
       "env": {

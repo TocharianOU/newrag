@@ -129,7 +129,7 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle', use_vlm=True):
     """
     完整处理 DOCX 文件 (通过 PDF 中转)
     """
-    print(f"🚀 开始处理 DOCX (方案B: PDF中转): {docx_path}")
+    print(f"🚀 开始处理文档 (方案B: PDF中转): {docx_path}")
     print(f"📂 输出目录: {output_dir}")
     print(f"🔧 OCR引擎: {ocr_engine}")
     print(f"🧠 VLM融合: {'开启' if use_vlm else '关闭'}")
@@ -165,14 +165,22 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle', use_vlm=True):
         return None
 
     try:
-        print(f"  ⏳ 转换 DOCX 为 PDF (使用: {soffice_cmd})...")
-        subprocess.run([
+        print(f"  ⏳ 转换文档为 PDF (使用: {soffice_cmd})...")
+        
+        # 对于纯文本文件 (.txt, .md)，显式指定过滤器以确保正确编码和换行
+        convert_args = [
             soffice_cmd,
             '--headless',
             '--convert-to', 'pdf',
             '--outdir', str(output_dir),
             str(docx_path)
-        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        ]
+        
+        # 如果是文本文件，LibreOffice 默认行为通常足够好，但可以根据需要添加过滤器
+        # 例如: --infilter="Text (encoded):UTF8,LF,,," 
+        # 但目前保持默认即可，LibreOffice 智能识别能力很强
+        
+        subprocess.run(convert_args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         # LibreOffice 输出的文件名处理
         generated_pdf = output_dir / f"{docx_path.stem}.pdf"
@@ -250,48 +258,98 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle', use_vlm=True):
                 print(f"    ✓ 已转换 {len(table_md_list)} 个表格为 Markdown")
                 
             # ---------------- 3.5 OCR 补充 (针对图片/扫描件) ----------------
-            print(f"  🔍 运行 OCR...")
-            ocr_full_text = ""
-            avg_confidence = 0.0
+            # 智能判断策略：如果页面没有图片，直接从 PDF 获取坐标，跳过 OCR 和 VLM
+            has_images = len(page.images) > 0
             
-            try:
-                ocr_result = ocr_extractor.extract_from_image(str(preview_path))
-                
-                # 保存 OCR JSON (使用 _global_ocr.json 命名以兼容前端 bbox 匹配)
+            # 获取 PDF 原生坐标（即使无图也需要，作为高精度文本定位）
+            # pdfplumber words 格式: {'text': 'foo', 'x0': 10, 'top': 20, 'x1': 30, 'bottom': 40, ...}
+            # 需要转换为 bbox [x1, y1, x2, y2] 并按比例放大到 300 DPI
+            pdf_words = page.extract_words()
+            pdf_bbox_list = []
+            
+            # 坐标换算系数：PDF点(72DPI) -> 图片像素(300DPI)
+            SCALE_FACTOR = 300 / 72  # 4.1666...
+            
+            for w in pdf_words:
+                pdf_bbox_list.append({
+                    "text": w['text'],
+                    "bbox": [
+                        int(w['x0'] * SCALE_FACTOR),
+                        int(w['top'] * SCALE_FACTOR),
+                        int(w['x1'] * SCALE_FACTOR),
+                        int(w['bottom'] * SCALE_FACTOR)
+                    ],
+                    "confidence": 1.0  # PDF 原生文本置信度为 100%
+                })
+            
+            ocr_full_text = ""
+            avg_confidence = 1.0
+            ocr_text_blocks = []
+
+            if not has_images and len(text_content) > 0:
+                print(f"    ⏩ [智能策略] 纯文本页面 (无图片)，使用 PDF 原生坐标，跳过 OCR")
+                # 使用转换后的 PDF 坐标伪装成 OCR 结果
+                ocr_result = {"text_blocks": pdf_bbox_list}
+                ocr_text_blocks = pdf_bbox_list
+                # 保存伪装的 OCR JSON
                 page_ocr_json = output_dir / f"page_{page_num:03d}_global_ocr.json"
                 with open(page_ocr_json, 'w', encoding='utf-8') as f:
                     json.dump(ocr_result, f, ensure_ascii=False, indent=2)
-                    
-                # 生成可视化
+                
+                # 生成可视化 (可选，为了调试)
                 vis_path = output_dir / f"page_{page_num:03d}_visualized.png"
-                visualize_extraction(str(preview_path), str(page_ocr_json), str(vis_path))
+                # 对于纯文本，直接复制原图作为可视化图，或者跳过画框以节省时间
+                import shutil
+                shutil.copy(preview_path, vis_path)
                 
-                # 提取 OCR 文本
-                ocr_text_blocks = ocr_result.get('text_blocks', [])
-                ocr_texts = [b.get('text', '') for b in ocr_text_blocks if b.get('text', '').strip()]
-                ocr_full_text = "\n".join(ocr_texts)
-                
-                if ocr_text_blocks:
-                    confs = [b.get('confidence', 0) for b in ocr_text_blocks]
-                    avg_confidence = sum(confs) / len(confs)
+            else:
+                # 有图片，或者虽然没图但也没提取到文本（可能是纯扫描件但 image 对象被封装了）
+                # 执行完整的 OCR 流程
+                print(f"  🔍 运行 OCR (发现 {len(page.images)} 张图片)...")
+                try:
+                    ocr_result = ocr_extractor.extract_from_image(str(preview_path))
                     
-            except Exception as e:
-                print(f"  ❌ OCR 出错: {e}")
-                ocr_text_blocks = []
+                    # 保存 OCR JSON
+                    page_ocr_json = output_dir / f"page_{page_num:03d}_global_ocr.json"
+                    with open(page_ocr_json, 'w', encoding='utf-8') as f:
+                        json.dump(ocr_result, f, ensure_ascii=False, indent=2)
+                        
+                    # 生成可视化
+                    vis_path = output_dir / f"page_{page_num:03d}_visualized.png"
+                    visualize_extraction(str(preview_path), str(page_ocr_json), str(vis_path))
+                    
+                    # 提取 OCR 文本
+                    ocr_text_blocks = ocr_result.get('text_blocks', [])
+                    ocr_texts = [b.get('text', '') for b in ocr_text_blocks if b.get('text', '').strip()]
+                    ocr_full_text = "\n".join(ocr_texts)
+                    
+                    if ocr_text_blocks:
+                        confs = [b.get('confidence', 0) for b in ocr_text_blocks]
+                        avg_confidence = sum(confs) / len(confs)
+                        
+                except Exception as e:
+                    print(f"  ❌ OCR 出错: {e}")
+                    ocr_text_blocks = []
 
             # ---------------- 3.6 智能融合 (XML + OCR + VLM) ----------------
             final_page_text = ""
             vlm_success = False
             
-            # 条件：启用了 VLM，且 OCR 识别到了内容，且 OCR 内容比 XML 内容多或者相当（说明有图片文字）
-            # 或者只要有 OCR 内容我们就尝试融合，让 VLM 决定是否需要补充
-            if use_vlm and vlm_model and len(ocr_full_text) > 20:
+            # 智能 VLM 触发逻辑：
+            # 1. 必须有图片 (has_images = True)
+            # 2. 必须启用了 VLM
+            # 3. OCR 必须识别到了内容
+            should_use_vlm = use_vlm and vlm_model and has_images and len(ocr_full_text) > 20
+            
+            if should_use_vlm:
                 print("  🧠 尝试使用 VLM 进行内容融合...")
                 refined_text = refine_page_with_vlm(str(preview_path), xml_base_text, ocr_full_text, vlm_model)
                 if refined_text:
                     final_page_text = refined_text
                     vlm_success = True
                     print("    ✓ VLM 融合成功")
+            elif not has_images:
+                 print("    ⏩ [智能策略] 纯文本页面，跳过 VLM")
             
             # 如果 VLM 未启用或失败，使用传统的回退策略
             if not final_page_text:

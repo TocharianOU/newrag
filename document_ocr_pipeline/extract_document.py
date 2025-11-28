@@ -510,7 +510,7 @@ class DocumentExtractor:
                         layout_regions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Sort text blocks considering layout regions
-        Similar to SmartResume's resort_page_text_with_layout
+        Similar to NewRAG's resort_page_text_with_layout
         """
         # Assign each text block to a layout region
         for text in text_blocks:

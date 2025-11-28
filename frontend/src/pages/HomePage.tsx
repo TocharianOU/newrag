@@ -44,8 +44,9 @@ export default function HomePage() {
     const ext = filename.split('.').pop()?.toLowerCase();
     if (['jpg', 'jpeg', 'png'].includes(ext || '')) return <ImageIcon className="text-purple-500" />;
     if (['pdf'].includes(ext || '')) return <FileText className="text-red-500" />;
-    if (['pptx'].includes(ext || '')) return <FileCode className="text-orange-500" />; // Presentation
-    if (['docx'].includes(ext || '')) return <FileText className="text-blue-500" />;
+    if (['pptx', 'odp'].includes(ext || '')) return <FileCode className="text-orange-500" />; // Presentation
+    if (['docx', 'odt'].includes(ext || '')) return <FileText className="text-blue-500" />;
+    if (['xlsx', 'xls', 'ods'].includes(ext || '')) return <FileText className="text-green-500" />;
     return <FileType className="text-slate-500" />;
   };
 
@@ -56,8 +57,11 @@ export default function HomePage() {
         <h2 className="text-4xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">
           上传您的文档
         </h2>
-        <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-          支持 PDF, 图片, PPTX, DOCX 和 ZIP 文件。我们会自动进行 OCR 识别和向量化处理。
+        <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
+          <span className="text-sm opacity-80">
+            系统采用 <b>"数字感知" (XML) + "仿生视觉" (OCR) + "认知重组" (VLM)</b> 的混合架构，<br/>
+            像人类一样精准理解文档的文本、视觉与空间结构。
+          </span>
         </p>
       </div>
 
@@ -82,7 +86,7 @@ export default function HomePage() {
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.jpg,.jpeg,.png,.pptx,.docx,.zip"
+              accept=".pdf,.jpg,.jpeg,.png,.pptx,.docx,.zip,.odt,.ods,.odp"
               onChange={handleFileChange}
               className="hidden"
             />
@@ -99,7 +103,10 @@ export default function HomePage() {
                   点击或拖拽文件到此处
                 </p>
                 <p className="text-sm text-slate-500 mt-1">
-                  单次最大支持 500MB
+                  单次最大支持 500MB，支持单个文件或 ZIP 压缩包
+                </p>
+                <p className="text-xs text-slate-400 mt-2 max-w-md mx-auto leading-relaxed">
+                  支持格式：PDF, DOCX, PPTX, XLSX, ODT, ODS, ODP, JPG, PNG, TXT, MD, ZIP
                 </p>
               </div>
             </div>

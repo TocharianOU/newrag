@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# SmartResume RAG Search MCP Server 启动脚本
+# NewRAG Search MCP Server 启动脚本
 
-echo "🚀 Starting SmartResume RAG Search MCP Server..."
+echo "🚀 Starting NewRAG Search MCP Server..."
 echo ""
 
 # 检查配置文件

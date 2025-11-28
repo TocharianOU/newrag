@@ -1,4 +1,4 @@
-# SmartResume Frontend (React)
+# NewRAG Frontend (React)
 
 基于 React + TypeScript + Vite 的现代化前端。
 

@@ -1,4 +1,4 @@
-# SmartResume - AIOps 智能知识库系统
+# NewRAG - AIOps 智能知识库系统
 
 基于 RAG (Retrieval-Augmented Generation) 的智能文档处理与问答系统，专为 AIOps 和运维场景设计。支持 PDF、DOCX、PPTX、Excel 等多种格式的智能解析、OCR 识别和语义检索。
 
@@ -70,7 +70,7 @@ uv run python dev.py
 ## 📂 项目结构
 
 ```
-SmartResume/
+NewRAG/
 ├── config.yaml                 # 核心配置文件
 ├── dev.py                      # 一键启动脚本
 ├── document_ocr_pipeline/      # 文档处理核心流水线 (OCR, VLM)

@@ -49,7 +49,7 @@ def test_minio_connection():
         
         # 测试上传一个小文件
         print("\n📤 Testing file upload...")
-        test_content = b"Hello from SmartResume!"
+        test_content = b"Hello from NewRAG!"
         from io import BytesIO
         
         client.put_object(

@@ -129,14 +129,18 @@ processing:
     - pdf
     - docx
     - doc
+    - odt
     - txt
     - md
     - html
     - csv
     - xlsx
+    - ods
     - png
     - jpg
     - jpeg
+    - pptx
+    - odp
   
   batch_size: 10
   max_file_size: 524288000  # 500MB in bytes
@@ -192,13 +196,17 @@ web:
     - png
     - docx
     - doc
+    - odt
     - xlsx
     - xls
+    - ods
     - txt
     - md
     - html
     - zip
     - pptx
+    - ppt
+    - odp
   
   # CORS 配置
   cors:
@@ -241,4 +249,9 @@ security:
   auth:
     enabled: false
     type: basic  # basic / jwt / oauth
+
+# MCP 服务配置
+mcp:
+  host: 0.0.0.0
+  port: 2999
 

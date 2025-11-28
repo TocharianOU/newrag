@@ -331,9 +331,9 @@ def process_image(
     # ===== 阶段 5: 构建最终文档 =====
     logger.info("📍 阶段 5: 构建最终文档")
     
-    # 复制原始图片作为预览
+    # 复制原始图片作为预览 (统一命名为 page_001_300dpi.png)
     import shutil
-    preview_path = output_dir / "image_preview.png"
+    preview_path = output_dir / "page_001_300dpi.png"
     shutil.copy(image_path, preview_path)
     
     # 构建页面数据

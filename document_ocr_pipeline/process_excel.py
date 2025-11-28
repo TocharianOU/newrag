@@ -18,18 +18,19 @@ from src.utils import get_soffice_command
 
 def process_excel(excel_path, output_dir, ocr_engine='vision'):
     """
-    Excel 处理：转 PDF 后调用 PDF 处理流程 (OCR + VLM)
+    通用处理：转 PDF 后调用 PDF 处理流程 (OCR + VLM)
+    支持: Excel, ODS, ODP, PPT (Legacy)
     """
-    print(f"🚀 开始处理 Excel: {excel_path}")
+    print(f"🚀 开始处理文档: {excel_path}")
     print(f"📂 输出目录: {output_dir}")
     
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     excel_path = Path(excel_path)
     
-    # ==================== 步骤 1: Excel -> PDF (LibreOffice) ====================
+    # ==================== 步骤 1: 文档 -> PDF (LibreOffice) ====================
     print(f"\n{'='*70}")
-    print(f"📄 步骤 1: 转换 Excel 为 PDF (LibreOffice)")
+    print(f"📄 步骤 1: 转换文档为 PDF (LibreOffice)")
     print(f"{'='*70}")
     
     pdf_output = output_dir / f"{excel_path.stem}.pdf"
@@ -113,9 +114,9 @@ def process_excel(excel_path, output_dir, ocr_engine='vision'):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Excel 文档智能处理 (OCR + VLM)')
-    parser.add_argument('excel_file', help='Excel 文件路径 (.xlsx, .xls)')
-    parser.add_argument('-o', '--output', help='输出目录', default='excel_output')
+    parser = argparse.ArgumentParser(description='通用文档智能处理 (Excel/ODS/ODP/PPT -> PDF -> VLM)')
+    parser.add_argument('excel_file', help='文件路径 (.xlsx, .xls, .ods, .odp, .ppt)')
+    parser.add_argument('-o', '--output', help='输出目录', default='output')
     parser.add_argument('--ocr-engine', choices=['paddle', 'easy', 'vision'], 
                         default='vision', help='OCR 引擎')
     
@@ -126,7 +127,7 @@ def main():
         print(f"❌ 文件不存在: {excel_path}")
         return 1
     
-    if excel_path.suffix.lower() not in ['.xlsx', '.xls']:
+    if excel_path.suffix.lower() not in ['.xlsx', '.xls', '.ods', '.odp', '.ppt']:
         print(f"❌ 不支持的文件格式: {excel_path.suffix}")
         return 1
     

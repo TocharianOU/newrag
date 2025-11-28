@@ -105,7 +105,7 @@ async def index(request: Request):
     html_content = f"""
     <html>
         <head>
-            <title>SmartResume Backend API</title>
+            <title>NewRAG Backend API</title>
             <style>
                 body {{ font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f0f2f5; }}
                 .container {{ text-align: center; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}

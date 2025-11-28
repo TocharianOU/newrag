@@ -5,6 +5,7 @@ import HomePage from './pages/HomePage';
 import SearchPage from './pages/SearchPage';
 import DocumentsPage from './pages/DocumentsPage';
 import StatsPage from './pages/StatsPage';
+import McpPage from './pages/McpPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,6 +26,7 @@ function App() {
             <Route path="/search" element={<SearchPage />} />
             <Route path="/documents" element={<DocumentsPage />} />
             <Route path="/stats" element={<StatsPage />} />
+            <Route path="/mcp" element={<McpPage />} />
           </Routes>
         </Layout>
       </Router>

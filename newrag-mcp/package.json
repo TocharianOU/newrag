@@ -1,13 +1,13 @@
 {
-  "name": "smartresume-rag-search-mcp",
-  "description": "SmartResume RAG智能搜索MCP服务器 - 支持向量混合搜索和完整ES API访问",
+  "name": "newrag-search-mcp",
+  "description": "NewRAG 智能搜索MCP服务器 - 支持向量混合搜索和完整ES API访问",
   "version": "1.0.0",
   "license": "Apache-2.0",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "bin": {
-    "smartresume-rag-search": "./dist/index.js"
+    "newrag-search": "./dist/index.js"
   },
   "keywords": [
     "rag",

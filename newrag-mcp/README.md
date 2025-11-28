@@ -1,6 +1,6 @@
-# SmartResume RAG 智能搜索 MCP 服务器
+# NewRAG 智能搜索 MCP 服务器
 
-专为 SmartResume RAG 项目设计的 Elasticsearch 搜索服务，提供智能混合搜索（向量+BM25）和完整的 ES API 访问能力。
+专为 NewRAG 项目设计的 Elasticsearch 搜索服务，提供智能混合搜索（向量+BM25）和完整的 ES API 访问能力。
 
 ## ✨ 特性
 
@@ -284,4 +284,4 @@ Apache-2.0
 
 ## 🤝 贡献
 
-这是 SmartResume RAG 项目的一部分，专门为智能文档检索设计。
+这是 NewRAG 项目的一部分，专门为智能文档检索设计。
