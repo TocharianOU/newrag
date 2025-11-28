@@ -14,6 +14,8 @@ import subprocess
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.utils import get_soffice_command
+
 def process_excel(excel_path, output_dir, ocr_engine='vision'):
     """
     Excel 处理：转 PDF 后调用 PDF 处理流程 (OCR + VLM)
@@ -32,9 +34,14 @@ def process_excel(excel_path, output_dir, ocr_engine='vision'):
     
     pdf_output = output_dir / f"{excel_path.stem}.pdf"
     
+    # 获取 LibreOffice 命令
+    soffice_cmd = get_soffice_command()
+    if not soffice_cmd:
+        raise RuntimeError("未找到 LibreOffice (soffice)。请安装 LibreOffice 并确保 soffice 命令在 PATH 中。")
+
     try:
         cmd = [
-            '/Applications/LibreOffice.app/Contents/MacOS/soffice',
+            soffice_cmd,
             '--headless',
             '--convert-to', 'pdf',
             '--outdir', str(output_dir),

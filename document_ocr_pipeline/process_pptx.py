@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from document_ocr_pipeline.extract_document import DocumentExtractor
 from document_ocr_pipeline.visualize_extraction import visualize_extraction
+from src.utils import get_soffice_command
 
 # 尝试导入 VLM (可选依赖)
 try:
@@ -718,57 +719,60 @@ def process_pptx(pptx_path, output_dir, ocr_engine='paddle'):
     
     temp_pdf = output_dir / f"{pptx_path.stem}_temp.pdf"
     
-    try:
-        # 调用 LibreOffice 转换 PPTX -> PDF
-        print(f"  ⏳ 转换 PPTX 为 PDF...")
-        subprocess.run([
-            '/Applications/LibreOffice.app/Contents/MacOS/soffice',
-            '--headless',
-            '--convert-to', 'pdf',
-            '--outdir', str(output_dir),
-            str(pptx_path)
-        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        # LibreOffice 输出的 PDF 文件名与输入文件名相同（仅扩展名不同）
-        generated_pdf = output_dir / f"{pptx_path.stem}.pdf"
-        if generated_pdf.exists() and generated_pdf != temp_pdf:
-            generated_pdf.rename(temp_pdf)
-        
-        print(f"  ✓ PDF 已生成: {temp_pdf.name}")
-        
-        # 使用 pdfplumber 渲染每一页为图片
-        import pdfplumber
-        import cv2
-        import numpy as np
-        
-        with pdfplumber.open(temp_pdf) as pdf:
-            total_slides = len(pdf.pages)
-            print(f"  📄 PDF 页数: {total_slides}")
-            
-            for page_num, page in enumerate(pdf.pages, 1):
-                # 渲染为高质量图片（300 DPI）
-                img = page.to_image(resolution=300)
-                img_array = np.array(img.original)
-                
-                # 保存为 page_XXX_preview.png（与 PDF 流程命名一致）
-                preview_path = output_dir / f"page_{page_num:03d}_preview.png"
-                cv2.imwrite(str(preview_path), cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR))
-                
-                height, width = img_array.shape[:2]
-                print(f"  ✓ 第 {page_num} 页: {width}x{height}px -> {preview_path.name}")
-        
-        # 删除临时 PDF 文件
-        temp_pdf.unlink()
-        print(f"  ✓ 预览图生成完成，临时 PDF 已清理")
-        
-    except FileNotFoundError:
-        print("  ⚠️  警告: 未找到 LibreOffice，跳过预览图生成")
-        print("  提示: 安装 LibreOffice 以启用页面预览功能")
+    # 获取 LibreOffice 命令
+    soffice_cmd = get_soffice_command()
+    if not soffice_cmd:
+        print("  ⚠️  警告: 未找到 LibreOffice (soffice)，跳过预览图生成")
+        print("  提示: 安装 LibreOffice 并确保 soffice 命令在 PATH 中")
         print("  macOS: brew install --cask libreoffice")
         total_slides = None
-    except Exception as e:
-        print(f"  ⚠️  预览图生成失败: {e}")
-        total_slides = None
+    else:
+        try:
+            # 调用 LibreOffice 转换 PPTX -> PDF
+            print(f"  ⏳ 转换 PPTX 为 PDF (使用: {soffice_cmd})...")
+            subprocess.run([
+                soffice_cmd,
+                '--headless',
+                '--convert-to', 'pdf',
+                '--outdir', str(output_dir),
+                str(pptx_path)
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # LibreOffice 输出的 PDF 文件名与输入文件名相同（仅扩展名不同）
+            generated_pdf = output_dir / f"{pptx_path.stem}.pdf"
+            if generated_pdf.exists() and generated_pdf != temp_pdf:
+                generated_pdf.rename(temp_pdf)
+            
+            print(f"  ✓ PDF 已生成: {temp_pdf.name}")
+            
+            # 使用 pdfplumber 渲染每一页为图片
+            import pdfplumber
+            import cv2
+            import numpy as np
+            
+            with pdfplumber.open(temp_pdf) as pdf:
+                total_slides = len(pdf.pages)
+                print(f"  📄 PDF 页数: {total_slides}")
+                
+                for page_num, page in enumerate(pdf.pages, 1):
+                    # 渲染为高质量图片（300 DPI）
+                    img = page.to_image(resolution=300)
+                    img_array = np.array(img.original)
+                    
+                    # 保存为 page_XXX_preview.png（与 PDF 流程命名一致）
+                    preview_path = output_dir / f"page_{page_num:03d}_preview.png"
+                    cv2.imwrite(str(preview_path), cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR))
+                    
+                    height, width = img_array.shape[:2]
+                    print(f"  ✓ 第 {page_num} 页: {width}x{height}px -> {preview_path.name}")
+            
+            # 删除临时 PDF 文件
+            temp_pdf.unlink()
+            print(f"  ✓ 预览图生成完成，临时 PDF 已清理")
+            
+        except Exception as e:
+            print(f"  ⚠️  预览图生成失败: {e}")
+            total_slides = None
     
     # ==================== 继续原有的内容提取流程 ====================
     prs = Presentation(str(pptx_path))

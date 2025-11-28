@@ -23,6 +23,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from document_ocr_pipeline.extract_document import DocumentExtractor
 from document_ocr_pipeline.visualize_extraction import visualize_extraction
+from src.utils import get_soffice_command
+
 try:
     from src.models import VisionModel
 except ImportError:
@@ -153,10 +155,19 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle', use_vlm=True):
     
     temp_pdf = output_dir / f"{docx_path.stem}_temp.pdf"
     
+    # 获取 LibreOffice 命令
+    soffice_cmd = get_soffice_command()
+    if not soffice_cmd:
+        print("  ❌ 错误: 未找到 LibreOffice (soffice)，无法进行转换")
+        print("  请安装 LibreOffice 并确保 soffice 命令在 PATH 中，或设置 SOFFICE_PATH 环境变量。")
+        print("  macOS: brew install --cask libreoffice")
+        print("  Ubuntu: sudo apt install libreoffice")
+        return None
+
     try:
-        print(f"  ⏳ 转换 DOCX 为 PDF...")
+        print(f"  ⏳ 转换 DOCX 为 PDF (使用: {soffice_cmd})...")
         subprocess.run([
-            '/Applications/LibreOffice.app/Contents/MacOS/soffice',
+            soffice_cmd,
             '--headless',
             '--convert-to', 'pdf',
             '--outdir', str(output_dir),
@@ -170,10 +181,6 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle', use_vlm=True):
         
         print(f"  ✓ PDF 已生成: {temp_pdf.name}")
         
-    except FileNotFoundError:
-        print("  ❌ 错误: 未找到 LibreOffice，无法进行转换")
-        print("  请安装: brew install --cask libreoffice")
-        return None
     except Exception as e:
         print(f"  ❌ 转换失败: {e}")
         return None
