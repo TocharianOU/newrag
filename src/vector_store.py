@@ -416,6 +416,70 @@ class VectorStore:
         bm25_weight = bm25_weight or hybrid_config.get('bm25_weight', 0.3)
         
         try:
+            # Handle empty query (match_all + filters)
+            if not query or not query.strip():
+                query_body = {
+                    "size": k,
+                    "query": {
+                        "bool": {
+                            "must": [{"match_all": {}}]
+                        }
+                    }
+                }
+                
+                # Add filters if provided
+                if filter_dict:
+                    filter_clauses = []
+                    for k, v in filter_dict.items():
+                        if k == "filename" and isinstance(v, str):
+                            search_val = v if '*' in v else f"*{v}*"
+                            filter_clauses.append({
+                                "wildcard": {
+                                    "metadata.filename": {
+                                        "value": search_val,
+                                        "case_insensitive": True
+                                    }
+                                }
+                            })
+                        else:
+                            filter_clauses.append({"term": {f"metadata.{k}": v}})
+                    
+                    query_body["query"]["bool"]["filter"] = filter_clauses
+                
+                # Execute search
+                response = self.es_client.search(
+                    index=self.index_name,
+                    body=query_body
+                )
+                
+                results = []
+                for hit in response['hits']['hits']:
+                    source = hit['_source']
+                    results.append({
+                        'id': hit['_id'],
+                        'score': hit['_score'],
+                        'content': source.get('text', ''),
+                        'content_snippet': source.get('text', '')[:500],
+                        'highlighted': None,  # No highlights for match_all
+                        'metadata': source.get('metadata', {}),
+                        'document_name': source.get('document_name', ''),
+                        'page_number': source.get('page_number', 1),
+                        'total_pages': source.get('total_pages', 1),
+                        'page_type': source.get('page_type', 'text'),
+                        'page_json': source.get('original_content', {}),
+                        'drawing_number': source.get('drawing_number', ''),
+                        'project_name': source.get('project_name', ''),
+                        'equipment_tags': source.get('equipment_tags', []),
+                        'component_details': source.get('component_details', []),
+                    })
+                
+                logger.info(
+                    "match_all_search_completed",
+                    num_results=len(results),
+                    filters=filter_dict
+                )
+                return results
+
             # Get vector search results
             vector_query = self.embedding_model.embed_text(query)
             
@@ -508,9 +572,28 @@ class VectorStore:
             
             # Add filters if provided
             if filter_dict:
-                query_body["query"]["bool"]["filter"] = [
-                    {"term": {f"metadata.{k}": v}} for k, v in filter_dict.items()
-                ]
+                # Initialize filter list
+                filter_clauses = []
+                
+                for k, v in filter_dict.items():
+                    # Special handling for filename (wildcard search)
+                    if k == "filename" and isinstance(v, str):
+                        # If value contains wildcards or we want partial match, use wildcard
+                        # Otherwise just wrap in wildcards
+                        search_val = v if '*' in v else f"*{v}*"
+                        filter_clauses.append({
+                            "wildcard": {
+                                "metadata.filename": {
+                                    "value": search_val,
+                                    "case_insensitive": True
+                                }
+                            }
+                        })
+                    # Standard exact match for other fields (file_type, etc.)
+                    else:
+                        filter_clauses.append({"term": {f"metadata.{k}": v}})
+                
+                query_body["query"]["bool"]["filter"] = filter_clauses
             
             # Execute search
             response = self.es_client.search(
@@ -773,9 +856,22 @@ class VectorStore:
             
             # Add additional filters
             if filter_dict:
-                query_body["query"]["bool"]["filter"] = [
-                    {"term": {f"metadata.{k}": v}} for k, v in filter_dict.items()
-                ]
+                filter_clauses = []
+                for k, v in filter_dict.items():
+                    if k == "filename" and isinstance(v, str):
+                        search_val = v if '*' in v else f"*{v}*"
+                        filter_clauses.append({
+                            "wildcard": {
+                                "metadata.filename": {
+                                    "value": search_val,
+                                    "case_insensitive": True
+                                }
+                            }
+                        })
+                    else:
+                        filter_clauses.append({"term": {f"metadata.{k}": v}})
+                
+                query_body["query"]["bool"]["filter"] = filter_clauses
             
             # Execute search
             response = self.es_client.search(
