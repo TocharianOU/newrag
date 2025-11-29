@@ -670,40 +670,117 @@ async def upload_batch(
     files: List[UploadFile] = File(...),
     category: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
-    author: Optional[str] = Form(None)
+    author: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    ocr_engine: Optional[str] = Form('vision')
 ):
     """
-    Upload and process multiple files
+    Upload and process multiple files asynchronously
     """
     try:
-        file_paths = []
+        results = []
+        logger.info("batch_upload_started", num_files=len(files))
         
-        # Save all files
         for file in files:
-            file_path = upload_folder / file.filename
-            with open(file_path, "wb") as f:
-                shutil.copyfileobj(file.file, f)
-            file_paths.append(str(file_path))
-        
-        logger.info("batch_uploaded", num_files=len(files))
-        
-        # Prepare metadata
-        metadata = {}
-        if category:
-            metadata['category'] = category
-        if tags:
-            metadata['tags'] = tags.split(',')
-        if author:
-            metadata['author'] = author
-        
-        # Process batch
-        results = pipeline.process_batch(file_paths, metadata)
-        
-        # Clean up
-        for file_path in file_paths:
-            if Path(file_path).exists():
-                os.remove(file_path)
-        
+            file_path = None
+            try:
+                # 1. Validate
+                if not file.filename:
+                    continue
+                
+                # Check file extension
+                allowed_extensions = web_config.get('allowed_extensions', [])
+                file_ext = Path(file.filename).suffix.lower().lstrip('.')
+                
+                if file_ext not in allowed_extensions:
+                    results.append({
+                        "filename": file.filename,
+                        "status": "failed",
+                        "error": f"File type not allowed. Allowed: {', '.join(allowed_extensions)}"
+                    })
+                    continue
+                
+                # 2. Save file
+                file_path = upload_folder / file.filename
+                with open(file_path, "wb") as f:
+                    shutil.copyfileobj(file.file, f)
+                
+                file_size = file_path.stat().st_size
+                
+                # 3. Checksum
+                with open(file_path, 'rb') as f:
+                    checksum = hashlib.sha256(f.read()).hexdigest()
+                
+                # 4. Check Duplicate
+                existing = db.get_document_by_checksum(checksum)
+                if existing:
+                    if file_path.exists():
+                        os.remove(file_path)
+                    results.append({
+                        "filename": file.filename,
+                        "status": "duplicate",
+                        "document_id": existing.id,
+                        "message": "File already exists"
+                    })
+                    continue
+                
+                # 5. Create DB Record
+                doc = db.create_document(
+                    filename=file.filename,
+                    file_path=str(file_path),
+                    file_type=file_ext,
+                    file_size=file_size,
+                    checksum=checksum,
+                    category=category,
+                    tags=tags.split(',') if tags else None,
+                    author=author,
+                    description=description,
+                    ocr_engine=ocr_engine
+                )
+                
+                # Update status to processing
+                db.update_document_status(doc.id, 'processing')
+                
+                # 6. Prepare Metadata
+                metadata = {}
+                if category: metadata['category'] = category
+                if tags: metadata['tags'] = tags.split(',')
+                if author: metadata['author'] = author
+                if description: metadata['description'] = description
+                
+                # 7. Start Background Task
+                thread = threading.Thread(
+                    target=process_document_background,
+                    args=(doc.id, file_path, metadata, ocr_engine, checksum),
+                    daemon=True
+                )
+                task_manager.register_thread(doc.id, thread)
+                thread.start()
+                
+                results.append({
+                    "filename": file.filename,
+                    "status": "processing",
+                    "document_id": doc.id,
+                    "checksum": checksum
+                })
+                
+                logger.info("batch_file_processing_started", doc_id=doc.id, filename=file.filename)
+                
+            except Exception as file_error:
+                logger.error("batch_file_failed", filename=file.filename, error=str(file_error))
+                # Clean up file if it exists and we failed before starting processing
+                if file_path and file_path.exists() and "document_id" not in locals():
+                    try:
+                        os.remove(file_path)
+                    except:
+                        pass
+                        
+                results.append({
+                    "filename": file.filename,
+                    "status": "failed",
+                    "error": str(file_error)
+                })
+
         return JSONResponse(content={"results": results})
     
     except Exception as e:
