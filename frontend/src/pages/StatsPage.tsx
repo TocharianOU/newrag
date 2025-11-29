@@ -101,7 +101,7 @@ export default function StatsPage() {
               <div key={type} className="group">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase">{type}</span>
-                  <span className="text-sm text-slate-500">{count} 篇</span>
+                  <span className="text-sm text-slate-500">{count} 页</span>
                 </div>
                 <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div 
