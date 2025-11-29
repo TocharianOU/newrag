@@ -4,7 +4,12 @@
 
 ## ✨ 核心特性
 
-- **多格式支持**: 深度解析 PDF, DOCX, PPTX, Excel, 图片等多种格式。
+- **多格式支持**: 全面支持以下文档格式的深度解析与语义检索：
+  - **文档**: PDF, DOCX/DOC (Word), PPTX/PPT (PowerPoint), ODT, ODP
+  - **表格**: XLSX/XLS (Excel), CSV, ODS
+  - **文本**: TXT, MD (Markdown), HTML
+  - **图片**: JPG, JPEG, PNG (支持 OCR 与 VLM 描述)
+  - **压缩**: ZIP (自动批量处理)
 - **智能 OCR**: 集成两阶段自适应 OCR (300/600 DPI) 和 VLM (视觉大模型) 纠错，精准还原文档内容。
 - **结构化提取**: 自动识别并提取表格 (Markdown)、图片内容和元数据。
 - **语义检索**: 基于 Elasticsearch 的混合检索 (向量 + 关键词)，支持页面级索引。
