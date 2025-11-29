@@ -75,6 +75,68 @@ def start_workers():
 # Ensure workers are started
 start_workers()
 
+def recover_stuck_tasks():
+    """
+    Recover tasks that were interrupted during shutdown.
+    Reset 'processing' and 'queued' tasks to 'queued' state and re-enqueue them.
+    This ensures no tasks are left in limbo after a restart.
+    """
+    try:
+        # Find tasks that are stuck in processing or queued
+        stuck_statuses = ['processing', 'queued']
+        stuck_docs = db.get_documents_by_status(stuck_statuses)
+        
+        if not stuck_docs:
+            logger.info("no_stuck_tasks_found")
+            return
+            
+        logger.info("recovering_stuck_tasks", count=len(stuck_docs))
+        
+        for doc in stuck_docs:
+            try:
+                doc_id = doc.id
+                file_path = Path(doc.file_path) if doc.file_path else None
+                
+                # Verify file exists
+                if not file_path or not file_path.exists():
+                    logger.warning("stuck_task_file_missing", doc_id=doc_id, path=str(file_path))
+                    db.update_document_status(doc_id, 'failed', error_message="File not found during recovery")
+                    continue
+                
+                # Reconstruct metadata
+                metadata = {}
+                if doc.category: metadata['category'] = doc.category
+                if doc.tags: metadata['tags'] = doc.tags.split(',') if doc.tags else []
+                if doc.author: metadata['author'] = doc.author
+                if doc.description: metadata['description'] = doc.description
+                
+                # Default values
+                ocr_engine = doc.ocr_engine or 'vision'
+                checksum = doc.checksum or ''
+                
+                # Reset status to queued
+                db.update_document_status(doc_id, 'queued', error_message="Recovered from system restart")
+                
+                # Re-create task in manager
+                task_manager.create_task(doc_id)
+                task_manager.update_task(
+                    doc_id,
+                    status=TaskStatus.PENDING,
+                    message="Recovered task, waiting in queue...",
+                    progress_percentage=0
+                )
+                
+                # Enqueue
+                task_queue.put((doc_id, file_path, metadata, ocr_engine, checksum))
+                logger.info("stuck_task_recovered", doc_id=doc_id, filename=doc.filename)
+                
+            except Exception as doc_error:
+                logger.error("failed_to_recover_single_task", doc_id=doc.id, error=str(doc_error))
+                db.update_document_status(doc.id, 'failed', error_message=f"Recovery failed: {str(doc_error)}")
+                
+    except Exception as e:
+        logger.error("task_recovery_process_failed", error=str(e))
+
 
 # ============================================================
 # Helper functions

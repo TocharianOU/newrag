@@ -222,6 +222,14 @@ class DatabaseManager:
         finally:
             session.close()
     
+    def get_documents_by_status(self, statuses: List[str]) -> List[Document]:
+        """Get documents by a list of statuses"""
+        session = self.get_session()
+        try:
+            return session.query(Document).filter(Document.status.in_(statuses)).all()
+        finally:
+            session.close()
+
     def list_documents(
         self,
         limit: int = 50,

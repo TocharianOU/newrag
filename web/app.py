@@ -67,6 +67,14 @@ db = DatabaseManager()
 app.include_router(document_router)
 app.include_router(cleanup_router)
 
+# Recover any stuck tasks from previous runs
+from web.handlers.document_processor import recover_stuck_tasks
+try:
+    logger.info("attempting_task_recovery")
+    recover_stuck_tasks()
+except Exception as e:
+    logger.error("task_recovery_failed_at_startup", error=str(e))
+
 # Create upload and processed folders
 upload_folder = Path(web_config.get('upload_folder', './uploads'))
 upload_folder.mkdir(parents=True, exist_ok=True)
