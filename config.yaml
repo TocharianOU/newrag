@@ -132,8 +132,6 @@ processing:
     - odt
     - txt
     - md
-    - html
-    - csv
     - xlsx
     - ods
     - png
@@ -202,7 +200,6 @@ web:
     - ods
     - txt
     - md
-    - html
     - zip
     - pptx
     - ppt
