@@ -3,6 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+import threading
 
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, Boolean, Text
 from sqlalchemy.ext.declarative import declarative_base
@@ -29,7 +30,7 @@ class Document(Base):
     description = Column(Text)
     
     # Processing status
-    status = Column(String(50), default='pending')  # pending, processing, completed, failed
+    status = Column(String(50), default='pending')  # pending, queued, processing, completed, failed
     num_chunks = Column(Integer, default=0)
     error_message = Column(Text)
     
@@ -79,6 +80,8 @@ class Document(Base):
 class DatabaseManager:
     """Database manager for SQLite"""
     
+    _db_lock = threading.Lock()  # Global lock for SQLite write operations
+    
     def __init__(self, db_path: str = "data/documents.db"):
         """Initialize database"""
         db_file = Path(db_path)
@@ -111,27 +114,28 @@ class DatabaseManager:
         ocr_engine: Optional[str] = None
     ) -> Document:
         """Create new document record"""
-        session = self.get_session()
-        try:
-            doc = Document(
-                filename=filename,
-                file_path=file_path,
-                file_type=file_type,
-                file_size=file_size,
-                checksum=checksum,
-                category=category,
-                tags=','.join(tags) if tags else '',
-                author=author,
-                description=description,
-                ocr_engine=ocr_engine,
-                status='pending'
-            )
-            session.add(doc)
-            session.commit()
-            session.refresh(doc)
-            return doc
-        finally:
-            session.close()
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                doc = Document(
+                    filename=filename,
+                    file_path=file_path,
+                    file_type=file_type,
+                    file_size=file_size,
+                    checksum=checksum,
+                    category=category,
+                    tags=','.join(tags) if tags else '',
+                    author=author,
+                    description=description,
+                    ocr_engine=ocr_engine,
+                    status='pending'
+                )
+                session.add(doc)
+                session.commit()
+                session.refresh(doc)
+                return doc
+            finally:
+                session.close()
     
     def update_document_status(
         self,
@@ -143,25 +147,26 @@ class DatabaseManager:
         pages_data: Optional[str] = None
     ):
         """Update document processing status"""
-        session = self.get_session()
-        try:
-            doc = session.query(Document).filter(Document.id == doc_id).first()
-            if doc:
-                doc.status = status
-                if num_chunks is not None:
-                    doc.num_chunks = num_chunks
-                if es_document_ids:
-                    doc.es_document_ids = es_document_ids
-                if error_message:
-                    doc.error_message = error_message
-                if pages_data:
-                    doc.pages_data = pages_data
-                if status == 'completed':
-                    doc.processed_at = datetime.utcnow()
-                    doc.progress_percentage = 100
-                session.commit()
-        finally:
-            session.close()
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                doc = session.query(Document).filter(Document.id == doc_id).first()
+                if doc:
+                    doc.status = status
+                    if num_chunks is not None:
+                        doc.num_chunks = num_chunks
+                    if es_document_ids:
+                        doc.es_document_ids = es_document_ids
+                    if error_message:
+                        doc.error_message = error_message
+                    if pages_data:
+                        doc.pages_data = pages_data
+                    if status == 'completed':
+                        doc.processed_at = datetime.utcnow()
+                        doc.progress_percentage = 100
+                    session.commit()
+            finally:
+                session.close()
     
     def update_document_progress(
         self,
@@ -172,32 +177,34 @@ class DatabaseManager:
         total_pages: Optional[int] = None
     ):
         """Update document processing progress"""
-        session = self.get_session()
-        try:
-            doc = session.query(Document).filter(Document.id == doc_id).first()
-            if doc:
-                doc.progress_percentage = min(100, max(0, progress_percentage))
-                doc.progress_message = progress_message
-                if processed_pages is not None:
-                    doc.processed_pages = processed_pages
-                if total_pages is not None:
-                    doc.total_pages = total_pages
-                session.commit()
-        finally:
-            session.close()
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                doc = session.query(Document).filter(Document.id == doc_id).first()
+                if doc:
+                    doc.progress_percentage = min(100, max(0, progress_percentage))
+                    doc.progress_message = progress_message
+                    if processed_pages is not None:
+                        doc.processed_pages = processed_pages
+                    if total_pages is not None:
+                        doc.total_pages = total_pages
+                    session.commit()
+            finally:
+                session.close()
     
     def update_document_pages_data(self, doc_id: int, pages_data: list):
         """Update document pages_data field and total_pages count"""
         import json
-        session = self.get_session()
-        try:
-            doc = session.query(Document).filter(Document.id == doc_id).first()
-            if doc:
-                doc.pages_data = json.dumps(pages_data)
-                doc.total_pages = len(pages_data)  # 🔥 同时更新页数
-                session.commit()
-        finally:
-            session.close()
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                doc = session.query(Document).filter(Document.id == doc_id).first()
+                if doc:
+                    doc.pages_data = json.dumps(pages_data)
+                    doc.total_pages = len(pages_data)  # 🔥 同时更新页数
+                    session.commit()
+            finally:
+                session.close()
     
     def get_document(self, doc_id: int) -> Optional[Document]:
         """Get document by ID"""
@@ -236,25 +243,27 @@ class DatabaseManager:
     
     def delete_document(self, doc_id: int) -> bool:
         """Delete document by ID"""
-        session = self.get_session()
-        try:
-            doc = session.query(Document).filter(Document.id == doc_id).first()
-            if doc:
-                session.delete(doc)
-                session.commit()
-                return True
-            return False
-        finally:
-            session.close()
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                doc = session.query(Document).filter(Document.id == doc_id).first()
+                if doc:
+                    session.delete(doc)
+                    session.commit()
+                    return True
+                return False
+            finally:
+                session.close()
     
     def delete_all_documents(self):
         """Delete all documents"""
-        session = self.get_session()
-        try:
-            session.query(Document).delete()
-            session.commit()
-        finally:
-            session.close()
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                session.query(Document).delete()
+                session.commit()
+            finally:
+                session.close()
     
     def get_stats(self):
         """Get database statistics"""
@@ -279,4 +288,3 @@ class DatabaseManager:
             }
         finally:
             session.close()
-

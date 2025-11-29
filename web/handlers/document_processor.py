@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import queue
 from pathlib import Path
 from typing import Optional
 
@@ -25,12 +26,54 @@ pipeline = ProcessingPipeline()
 web_config = config.web_config
 upload_folder = Path(web_config.get('upload_folder', './uploads'))
 
-# Concurrent processing control (limit to 5 documents processing at the same time)
-processing_semaphore = threading.Semaphore(5)
-
 # Create processed folder path globally
 processed_folder = Path('web/static/processed_docs')
 processed_folder.mkdir(parents=True, exist_ok=True)
+
+# Global Task Queue
+# tuple: (doc_id, file_path, metadata, ocr_engine, checksum)
+task_queue = queue.Queue()
+
+# Worker Thread Management
+WORKER_COUNT = 3  # Number of concurrent workers
+workers = []
+
+def processing_worker():
+    """Worker thread to process documents from queue"""
+    while True:
+        try:
+            # Get task from queue
+            task_args = task_queue.get()
+            if task_args is None:
+                break  # Sentinel to stop worker
+            
+            doc_id, file_path, metadata, ocr_engine, checksum = task_args
+            
+            try:
+                logger.info("worker_picked_task", doc_id=doc_id, thread=threading.current_thread().name)
+                _real_process_document(doc_id, file_path, metadata, ocr_engine, checksum)
+            except Exception as e:
+                logger.error("worker_task_failed", doc_id=doc_id, error=str(e))
+                task_manager.complete_task(doc_id, success=False, error_message=str(e))
+                db.update_document_status(doc_id, 'failed', error_message=str(e))
+            finally:
+                task_queue.task_done()
+                
+        except Exception as e:
+            logger.error("worker_thread_error", error=str(e))
+
+# Start workers
+def start_workers():
+    global workers
+    if not workers:
+        for i in range(WORKER_COUNT):
+            t = threading.Thread(target=processing_worker, name=f"DocWorker-{i+1}", daemon=True)
+            t.start()
+            workers.append(t)
+        logger.info("worker_threads_started", count=WORKER_COUNT)
+
+# Ensure workers are started
+start_workers()
 
 
 # ============================================================
@@ -597,8 +640,8 @@ def process_single_docx(doc_id: int, file_path: Path, metadata: dict, ocr_engine
         ], capture_output=True, text=True)
         
         if result.returncode != 0:
-            logger.error("docx_processing_failed", error=result.stderr, doc_id=doc_id)
-            raise ValueError(f"DOCX processing failed: {result.stderr}")
+            logger.error("docx_processing_failed", error=result.stderr, stdout=result.stdout, doc_id=doc_id)
+            raise ValueError(f"DOCX processing failed: {result.stdout} {result.stderr}")
         
         logger.info("docx_extraction_completed", doc_id=doc_id)
         
@@ -978,261 +1021,278 @@ def process_single_image(doc_id: int, file_path: Path, metadata: dict, ocr_engin
         raise
 
 
+def _real_process_document(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str):
+    """
+    Actual logic for processing documents.
+    This is called by the worker thread and replaces the old process_document_background logic.
+    """
+    
+    try:
+        # Update task status
+        task_manager.update_task(
+            doc_id,
+            status=TaskStatus.RUNNING,
+            stage=TaskStage.INITIALIZING,
+            progress_percentage=0,
+            message="Initializing document processing...",
+            filename=file_path.name
+        )
+        db.update_document_progress(doc_id, 0, "Initializing...")
+        logger.info("background_processing_started", doc_id=doc_id, filename=file_path.name, ocr_engine=ocr_engine)
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Determine file type and handle accordingly
+        file_ext = file_path.suffix.lower()
+        logger.info("📄 file_type_detected", doc_id=doc_id, file_ext=file_ext, ocr_engine=ocr_engine)
+        
+        # Handle ZIP files - extract and process all supported files
+        if file_ext == '.zip':
+            import zipfile
+            
+            task_manager.update_task(
+                doc_id,
+                stage=TaskStage.EXTRACTING_ZIP,
+                progress_percentage=5,
+                message="Extracting ZIP archive...",
+                is_zip_parent=True
+            )
+            db.update_document_progress(doc_id, 5, "Extracting ZIP archive...")
+            logger.info("extracting_zip", doc_id=doc_id, zip_file=file_path.name)
+            
+            # Create temporary extraction directory
+            temp_extract_dir = upload_folder / f"temp_extract_{doc_id}_{checksum[:8]}"
+            temp_extract_dir.mkdir(exist_ok=True)
+            
+            # Extract ZIP
+            try:
+                with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                    # Handle encoding issues in ZIP filenames (common with macOS-created ZIPs)
+                    for zip_info in zip_ref.infolist():
+                        # Try to fix filename encoding if needed
+                        try:
+                            # First try: assume filename is correct UTF-8
+                            corrected_name = zip_info.filename
+                        except:
+                            # If fails, try to decode as CP437 (DOS) and re-encode as UTF-8
+                            try:
+                                corrected_name = zip_info.filename.encode('cp437').decode('utf-8')
+                            except:
+                                # Last resort: keep original
+                                corrected_name = zip_info.filename
+                        
+                        # Extract with corrected name
+                        zip_info.filename = corrected_name
+                        zip_ref.extract(zip_info, temp_extract_dir)
+                
+                # Find all supported files
+                supported_extensions = ['.pdf', '.pptx', '.ppt', '.odp', '.docx', '.doc', '.odt', '.xlsx', '.xls', '.ods', '.jpg', '.jpeg', '.png']
+                found_files = []
+                
+                for p in temp_extract_dir.rglob('*'):
+                    if p.is_file() and p.suffix.lower() in supported_extensions:
+                        # Check if any part of the path is hidden or __MACOSX
+                        parts = p.relative_to(temp_extract_dir).parts
+                        if not any(part.startswith('.') or part == '__MACOSX' for part in parts):
+                            found_files.append(p)
+                
+                if not found_files:
+                    raise ValueError("No supported files found in ZIP archive")
+                
+                logger.info("found_files_in_zip", count=len(found_files), doc_id=doc_id)
+                
+                # Update parent task with total files
+                task_manager.update_task(
+                    doc_id,
+                    total_files=len(found_files),
+                    processed_files=0,
+                    message=f"Found {len(found_files)} files in ZIP. Initializing tasks..."
+                )
+                
+                # Phase 1: Create all tasks and DB records first (Show all as Pending immediately)
+                pending_tasks = []
+                for idx, f_path in enumerate(found_files, 1):
+                    f_ext = f_path.suffix.lower()
+                    
+                    child_checksum = f"{checksum}_{idx}"
+                    
+                    # Create database record for child FIRST (to get real ID)
+                    child_doc = db.create_document(
+                        filename=f_path.name,
+                        file_path=str(f_path),
+                        file_type=f_ext.lstrip('.'),
+                        file_size=f_path.stat().st_size,
+                        checksum=child_checksum,
+                        category=metadata.get('category'),
+                        tags=metadata.get('tags'),
+                        author=metadata.get('author'),
+                        description=f"From ZIP: {file_path.name} / {f_path.name}",
+                        ocr_engine=ocr_engine
+                    )
+                    
+                    # Use the database-generated ID as child_doc_id
+                    child_doc_id = child_doc.id
+                    
+                    # Create child task with real ID
+                    task_manager.create_task(child_doc_id)
+                    task_manager.add_child_task(doc_id, child_doc_id)
+                    
+                    # Store info for processing
+                    pending_tasks.append({
+                        'child_doc_id': child_doc_id,
+                        'file_path': f_path,
+                        'file_ext': f_ext,
+                        'checksum': child_checksum,
+                        'idx': idx
+                    })
+                    
+                    # Initialize task status as pending
+                    task_manager.update_task(
+                        child_doc_id,
+                        status=TaskStatus.PENDING,
+                        message="Waiting in queue...",
+                        progress_percentage=0,
+                        filename=f_path.name
+                    )
+
+                # Phase 2: Process files sequentially
+                for task_info in pending_tasks:
+                    idx = task_info['idx']
+                    f_path = task_info['file_path']
+                    f_ext = task_info['file_ext']
+                    child_doc_id = task_info['child_doc_id']
+                    child_checksum = task_info['checksum']
+                    
+                    # Check for cancellation
+                    if not task_manager.wait_if_paused(doc_id):
+                        raise InterruptedError("Task was cancelled by user")
+                    
+                    # Update parent progress
+                    parent_progress = 10 + (80 * (idx - 1) / len(found_files))
+                    task_manager.update_task(
+                        doc_id,
+                        progress_percentage=int(parent_progress),
+                        message=f"Processing file {idx}/{len(found_files)}: {f_path.name}",
+                        processed_files=idx - 1
+                    )
+                    
+                    # Process the file based on type
+                    try:
+                        if f_ext == '.pdf':
+                            process_single_pdf(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
+                        elif f_ext == '.pptx':
+                            process_single_pptx(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
+                        elif f_ext in ['.docx', '.doc', '.odt', '.txt', '.md']:
+                            process_single_docx(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
+                        elif f_ext in ['.xlsx', '.xls', '.ods', '.odp', '.ppt']:
+                            # Route ODS, ODP, PPT to Excel processor (Generic LibreOffice -> PDF -> VLM)
+                            process_single_excel(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
+                        elif f_ext in ['.jpg', '.jpeg', '.png']:
+                            process_single_image(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
+                        
+                        # Child task status is already updated in the processing function
+                        # No need to update again here
+                        
+                    except Exception as e:
+                        logger.error("child_file_failed", error=str(e), child_id=child_doc_id, file=f_path.name)
+                        task_manager.complete_task(child_doc_id, success=False, error_message=str(e))
+                        db.update_document_status(child_doc_id, 'failed', error_message=str(e))
+                    
+                    # Update parent processed count
+                    task_manager.update_task(
+                        doc_id,
+                        processed_files=idx
+                    )
+                
+                # All files processed
+                task_manager.complete_task(doc_id, success=True)
+                db.update_document_status(doc_id, 'completed')
+                logger.info("zip_processing_completed", doc_id=doc_id, total_files=len(found_files))
+                return
+                
+            except zipfile.BadZipFile:
+                raise ValueError("Invalid or corrupted ZIP file")
+        
+        elif file_ext == '.pdf':
+            # Handle single PDF file
+            process_single_pdf(doc_id, file_path, metadata, ocr_engine, checksum)
+        
+        elif file_ext == '.pptx':
+            # Handle PPTX files
+            process_single_pptx(doc_id, file_path, metadata, ocr_engine, checksum)
+        
+        elif file_ext in ['.docx', '.doc', '.odt', '.txt', '.md']:
+            # Handle DOCX and Text/Markdown files
+            process_single_docx(doc_id, file_path, metadata, ocr_engine, checksum)
+        
+        elif file_ext in ['.xlsx', '.xls', '.ods', '.odp', '.ppt']:
+            # Handle Excel/ODS/ODP/PPT files (Generic PDF conversion)
+            process_single_excel(doc_id, file_path, metadata, ocr_engine, checksum)
+        
+        elif file_ext in ['.jpg', '.jpeg', '.png']:
+            # Handle image files
+            process_single_image(doc_id, file_path, metadata, ocr_engine, checksum)
+        
+        else:
+            raise ValueError(f"Unsupported file type: {file_ext}. Supported: PDF, ZIP, JPG, PNG, PPTX, DOCX, XLSX, ODT, ODS, ODP")
+    
+    except InterruptedError as e:
+        # Task was cancelled by user
+        logger.info("task_cancelled", doc_id=doc_id, message=str(e))
+        task_manager.complete_task(doc_id, success=False, error_message="Task cancelled by user")
+        db.update_document_status(doc_id, 'cancelled', error_message=str(e))
+    
+    except subprocess.CalledProcessError as e:
+        error_msg = f"OCR processing failed: {str(e)}"
+        logger.error("❌ subprocess_failed", error=str(e), returncode=e.returncode, 
+                    cmd=' '.join(e.cmd) if hasattr(e, 'cmd') else 'unknown',
+                    stdout=e.stdout[:500] if hasattr(e, 'stdout') and e.stdout else '',
+                    stderr=e.stderr[:500] if hasattr(e, 'stderr') and e.stderr else '',
+                    doc_id=doc_id, ocr_engine=ocr_engine)
+        task_manager.complete_task(doc_id, success=False, error_message=error_msg)
+        db.update_document_status(doc_id, 'failed', error_message=error_msg)
+    
+    except (RuntimeError, ValueError) as e:
+        error_msg = f"Processing failed: {str(e)}"
+        logger.error("processing_failed", error=str(e), 
+                    error_type=type(e).__name__, doc_id=doc_id)
+        task_manager.complete_task(doc_id, success=False, error_message=error_msg)
+        db.update_document_status(doc_id, 'failed', error_message=error_msg)
+    
+    except Exception as e:
+        error_msg = str(e)
+        logger.error("background_processing_failed", error=error_msg, doc_id=doc_id)
+        task_manager.complete_task(doc_id, success=False, error_message=error_msg)
+        db.update_document_status(doc_id, 'failed', error_message=error_msg)
+    finally:
+        # Clean up temporary extraction directory
+        if 'temp_extract_dir' in locals() and temp_extract_dir and temp_extract_dir.exists():
+            try:
+                shutil.rmtree(temp_extract_dir)
+                logger.info("cleaned_up_temp_extract_dir", dir=str(temp_extract_dir))
+            except Exception as e:
+                logger.warning("failed_to_cleanup_temp_dir", error=str(e), dir=str(temp_extract_dir))
+
+
 def process_document_background(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str):
-    """Background task to process document with full control"""
+    """
+    Entry point for background processing.
+    Now just enqueues the task for workers.
+    """
     # Create task in task manager
     task_manager.create_task(doc_id)
     
-    logger.info("🚀 process_document_background_called", doc_id=doc_id, filename=file_path.name, ocr_engine=ocr_engine, checksum=checksum[:8])
+    # Update status to Queued
+    task_manager.update_task(
+        doc_id,
+        status=TaskStatus.PENDING,
+        message="Waiting in queue for available worker...",
+        progress_percentage=0
+    )
+    db.update_document_status(doc_id, 'queued', error_message=None)
     
-    # Wait for processing slot (max 5 concurrent documents)
-    with processing_semaphore:
-        temp_extract_dir = None
-        
-        try:
-            # Update task status
-            task_manager.update_task(
-                doc_id,
-                status=TaskStatus.RUNNING,
-                stage=TaskStage.INITIALIZING,
-                progress_percentage=0,
-                message="Initializing document processing...",
-                filename=file_path.name
-            )
-            db.update_document_progress(doc_id, 0, "Initializing...")
-            logger.info("background_processing_started", doc_id=doc_id, filename=file_path.name, ocr_engine=ocr_engine)
-            
-            # Check for cancellation
-            if not task_manager.wait_if_paused(doc_id):
-                raise InterruptedError("Task was cancelled by user")
-            
-            # Determine file type and handle accordingly
-            file_ext = file_path.suffix.lower()
-            logger.info("📄 file_type_detected", doc_id=doc_id, file_ext=file_ext, ocr_engine=ocr_engine)
-            
-            # Handle ZIP files - extract and process all supported files
-            if file_ext == '.zip':
-                import zipfile
-                
-                task_manager.update_task(
-                    doc_id,
-                    stage=TaskStage.EXTRACTING_ZIP,
-                    progress_percentage=5,
-                    message="Extracting ZIP archive...",
-                    is_zip_parent=True
-                )
-                db.update_document_progress(doc_id, 5, "Extracting ZIP archive...")
-                logger.info("extracting_zip", doc_id=doc_id, zip_file=file_path.name)
-                
-                # Create temporary extraction directory
-                temp_extract_dir = upload_folder / f"temp_extract_{doc_id}_{checksum[:8]}"
-                temp_extract_dir.mkdir(exist_ok=True)
-                
-                # Extract ZIP
-                try:
-                    with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                        # Handle encoding issues in ZIP filenames (common with macOS-created ZIPs)
-                        for zip_info in zip_ref.infolist():
-                            # Try to fix filename encoding if needed
-                            try:
-                                # First try: assume filename is correct UTF-8
-                                corrected_name = zip_info.filename
-                            except:
-                                # If fails, try to decode as CP437 (DOS) and re-encode as UTF-8
-                                try:
-                                    corrected_name = zip_info.filename.encode('cp437').decode('utf-8')
-                                except:
-                                    # Last resort: keep original
-                                    corrected_name = zip_info.filename
-                            
-                            # Extract with corrected name
-                            zip_info.filename = corrected_name
-                            zip_ref.extract(zip_info, temp_extract_dir)
-                    
-                    # Find all supported files
-                    supported_extensions = ['.pdf', '.pptx', '.ppt', '.odp', '.docx', '.doc', '.odt', '.xlsx', '.xls', '.ods', '.jpg', '.jpeg', '.png']
-                    found_files = []
-                    
-                    for p in temp_extract_dir.rglob('*'):
-                        if p.is_file() and p.suffix.lower() in supported_extensions:
-                            # Check if any part of the path is hidden or __MACOSX
-                            parts = p.relative_to(temp_extract_dir).parts
-                            if not any(part.startswith('.') or part == '__MACOSX' for part in parts):
-                                found_files.append(p)
-                    
-                    if not found_files:
-                        raise ValueError("No supported files found in ZIP archive")
-                    
-                    logger.info("found_files_in_zip", count=len(found_files), doc_id=doc_id)
-                    
-                    # Update parent task with total files
-                    task_manager.update_task(
-                        doc_id,
-                        total_files=len(found_files),
-                        processed_files=0,
-                        message=f"Found {len(found_files)} files in ZIP. Initializing tasks..."
-                    )
-                    
-                    # Phase 1: Create all tasks and DB records first (Show all as Pending immediately)
-                    pending_tasks = []
-                    for idx, f_path in enumerate(found_files, 1):
-                        f_ext = f_path.suffix.lower()
-                        
-                        child_checksum = f"{checksum}_{idx}"
-                        
-                        # Create database record for child FIRST (to get real ID)
-                        child_doc = db.create_document(
-                            filename=f_path.name,
-                            file_path=str(f_path),
-                            file_type=f_ext.lstrip('.'),
-                            file_size=f_path.stat().st_size,
-                            checksum=child_checksum,
-                            category=metadata.get('category'),
-                            tags=metadata.get('tags'),
-                            author=metadata.get('author'),
-                            description=f"From ZIP: {file_path.name} / {f_path.name}",
-                            ocr_engine=ocr_engine
-                        )
-                        
-                        # Use the database-generated ID as child_doc_id
-                        child_doc_id = child_doc.id
-                        
-                        # Create child task with real ID
-                        task_manager.create_task(child_doc_id)
-                        task_manager.add_child_task(doc_id, child_doc_id)
-                        
-                        # Store info for processing
-                        pending_tasks.append({
-                            'child_doc_id': child_doc_id,
-                            'file_path': f_path,
-                            'file_ext': f_ext,
-                            'checksum': child_checksum,
-                            'idx': idx
-                        })
-                        
-                        # Initialize task status as pending
-                        task_manager.update_task(
-                            child_doc_id,
-                            status=TaskStatus.PENDING,
-                            message="Waiting in queue...",
-                            progress_percentage=0,
-                            filename=f_path.name
-                        )
-
-                    # Phase 2: Process files sequentially
-                    for task_info in pending_tasks:
-                        idx = task_info['idx']
-                        f_path = task_info['file_path']
-                        f_ext = task_info['file_ext']
-                        child_doc_id = task_info['child_doc_id']
-                        child_checksum = task_info['checksum']
-                        
-                        # Check for cancellation
-                        if not task_manager.wait_if_paused(doc_id):
-                            raise InterruptedError("Task was cancelled by user")
-                        
-                        # Update parent progress
-                        parent_progress = 10 + (80 * (idx - 1) / len(found_files))
-                        task_manager.update_task(
-                            doc_id,
-                            progress_percentage=int(parent_progress),
-                            message=f"Processing file {idx}/{len(found_files)}: {f_path.name}",
-                            processed_files=idx - 1
-                        )
-                        
-                        # Process the file based on type
-                        try:
-                            if f_ext == '.pdf':
-                                process_single_pdf(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
-                            elif f_ext == '.pptx':
-                                process_single_pptx(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
-                            elif f_ext in ['.docx', '.doc', '.odt', '.txt', '.md']:
-                                process_single_docx(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
-                            elif f_ext in ['.xlsx', '.xls', '.ods', '.odp', '.ppt']:
-                                # Route ODS, ODP, PPT to Excel processor (Generic LibreOffice -> PDF -> VLM)
-                                process_single_excel(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
-                            elif f_ext in ['.jpg', '.jpeg', '.png']:
-                                process_single_image(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
-                            
-                            # Child task status is already updated in the processing function
-                            # No need to update again here
-                            
-                        except Exception as e:
-                            logger.error("child_file_failed", error=str(e), child_id=child_doc_id, file=f_path.name)
-                            task_manager.complete_task(child_doc_id, success=False, error_message=str(e))
-                            db.update_document_status(child_doc_id, 'failed', error_message=str(e))
-                        
-                        # Update parent processed count
-                        task_manager.update_task(
-                            doc_id,
-                            processed_files=idx
-                        )
-                    
-                    # All files processed
-                    task_manager.complete_task(doc_id, success=True)
-                    db.update_document_status(doc_id, 'completed')
-                    logger.info("zip_processing_completed", doc_id=doc_id, total_files=len(found_files))
-                    return
-                    
-                except zipfile.BadZipFile:
-                    raise ValueError("Invalid or corrupted ZIP file")
-            
-            elif file_ext == '.pdf':
-                # Handle single PDF file
-                process_single_pdf(doc_id, file_path, metadata, ocr_engine, checksum)
-            
-            elif file_ext == '.pptx':
-                # Handle PPTX files
-                process_single_pptx(doc_id, file_path, metadata, ocr_engine, checksum)
-            
-            elif file_ext in ['.docx', '.doc', '.odt', '.txt', '.md']:
-                # Handle DOCX and Text/Markdown files
-                process_single_docx(doc_id, file_path, metadata, ocr_engine, checksum)
-
-            elif file_ext in ['.xlsx', '.xls', '.ods', '.odp', '.ppt']:
-                # Handle Excel/ODS/ODP/PPT files (Generic PDF conversion)
-                process_single_excel(doc_id, file_path, metadata, ocr_engine, checksum)
-            
-            elif file_ext in ['.jpg', '.jpeg', '.png']:
-                # Handle image files
-                process_single_image(doc_id, file_path, metadata, ocr_engine, checksum)
-            
-            else:
-                raise ValueError(f"Unsupported file type: {file_ext}. Supported: PDF, ZIP, JPG, PNG, PPTX, DOCX, XLSX, ODT, ODS, ODP")
-        
-        except InterruptedError as e:
-            # Task was cancelled by user
-            logger.info("task_cancelled", doc_id=doc_id, message=str(e))
-            task_manager.complete_task(doc_id, success=False, error_message="Task cancelled by user")
-            db.update_document_status(doc_id, 'cancelled', error_message=str(e))
-        
-        except subprocess.CalledProcessError as e:
-            error_msg = f"OCR processing failed: {str(e)}"
-            logger.error("❌ subprocess_failed", error=str(e), returncode=e.returncode, 
-                        cmd=' '.join(e.cmd) if hasattr(e, 'cmd') else 'unknown',
-                        stdout=e.stdout[:500] if hasattr(e, 'stdout') and e.stdout else '',
-                        stderr=e.stderr[:500] if hasattr(e, 'stderr') and e.stderr else '',
-                        doc_id=doc_id, ocr_engine=ocr_engine)
-            task_manager.complete_task(doc_id, success=False, error_message=error_msg)
-            db.update_document_status(doc_id, 'failed', error_message=error_msg)
-        
-        except (RuntimeError, ValueError) as e:
-            error_msg = f"Processing failed: {str(e)}"
-            logger.error("processing_failed", error=str(e), 
-                        error_type=type(e).__name__, doc_id=doc_id)
-            task_manager.complete_task(doc_id, success=False, error_message=error_msg)
-            db.update_document_status(doc_id, 'failed', error_message=error_msg)
-        
-        except Exception as e:
-            error_msg = str(e)
-            logger.error("background_processing_failed", error=error_msg, doc_id=doc_id)
-            task_manager.complete_task(doc_id, success=False, error_message=error_msg)
-            db.update_document_status(doc_id, 'failed', error_message=error_msg)
-        finally:
-            # Clean up temporary extraction directory
-            if temp_extract_dir and temp_extract_dir.exists():
-                try:
-                    shutil.rmtree(temp_extract_dir)
-                    logger.info("cleaned_up_temp_extract_dir", dir=str(temp_extract_dir))
-                except Exception as e:
-                    logger.warning("failed_to_cleanup_temp_dir", error=str(e), dir=str(temp_extract_dir))
+    # Enqueue task
+    task_queue.put((doc_id, file_path, metadata, ocr_engine, checksum))
+    logger.info("task_enqueued", doc_id=doc_id, qsize=task_queue.qsize())
