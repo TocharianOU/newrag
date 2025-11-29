@@ -148,51 +148,82 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle', use_vlm=True):
     output_dir.mkdir(parents=True, exist_ok=True)
     docx_path = Path(docx_path)
     
-    # ==================== 步骤 1: LibreOffice 转换 DOCX -> PDF ====================
-    print(f"\n{'='*70}")
-    print(f"📄 步骤 1: 转换为 PDF (获取精准布局)")
-    print(f"{'='*70}")
-    
-    temp_pdf = output_dir / f"{docx_path.stem}_temp.pdf"
-    
-    # 获取 LibreOffice 命令
-    soffice_cmd = get_soffice_command()
-    if not soffice_cmd:
-        print("  ❌ 错误: 未找到 LibreOffice (soffice)，无法进行转换")
-        print("  请安装 LibreOffice 并确保 soffice 命令在 PATH 中，或设置 SOFFICE_PATH 环境变量。")
-        print("  macOS: brew install --cask libreoffice")
-        print("  Ubuntu: sudo apt install libreoffice")
-        return None
-
+    # 安全处理中文文件名：如果包含非 ASCII 字符，先复制为临时文件
+    temp_process_file = None
     try:
-        print(f"  ⏳ 转换文档为 PDF (使用: {soffice_cmd})...")
+        original_docx_path = docx_path
+        if any(ord(c) > 127 for c in str(docx_path)):
+            import uuid
+            # 创建临时文件 (使用安全的纯英文名)
+            temp_name = f"temp_process_{uuid.uuid4().hex}{docx_path.suffix}"
+            temp_process_file = docx_path.parent / temp_name
+            shutil.copy2(docx_path, temp_process_file)
+            print(f"  🔄 使用安全临时文件处理中文名文件: {docx_path.name} -> {temp_name}")
+            docx_path = temp_process_file
+            
+        # ==================== 步骤 1: LibreOffice 转换 DOCX -> PDF ====================
+        print(f"\n{'='*70}")
+        print(f"📄 步骤 1: 转换为 PDF (获取精准布局)")
+        print(f"{'='*70}")
         
-        # 对于纯文本文件 (.txt, .md)，显式指定过滤器以确保正确编码和换行
-        convert_args = [
-            soffice_cmd,
-            '--headless',
-            '--convert-to', 'pdf',
-            '--infilter=Text (encoded):UTF8,LF,Liberation Mono,10', 
-            '--outdir', str(output_dir),
-            str(docx_path)
-        ]
+        temp_pdf = output_dir / f"{original_docx_path.stem}_temp.pdf"
         
-        # 如果是文本文件，LibreOffice 默认行为通常足够好，但可以根据需要添加过滤器
-        # 例如: --infilter="Text (encoded):UTF8,LF,,," 
-        # 但目前保持默认即可，LibreOffice 智能识别能力很强
-        
-        subprocess.run(convert_args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        # LibreOffice 输出的文件名处理
-        generated_pdf = output_dir / f"{docx_path.stem}.pdf"
-        if generated_pdf.exists() and generated_pdf != temp_pdf:
-            generated_pdf.rename(temp_pdf)
-        
-        print(f"  ✓ PDF 已生成: {temp_pdf.name}")
-        
-    except Exception as e:
-        print(f"  ❌ 转换失败: {e}")
-        return None
+        # 获取 LibreOffice 命令
+        soffice_cmd = get_soffice_command()
+        if not soffice_cmd:
+            print("  ❌ 错误: 未找到 LibreOffice (soffice)，无法进行转换")
+            print("  请安装 LibreOffice 并确保 soffice 命令在 PATH 中，或设置 SOFFICE_PATH 环境变量。")
+            print("  macOS: brew install --cask libreoffice")
+            print("  Ubuntu: sudo apt install libreoffice")
+            return None
+
+        try:
+            print(f"  ⏳ 转换文档为 PDF (使用: {soffice_cmd})...")
+            
+            # 对于纯文本文件 (.txt, .md)，显式指定过滤器以确保正确编码和换行
+            convert_args = [
+                soffice_cmd,
+                '--headless',
+                '--convert-to', 'pdf',
+                '--infilter=Text (encoded):UTF8,LF,Liberation Mono,10', 
+                '--outdir', str(output_dir),
+                str(docx_path)
+            ]
+            
+            # 如果是文本文件，LibreOffice 默认行为通常足够好，但可以根据需要添加过滤器
+            # 例如: --infilter="Text (encoded):UTF8,LF,,," 
+            # 但目前保持默认即可，LibreOffice 智能识别能力很强
+            
+            subprocess.run(convert_args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # LibreOffice 输出的文件名处理
+            # 注意：LibreOffice 会使用输入文件名生成 PDF
+            generated_pdf = output_dir / f"{docx_path.stem}.pdf"
+            if generated_pdf.exists():
+                generated_pdf.rename(temp_pdf)
+            else:
+                # 如果没找到预期文件，可能是因为使用了原始中文名（如果没有进入临时文件逻辑）
+                # 尝试找原始名称的 PDF
+                orig_pdf = output_dir / f"{original_docx_path.stem}.pdf"
+                if orig_pdf.exists():
+                    orig_pdf.rename(temp_pdf)
+            
+            if not temp_pdf.exists():
+                raise FileNotFoundError(f"PDF conversion failed, expected output not found: {temp_pdf}")
+                
+            print(f"  ✓ PDF 已生成: {temp_pdf.name}")
+            
+        except Exception as e:
+            print(f"  ❌ 转换失败: {e}")
+            return None
+    finally:
+        # 清理临时文件
+        if temp_process_file and temp_process_file.exists():
+            try:
+                temp_process_file.unlink()
+                print(f"  🧹 已清理临时文件: {temp_process_file.name}")
+            except Exception as e:
+                print(f"  ⚠️  清理临时文件失败: {e}")
 
     # ==================== 步骤 2: 初始化 OCR 引擎 ====================
     print(f"\n{'='*70}")

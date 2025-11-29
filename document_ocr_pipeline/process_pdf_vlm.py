@@ -296,43 +296,66 @@ def main():
         print(f"❌ PDF 不存在: {pdf_path}")
         sys.exit(1)
     
-    # 确定输出目录（与 adaptive_ocr_pipeline.py 保持一致）
-    if args.output_dir:
-        output_dir = Path(args.output_dir)
-    else:
-        # 使用与 adaptive_ocr_pipeline.py 相同的命名规则
-        output_dir = Path(pdf_path.stem.replace(' ', '_') + "_adaptive")
-    
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    logger.info("=" * 80)
-    logger.info("📄 开始处理 PDF 文档（智能 VLM 模式）", pdf=pdf_path.name, ocr_engine=args.ocr_engine)
-    logger.info("=" * 80)
-    
-    # 初始化 VLM
-    vlm_model = None
-    if HAS_VLM:
-        try:
-            vlm_config = config.vision_config
-            if vlm_config.get('enabled', False):
-                vlm_model = VisionModel(vlm_config)
-                logger.info("✅ VLM 已启用")
-        except Exception as e:
-            logger.warning(f"⚠️  VLM 初始化失败: {e}")
-    
-    # 先调用原有的 adaptive_ocr_pipeline 生成基础 OCR
-    logger.info("📍 阶段 1: 运行 Adaptive OCR Pipeline...")
-    
-    # 调用 adaptive_ocr_pipeline.py 作为子进程
-    import subprocess
-    adaptive_script = Path('document_ocr_pipeline/adaptive_ocr_pipeline.py')
-    subprocess.run([
-        sys.executable,
-        str(adaptive_script),
-        str(pdf_path),
-        '--ocr-engine', args.ocr_engine,
-        '--output-dir', str(output_dir)
-    ], check=True, cwd=project_root)
+    # 安全处理中文文件名：如果包含非 ASCII 字符，先复制为临时文件
+    temp_process_file = None
+    try:
+        original_pdf_path = pdf_path
+        if any(ord(c) > 127 for c in str(pdf_path)):
+            import shutil
+            import uuid
+            # 创建临时文件
+            temp_name = f"temp_process_{uuid.uuid4().hex}.pdf"
+            temp_process_file = pdf_path.parent / temp_name
+            shutil.copy2(pdf_path, temp_process_file)
+            logger.info(f"  🔄 使用安全临时文件处理中文名文件: {pdf_path.name} -> {temp_name}")
+            pdf_path = temp_process_file
+        
+        # 确定输出目录（与 adaptive_ocr_pipeline.py 保持一致）
+        if args.output_dir:
+            output_dir = Path(args.output_dir)
+        else:
+            # 使用与 adaptive_ocr_pipeline.py 相同的命名规则
+            # 注意：这里仍使用原始文件名生成目录名，因为目录名支持中文
+            output_dir = Path(original_pdf_path.stem.replace(' ', '_') + "_adaptive")
+        
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info("=" * 80)
+        logger.info("📄 开始处理 PDF 文档（智能 VLM 模式）", pdf=original_pdf_path.name, ocr_engine=args.ocr_engine)
+        logger.info("=" * 80)
+        
+        # 初始化 VLM
+        vlm_model = None
+        if HAS_VLM:
+            try:
+                vlm_config = config.vision_config
+                if vlm_config.get('enabled', False):
+                    vlm_model = VisionModel(vlm_config)
+                    logger.info("✅ VLM 已启用")
+            except Exception as e:
+                logger.warning(f"⚠️  VLM 初始化失败: {e}")
+        
+        # 先调用原有的 adaptive_ocr_pipeline 生成基础 OCR
+        logger.info("📍 阶段 1: 运行 Adaptive OCR Pipeline...")
+        
+        # 调用 adaptive_ocr_pipeline.py 作为子进程
+        import subprocess
+        adaptive_script = Path('document_ocr_pipeline/adaptive_ocr_pipeline.py')
+        subprocess.run([
+            sys.executable,
+            str(adaptive_script),
+            str(pdf_path),
+            '--ocr-engine', args.ocr_engine,
+            '--output-dir', str(output_dir)
+        ], check=True, cwd=project_root)
+    finally:
+        # 清理临时文件
+        if temp_process_file and temp_process_file.exists():
+            try:
+                temp_process_file.unlink()
+                logger.info(f"  🧹 已清理临时文件: {temp_process_file.name}")
+            except Exception as e:
+                logger.warning(f"  ⚠️  清理临时文件失败: {e}")
     
     # 读取生成的 complete_adaptive_ocr.json
     complete_json = output_dir / "complete_adaptive_ocr.json"
