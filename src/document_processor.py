@@ -291,7 +291,7 @@ class DocumentProcessor:
                     logger.warning("word_page_split_failed", error=str(e))
                     # Fall back to standard loading
                     loader = UnstructuredWordDocumentLoader(str(file_path))
-            elif file_ext == '.txt':
+            elif file_ext in ['.txt', '.md']:
                 loader = TextLoader(str(file_path), encoding='utf-8')
             elif file_ext in ['.html', '.htm']:
                 loader = UnstructuredHTMLLoader(str(file_path))

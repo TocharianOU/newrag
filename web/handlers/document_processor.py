@@ -496,6 +496,71 @@ def process_single_pptx(doc_id: int, file_path: Path, metadata: dict, ocr_engine
         raise
 
 
+def process_single_text(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str, parent_task_id: Optional[int] = None):
+    """Process a single Text/Markdown file (No OCR, just text indexing)"""
+    try:
+        logger.info("processing_text_file", doc_id=doc_id, filename=file_path.name)
+        
+        task_manager.update_task(
+            doc_id,
+            status=TaskStatus.RUNNING,
+            stage=TaskStage.INDEXING, # Skip OCR stage
+            progress_percentage=30,
+            message=f"Processing text: {file_path.name}...",
+            filename=file_path.name
+        )
+        db.update_document_progress(doc_id, 30, f"Processing text content...")
+        
+        # Check for cancellation
+        if not task_manager.wait_if_paused(doc_id):
+            raise InterruptedError("Task was cancelled by user")
+        
+        # Create output directory (for consistency)
+        doc_output_dir = processed_folder / f"{doc_id}_{checksum[:8]}"
+        doc_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Index to vector store using pipeline
+        metadata['document_id'] = doc_id
+        metadata['filename'] = file_path.name
+        metadata['checksum'] = checksum
+        metadata['source'] = str(file_path)
+        
+        # Direct text processing via pipeline -> DocumentProcessor -> TextLoader
+        result = pipeline.process_file(
+            file_path=str(file_path),
+            metadata=metadata,
+            processed_json_dir=str(doc_output_dir)
+        )
+        
+        # Create a simple pages_data for frontend consistency
+        # We don't have images, but we can provide text stats
+        pages_data = [{
+            'page_num': 1,
+            'image_path': "", # No image for text files
+            'visualized_path': "",
+            'text_count': 0, # Will be populated if we parsed result better, but 0 is safe
+            'components': []
+        }]
+        
+        db.update_document_pages_data(doc_id, pages_data)
+        
+        # Mark as completed
+        db.update_document_status(doc_id, 'completed')
+        if not parent_task_id:
+            db.update_document_progress(doc_id, 100, "Completed")
+        task_manager.complete_task(doc_id, success=True)
+        
+        logger.info("text_processing_completed", doc_id=doc_id)
+
+    except InterruptedError:
+        raise
+    except Exception as e:
+        logger.error("text_processing_failed", error=str(e), doc_id=doc_id)
+        task_manager.complete_task(doc_id, success=False, error_message=str(e))
+        db.update_document_status(doc_id, 'failed', error_message=str(e))
+        raise
+
+
 def process_single_docx(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str, parent_task_id: Optional[int] = None):
     """Process a single DOCX file"""
     try:
@@ -1121,9 +1186,9 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
                 process_single_pptx(doc_id, file_path, metadata, ocr_engine, checksum)
             
             elif file_ext in ['.docx', '.doc', '.odt', '.txt', '.md']:
-                # Handle DOCX/TXT/MD files
+                # Handle DOCX and Text/Markdown files
                 process_single_docx(doc_id, file_path, metadata, ocr_engine, checksum)
-            
+
             elif file_ext in ['.xlsx', '.xls', '.ods', '.odp', '.ppt']:
                 # Handle Excel/ODS/ODP/PPT files (Generic PDF conversion)
                 process_single_excel(doc_id, file_path, metadata, ocr_engine, checksum)

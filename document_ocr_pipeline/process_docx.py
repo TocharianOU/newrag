@@ -172,6 +172,7 @@ def process_docx(docx_path, output_dir, ocr_engine='paddle', use_vlm=True):
             soffice_cmd,
             '--headless',
             '--convert-to', 'pdf',
+            '--infilter=Text (encoded):UTF8,LF,Liberation Mono,10', 
             '--outdir', str(output_dir),
             str(docx_path)
         ]
