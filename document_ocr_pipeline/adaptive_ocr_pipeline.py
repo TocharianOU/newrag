@@ -338,8 +338,8 @@ def main():
     if args.output_dir:
         output_path = Path(args.output_dir)
     else:
-    output_dir = input_file.stem.replace(' ', '_') + "_adaptive"
-    output_path = Path(output_dir)
+        output_dir = input_file.stem.replace(' ', '_') + "_adaptive"
+        output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
     print("="*80)

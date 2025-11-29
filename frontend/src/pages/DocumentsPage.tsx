@@ -1,13 +1,17 @@
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, FileText, Calendar, Loader2, RefreshCw, Cloud } from 'lucide-react';
+import { Trash2, FileText, Calendar, Loader2, RefreshCw, Cloud, CheckSquare, Square } from 'lucide-react';
 import { documentAPI } from '../api/documents';
 
 export default function DocumentsPage() {
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [selectedDocs, setSelectedDocs] = useState<Set<number>>(new Set());
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
-    queryKey: ['documents'],
-    queryFn: () => documentAPI.list({ limit: 100 }),
+    queryKey: ['documents', page, pageSize],
+    queryFn: () => documentAPI.list({ limit: pageSize, offset: (page - 1) * pageSize }),
   });
 
   // 完整删除
@@ -18,24 +22,60 @@ export default function DocumentsPage() {
     },
   });
 
-  // 仅清理 MinIO
-  const cleanupMinIOMutation = useMutation({
-    mutationFn: documentAPI.cleanupMinIO,
-    onSuccess: (data) => {
-      alert(`MinIO 数据清理成功，释放了 ${data.files_deleted} 个文件`);
-    },
-  });
-
-  const handleDelete = (docId: number, filename: string) => {
+  const handleDelete = async (docId: number, filename: string) => {
     if (confirm(`确定要删除文档 "${filename}" 吗？这将删除所有相关数据！`)) {
-      deleteMutation.mutate(docId);
+      try {
+        await deleteMutation.mutateAsync(docId);
+      } catch (error) {
+        console.error("删除失败", error);
+        alert("删除失败，请查看控制台");
+      }
     }
   };
   
-  const handleCleanupMinIO = (docId: number, filename: string) => {
-    if (confirm(`确定要清理 "${filename}" 的 MinIO 数据吗？数据库记录将保留。`)) {
-      cleanupMinIOMutation.mutate(docId);
+  const handleBatchDelete = async () => {
+    if (selectedDocs.size === 0) return;
+    
+    if (confirm(`确定要删除选中的 ${selectedDocs.size} 个文档吗？这将删除所有相关数据！`)) {
+       const ids = Array.from(selectedDocs);
+       let successCount = 0;
+       
+       // 简单的串行删除实现，实际项目中可能需要后端支持批量删除 API
+       for (const id of ids) {
+         try {
+           await deleteMutation.mutateAsync(id);
+           successCount++;
+         } catch (error) {
+           console.error(`删除文档 ${id} 失败`, error);
+         }
+       }
+       
+       alert(`批量删除完成。成功: ${successCount}, 失败: ${ids.length - successCount}`);
+       setSelectedDocs(new Set()); // 清空选择
+       queryClient.invalidateQueries({ queryKey: ['documents'] });
     }
+  };
+
+  const toggleSelectAll = () => {
+    if (!data?.documents) return;
+    
+    if (selectedDocs.size === data.documents.length) {
+      setSelectedDocs(new Set());
+    } else {
+      const newSet = new Set<number>();
+      data.documents.forEach(doc => newSet.add(doc.id));
+      setSelectedDocs(newSet);
+    }
+  };
+
+  const toggleSelectDoc = (id: number) => {
+    const newSet = new Set(selectedDocs);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedDocs(newSet);
   };
 
   if (isLoading) {
@@ -46,6 +86,8 @@ export default function DocumentsPage() {
       </div>
     );
   }
+
+  const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
 
   return (
     <div className="space-y-6">
@@ -58,13 +100,24 @@ export default function DocumentsPage() {
             管理已上传的文档和知识库资源
           </p>
         </div>
-        <button 
-          onClick={() => refetch()}
-          className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500"
-          title="刷新列表"
-        >
-          <RefreshCw size={20} className={isRefetching ? "animate-spin" : ""} />
-        </button>
+        <div className="flex items-center gap-3">
+            {selectedDocs.size > 0 && (
+              <button
+                onClick={handleBatchDelete}
+                className="flex items-center gap-2 px-3 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg transition-colors text-sm font-medium"
+              >
+                <Trash2 size={16} />
+                批量删除 ({selectedDocs.size})
+              </button>
+            )}
+            <button 
+              onClick={() => refetch()}
+              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500"
+              title="刷新列表"
+            >
+              <RefreshCw size={20} className={isRefetching ? "animate-spin" : ""} />
+            </button>
+        </div>
       </div>
 
       <div className="card overflow-hidden bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-2xl">
@@ -72,6 +125,18 @@ export default function DocumentsPage() {
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
             <thead className="bg-slate-50/50 dark:bg-slate-800/50">
               <tr>
+                <th className="px-4 py-4 w-12">
+                  <button 
+                    onClick={toggleSelectAll}
+                    className="text-slate-400 hover:text-indigo-600 transition-colors"
+                  >
+                    {data?.documents.length && selectedDocs.size === data.documents.length ? (
+                        <CheckSquare size={20} className="text-indigo-600" />
+                    ) : (
+                        <Square size={20} />
+                    )}
+                  </button>
+                </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   文档名称
                 </th>
@@ -91,7 +156,19 @@ export default function DocumentsPage() {
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {data?.documents.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors group">
+                <tr key={doc.id} className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors group ${selectedDocs.has(doc.id) ? 'bg-indigo-50/30 dark:bg-indigo-900/10' : ''}`}>
+                  <td className="px-4 py-4">
+                     <button 
+                        onClick={() => toggleSelectDoc(doc.id)}
+                        className="text-slate-400 hover:text-indigo-600 transition-colors"
+                      >
+                        {selectedDocs.has(doc.id) ? (
+                            <CheckSquare size={20} className="text-indigo-600" />
+                        ) : (
+                            <Square size={20} />
+                        )}
+                      </button>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mr-4">
@@ -141,13 +218,6 @@ export default function DocumentsPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
-                        onClick={() => handleCleanupMinIO(doc.id, doc.filename)}
-                        className="p-2 text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
-                        title="仅清理 MinIO 数据"
-                      >
-                        <Cloud size={18} />
-                      </button>
-                      <button
                         onClick={() => handleDelete(doc.id, doc.filename)}
                         className="p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20 rounded-lg transition-colors"
                         title="完整删除"
@@ -160,7 +230,7 @@ export default function DocumentsPage() {
               ))}
               {data?.documents.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                     暂无文档，请先上传
                   </td>
                 </tr>
@@ -169,6 +239,29 @@ export default function DocumentsPage() {
           </table>
         </div>
       </div>
+      
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-2 mt-4">
+            <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1 rounded border border-slate-200 dark:border-slate-700 disabled:opacity-50"
+            >
+                上一页
+            </button>
+            <span className="px-3 py-1 text-slate-600 dark:text-slate-400">
+                第 {page} / {totalPages} 页
+            </span>
+            <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1 rounded border border-slate-200 dark:border-slate-700 disabled:opacity-50"
+            >
+                下一页
+            </button>
+        </div>
+      )}
     </div>
   );
 }

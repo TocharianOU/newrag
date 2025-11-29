@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # NewRAG Search MCP Server 启动脚本
+# 注意: 请确保在父目录配置好 config.yaml
 
 echo "🚀 Starting NewRAG Search MCP Server..."
 echo ""
@@ -12,24 +13,9 @@ if [ ! -f "../config.yaml" ]; then
     echo ""
 fi
 
-# 检查 Elasticsearch
-ES_URL=${ES_URL:-http://localhost:9200}
-echo "📡 Checking Elasticsearch connection at $ES_URL..."
-if curl -s "$ES_URL" > /dev/null 2>&1; then
-    echo "✓ Elasticsearch is running"
-else
-    echo "❌ Cannot connect to Elasticsearch at $ES_URL"
-    echo "   Please start Elasticsearch or set ES_URL environment variable"
-    exit 1
-fi
-
-# 设置环境变量
-export ES_URL=${ES_URL:-http://localhost:9200}
-
 # 启动服务器
 echo ""
-echo "Starting server in Stdio mode..."
-echo "To use HTTP mode, run: MCP_TRANSPORT=http npm run start:http"
+echo "Starting server..."
 echo ""
 
 npm start

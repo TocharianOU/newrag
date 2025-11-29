@@ -59,7 +59,7 @@ export default function HomePage() {
         </h2>
         <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
           <span className="text-sm opacity-80">
-            系统采用 <b>""仿生视觉" (OCR) + "认知重组" (VLM)</b> 的混合架构，<br/>
+            系统采用 <b>"仿生视觉" (OCR) + "认知重组" (VLM)</b> 的混合架构，<br/>
             像人类一样精准理解文档的文本、视觉与空间结构。
           </span>
         </p>

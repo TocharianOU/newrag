@@ -226,7 +226,7 @@ logging:
   level: INFO  # 日志级别: DEBUG / INFO / WARNING / ERROR / CRITICAL
   format: json  # 输出格式: json (结构化日志) / text (人类可读)
   output: stdout  # 输出目标: stdout (控制台) / file (文件)
-  file_path: ./logs/app.log  # 日志文件路径（仅在 output=file 时使用）
+  file_path: ./logs/newrag.log  # 日志文件路径（仅在 output=file 时使用）
   max_file_size: 10485760  # 单个日志文件最大大小（字节）10MB
   backup_count: 5  # 保留的历史日志文件数量（轮转）
   # 向量字段过滤：自动过滤日志中的 embedding/vector 字段，避免大量向量数据占用空间

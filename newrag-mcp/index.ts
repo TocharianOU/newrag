@@ -682,10 +682,10 @@ export async function createElasticsearchMcpServer(
 const ragConfig = loadRagConfig();
 
 const config: ElasticsearchConfig = {
-  url: process.env.ES_URL || "http://localhost:9200",
-  apiKey: process.env.ES_API_KEY || "",
-  username: process.env.ES_USERNAME || "",
-  password: process.env.ES_PASSWORD || "",
+  url: ragConfig?.elasticsearch?.hosts[0] || process.env.ES_URL || "http://localhost:9200",
+  apiKey: ragConfig?.elasticsearch?.password ? undefined : (process.env.ES_API_KEY || ""), // 优先用 user/pass
+  username: ragConfig?.elasticsearch?.username || process.env.ES_USERNAME || "",
+  password: ragConfig?.elasticsearch?.password || process.env.ES_PASSWORD || "",
   caCert: process.env.ES_CA_CERT || "",
 };
 

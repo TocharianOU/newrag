@@ -110,7 +110,7 @@ def main():
     frontend_env["VITE_MCP_URL"] = f"http://{mcp_display_host}:{conf['mcp_port']}/mcp"
     frontend_env["VITE_MCP_HOST_DISPLAY"] = mcp_display_host
     frontend_env["VITE_MCP_PORT"] = str(conf["mcp_port"])
-    
+        
     frontend_process = subprocess.Popen(
         [npm_cmd, "run", "dev"],
         cwd=frontend_dir,

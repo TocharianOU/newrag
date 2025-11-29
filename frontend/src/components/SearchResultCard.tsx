@@ -1,19 +1,59 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FileText, ChevronDown, ChevronUp, Eye, Image as ImageIcon, Search, AlertCircle, ExternalLink, Maximize2, X } from 'lucide-react';
+import { FileText, ChevronDown, ChevronUp, Eye, Image as ImageIcon, Search, AlertCircle, ExternalLink, Maximize2, X, Trash2 } from 'lucide-react';
 import type { SearchResult, PageData } from '../api/search';
+import { documentAPI } from '../api/documents';
 
 interface SearchResultCardProps {
   result: SearchResult;
   index: number;
+  onDelete?: (id: string) => void;
 }
 
-export const SearchResultCard: React.FC<SearchResultCardProps> = ({ result, index }) => {
+export const SearchResultCard: React.FC<SearchResultCardProps> = ({ result, index, onDelete }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showImages, setShowImages] = useState(false);
   const [activeImageTab, setActiveImageTab] = useState<'original' | 'visualized'>('original');
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [lightboxMode, setLightboxMode] = useState<'original' | 'visualized'>('original');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleted, setIsDeleted] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const handleDelete = async () => {
+    if (!window.confirm('确定要删除这条记录吗？这将从数据库和索引中永久移除。')) return;
+    
+    const docIdStr = result.metadata.document_id || result.metadata.doc_id || result.id;
+    if (!docIdStr) {
+      alert('无法获取文档ID');
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      // 尝试将 ID 转换为数字，如果不是数字则可能无法调用 delete API (取决于 API 定义)
+      // 目前 API 文档显示 delete 接收 number。ES 中的 ID 可能是 string。
+      // 如果 docIdStr 是纯数字字符串，parseInt 可以工作。
+      const docId = parseInt(docIdStr.toString(), 10);
+      
+      if (isNaN(docId)) {
+        // 如果是非数字 ID（可能是旧数据），可能无法通过常规 API 删除
+        console.warn('Document ID is not a number:', docIdStr);
+        alert(`文档 ID 格式不正确 (${docIdStr})，无法通过 API 删除`);
+        return;
+      }
+
+      await documentAPI.delete(docId);
+      setIsDeleted(true);
+      if (onDelete) onDelete(docIdStr.toString());
+    } catch (error) {
+      console.error('Delete failed', error);
+      alert('删除失败，请查看控制台');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  if (isDeleted) return null;
 
   // Determine display text
   const fullContent = result.content || result.text || '';
@@ -254,7 +294,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({ result, inde
         </div>
 
         {/* Image Preview Section */}
-        {matchedPage ? (
+        {matchedPage && (
           <div className="mt-4 border-t border-slate-200 dark:border-slate-800 pt-4">
             <div className="flex justify-between items-center mb-3">
               <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -380,16 +420,32 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({ result, inde
               </div>
             )}
           </div>
-        ) : (
-          // Orphan Document State
+        )}
+        {/* Orphan Document State */}
+        {!matchedPage && (
           <div className="mt-4 border-t border-slate-200 dark:border-slate-800 pt-4">
             <div className="bg-red-50 dark:bg-red-900/10 rounded-lg p-4 border border-red-100 dark:border-red-800/30 flex items-start gap-3">
               <AlertCircle className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" size={18} />
               <div className="flex-1">
-                <h4 className="text-sm font-bold text-red-700 dark:text-red-400">无页面预览</h4>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                  文档文件可能已被删除，或者 Elasticsearch 索引数据与数据库不一致。
-                </p>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="text-sm font-bold text-red-700 dark:text-red-400">无页面预览</h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                      文档文件可能已被删除，或者 Elasticsearch 索引数据与数据库不一致。
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete();
+                    }}
+                    disabled={isDeleting}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 rounded text-xs font-medium transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 size={14} />
+                    {isDeleting ? '删除中...' : '删除记录'}
+                  </button>
+                </div>
                 
                 <div className="mt-3">
                    <details className="text-xs">
