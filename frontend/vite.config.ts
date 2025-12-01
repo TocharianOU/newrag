@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
+      host: '0.0.0.0', // 允许外部访问
       port: frontendPort,
       strictPort: true, // 如果端口被占用，直接退出而不是尝试下一个端口
       proxy: {
