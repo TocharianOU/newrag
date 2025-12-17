@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "langchain>=0.1.0",
+    "langchain-core>=0.1.0",
+    "langchain-text-splitters>=0.0.1",
     "langchain-elasticsearch>=0.1.0",
     "langchain-community>=0.0.20",
     "langchain-openai>=0.0.5",

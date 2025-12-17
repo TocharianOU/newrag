@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 import structlog
 from elasticsearch import Elasticsearch
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_elasticsearch import ElasticsearchStore
 
 from src.config import config

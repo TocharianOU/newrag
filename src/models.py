@@ -5,7 +5,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 import structlog
-from langchain.embeddings.base import Embeddings
+from langchain_core.embeddings import Embeddings
 from openai import OpenAI
 
 from src.config import config
