@@ -40,7 +40,7 @@ processing_semaphore = threading.Semaphore(3)
 app = FastAPI(
     title="AIOps RAG Knowledge Base",
     description="AI-powered knowledge base for IT Operations and Security",
-    version="0.1.0"
+    version="1.1.0"
 )
 
 # CORS configuration

@@ -1,6 +1,6 @@
 [project]
 name = "rag-knowledge-base"
-version = "0.1.0"
+version = "1.1.0"
 description = "AIOps RAG Knowledge Base System for IT Operations and Security"
 readme = "README.md"
 requires-python = ">=3.9"
