@@ -5,6 +5,10 @@ import os
 import time
 import threading
 import yaml # 需要 PyYAML，通常项目中已有
+from pathlib import Path
+
+# Ensure logs directory exists
+Path("logs").mkdir(exist_ok=True)
 
 def load_config():
     """读取 config.yaml 配置"""

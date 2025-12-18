@@ -46,13 +46,24 @@ class VectorStore:
         
         self.index_name = self.config.get('index_name', 'aiops_knowledge_base')
         
-        # Initialize LangChain Elasticsearch store
-        self.store = ElasticsearchStore(
-            es_connection=self.es_client,
-            index_name=self.index_name,
-            embedding=self.embedding_model.get_langchain_embeddings(),
-            vector_query_field="content_vector",
-        )
+        # Initialize LangChain Elasticsearch store with version compatibility
+        try:
+            # Try new parameter name first (langchain-elasticsearch >= 0.2.0)
+            self.store = ElasticsearchStore(
+                es_client=self.es_client,
+                index_name=self.index_name,
+                embedding=self.embedding_model.get_langchain_embeddings(),
+                vector_query_field="content_vector",
+            )
+        except TypeError:
+            # Fallback to old parameter name for backwards compatibility
+            logger.warning("Using legacy es_connection parameter for ElasticsearchStore")
+            self.store = ElasticsearchStore(
+                es_connection=self.es_client,
+                index_name=self.index_name,
+                embedding=self.embedding_model.get_langchain_embeddings(),
+                vector_query_field="content_vector",
+            )
         
         logger.info("vector_store_initialized", index_name=self.index_name)
     

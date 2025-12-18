@@ -7,6 +7,9 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+
+# Ensure logs directory exists before importing logging modules
+Path("logs").mkdir(exist_ok=True)
 from typing import List, Optional
 from datetime import datetime
 
