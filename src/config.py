@@ -39,6 +39,12 @@ class Config:
     
     def _apply_env_overrides(self):
         """Apply environment variable overrides"""
+        # Database
+        if os.getenv('DATABASE_URL'):
+            if 'database' not in self._config:
+                self._config['database'] = {}
+            self._config['database']['url'] = os.getenv('DATABASE_URL')
+        
         # Elasticsearch
         if os.getenv('ES_HOST'):
             self._config['elasticsearch']['hosts'] = [os.getenv('ES_HOST')]
@@ -74,6 +80,12 @@ class Config:
         # Logging
         if os.getenv('LOG_LEVEL'):
             self._config['logging']['level'] = os.getenv('LOG_LEVEL')
+        
+        # Security - JWT
+        if os.getenv('JWT_SECRET'):
+            if 'security' not in self._config:
+                self._config['security'] = {}
+            self._config['security']['jwt_secret'] = os.getenv('JWT_SECRET')
         
         # MinIO - ensure minio section exists before applying overrides
         if 'minio' not in self._config:
@@ -165,6 +177,11 @@ class Config:
     def minio_config(self) -> Dict[str, Any]:
         """Get MinIO configuration"""
         return self.get('minio', {})
+    
+    @property
+    def database_config(self) -> Dict[str, Any]:
+        """Get database configuration"""
+        return self.get('database', {})
     
 
 

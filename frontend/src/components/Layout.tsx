@@ -1,5 +1,6 @@
-import { Link, useLocation } from 'react-router-dom';
-import { Search, Upload, BarChart3, FileText, Sparkles, Server } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Search, Upload, BarChart3, FileText, Sparkles, Server, User, LogOut } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -7,6 +8,54 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check if user is logged in
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    // Fetch current user info
+    fetch('/api/auth/me', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('Unauthorized');
+        }
+        return res.json();
+      })
+      .then(data => {
+        setUser(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        navigate('/login');
+      });
+  }, [navigate]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    navigate('/login');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-slate-600">加载中...</div>
+      </div>
+    );
+  }
 
   const navItems = [
     { path: '/', label: '上传', icon: Upload },
@@ -33,28 +82,45 @@ export default function Layout({ children }: LayoutProps) {
             </div>
 
             {/* Navigation */}
-            <nav className="flex items-center gap-1">
-              {navItems.map(({ path, label, icon: Icon }) => {
-                const isActive = location.pathname === path;
-                return (
-                  <Link
-                    key={path}
-                    to={path}
-                    className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      isActive
-                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800/50'
-                    }`}
-                  >
-                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
-                    <span>{label}</span>
-                    {isActive && (
-                      <span className="absolute inset-x-0 -bottom-[13px] h-[2px] bg-indigo-500 rounded-t-full shadow-[0_-2px_8px_rgba(99,102,241,0.6)]" />
-                    )}
-                  </Link>
-                );
-              })}
-            </nav>
+            <div className="flex items-center gap-4">
+              <nav className="flex items-center gap-1">
+                {navItems.map(({ path, label, icon: Icon }) => {
+                  const isActive = location.pathname === path;
+                  return (
+                    <Link
+                      key={path}
+                      to={path}
+                      className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                        isActive
+                          ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
+                      <span>{label}</span>
+                      {isActive && (
+                        <span className="absolute inset-x-0 -bottom-[13px] h-[2px] bg-indigo-500 rounded-t-full shadow-[0_-2px_8px_rgba(99,102,241,0.6)]" />
+                      )}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              {/* User Menu */}
+              <div className="flex items-center gap-2 pl-4 border-l border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <User size={16} />
+                  <span>{user?.username}</span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all duration-200"
+                  title="登出"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </header>

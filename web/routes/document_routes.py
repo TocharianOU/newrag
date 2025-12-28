@@ -8,14 +8,15 @@ import zipfile
 import os
 import threading
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, File, Form, UploadFile
+from fastapi import APIRouter, HTTPException, File, Form, UploadFile, Depends, Request
 from fastapi.responses import JSONResponse
 from src.task_manager import task_manager, TaskStatus
-from src.database import DatabaseManager
+from src.database import DatabaseManager, User
 import shutil
 from src.pipeline import ProcessingPipeline
 from src.config import config
 from web.handlers.document_processor import process_document_background
+from web.dependencies.auth_deps import get_current_user, require_permission
 
 web_config = config.web_config
 upload_folder = Path(web_config.get('upload_folder', './uploads'))
@@ -36,35 +37,42 @@ router = APIRouter(prefix="", tags=["documents"])
 # ============================================================
 
 @router.get("/documents")
-async def list_documents(limit: int = 50, offset: int = 0, status: Optional[str] = None, include_archives: bool = False):
+async def list_documents(
+    limit: int = 50, 
+    offset: int = 0, 
+    status: Optional[str] = None, 
+    include_archives: bool = False,
+    current_user: Optional[User] = Depends(get_current_user)
+):
     """
-    List uploaded documents
+    List uploaded documents with permission filtering
     
-    示例函数 - 其他文档路由可以复制到这里：
-    - POST /upload
-    - POST /upload_batch  
-    - POST /upload_zip
-    - GET /documents/{doc_id}/progress
-    - DELETE /documents/{doc_id}
-    - DELETE /documents (delete all)
-    - GET /tasks
-    - GET /tasks/{task_id}
-    - POST /tasks/{task_id}/pause
-    - POST /tasks/{task_id}/resume
-    - POST /tasks/{task_id}/cancel
-    - POST /tasks/cleanup
-    - POST /documents/{doc_id}/cleanup-minio
+    Requires authentication. Returns only documents the user has permission to see.
     """
     try:
         # 默认不显示 ZIP 压缩包本身，除非 include_archives=True
         exclude_types = None if include_archives else ['zip']
-        docs = db.list_documents(limit=limit, offset=offset, status=status, exclude_file_types=exclude_types)
+        
+        # Apply permission filtering based on current user
+        user_id = current_user.id if current_user else None
+        org_id = current_user.org_id if current_user else None
+        is_superuser = current_user.is_superuser if current_user else False
+        
+        docs = db.list_documents(
+            limit=limit, 
+            offset=offset, 
+            status=status, 
+            exclude_file_types=exclude_types,
+            user_id=user_id,
+            org_id=org_id,
+            is_superuser=is_superuser
+        )
         return JSONResponse(content={
             "documents": [doc.to_dict() for doc in docs],
             "total": len(docs)
         })
     except Exception as e:
-        logger.error("list_documents_failed", error=str(e))
+        logger.error("list_documents_failed", error=str(e), user_id=user_id if current_user else None)
         raise HTTPException(status_code=500, detail=str(e))
 
 

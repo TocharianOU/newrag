@@ -1,6 +1,18 @@
 # AIOps RAG Knowledge Base Configuration
 # 面向 IT 运维和安全场景的智能知识库系统配置
 
+# 数据库配置
+database:
+  # 数据库连接URL（通过环境变量DATABASE_URL覆盖）
+  url: "sqlite:///data/documents.db"  # 开发环境默认使用SQLite
+  # url: "postgresql://user:pass@localhost:5432/newrag"  # 生产环境可使用PostgreSQL
+  pool_size: 20
+  pool_recycle: 3600
+  echo: false
+  
+  # PostgreSQL RLS（行级安全）- SQLite会自动忽略此配置
+  enable_rls: false
+
 # MinIO 对象存储配置
 # 可通过环境变量覆盖：MINIO_ENABLED, MINIO_ENDPOINT, MINIO_ACCESS_KEY, 
 # MINIO_SECRET_KEY, MINIO_BUCKET, MINIO_SECURE, MINIO_PUBLIC_URL
@@ -242,10 +254,17 @@ security:
     enabled: true
     requests_per_minute: 60
   
-  # 认证（可选）
+  # JWT 配置
+  jwt_secret: "your-secret-key-min-32-chars-change-in-production"  # 通过环境变量 JWT_SECRET 覆盖
+  jwt_algorithm: "HS256"
+  jwt_access_token_expire_minutes: 60
+  jwt_refresh_token_expire_days: 30
+  
+  # 认证配置
   auth:
-    enabled: false
-    type: basic  # basic / jwt / oauth
+    enabled: true  # 认证已启用
+    type: jwt
+    allow_registration: true  # 是否允许用户注册（生产环境建议关闭）
 
 # MCP 服务配置
 # 注意：Platform 其他 MCP 服务端口分配：

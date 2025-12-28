@@ -67,6 +67,62 @@ class VectorStore:
         
         logger.info("vector_store_initialized", index_name=self.index_name)
     
+    def build_permission_filter(self, user_id: Optional[int] = None, 
+                               org_id: Optional[int] = None,
+                               is_superuser: bool = False) -> List[Dict[str, Any]]:
+        """
+        Build Elasticsearch filter clauses for permission filtering
+        
+        Permission logic (same as DatabaseManager):
+        - Superuser: no filter (sees everything)
+        - Regular user: can see:
+          1. Public documents (visibility=public)
+          2. Organization documents (visibility=org AND org_id matches)
+          3. Documents they own (owner_id matches)
+          4. Documents explicitly shared with them (user_id in shared_with_users)
+        
+        Returns:
+            List of filter clauses for ES bool query
+        """
+        if is_superuser:
+            # Superuser sees everything, no filter needed
+            return []
+        
+        # Build OR conditions for permissions
+        should_clauses = [
+            {"term": {"metadata.visibility": "public"}},  # Public documents
+        ]
+        
+        if user_id is not None:
+            # Documents owned by user
+            should_clauses.append({"term": {"metadata.owner_id": user_id}})
+            
+            # Documents shared with user (check if user_id appears in shared_with_users array)
+            should_clauses.append({"term": {"metadata.shared_with_users": user_id}})
+        
+        if org_id is not None:
+            # Organization documents
+            should_clauses.append({
+                "bool": {
+                    "must": [
+                        {"term": {"metadata.visibility": "org"}},
+                        {"term": {"metadata.org_id": org_id}}
+                    ]
+                }
+            })
+        
+        # If no user_id and not superuser, only show public documents
+        if user_id is None:
+            return [{"term": {"metadata.visibility": "public"}}]
+        
+        # Return as a single bool should clause with minimum_should_match=1
+        return [{
+            "bool": {
+                "should": should_clauses,
+                "minimum_should_match": 1
+            }
+        }]
+    
     def add_documents(
         self,
         documents: List[Document],
@@ -373,20 +429,45 @@ class VectorStore:
         self,
         query: str,
         k: int = 5,
-        filter_dict: Optional[Dict[str, Any]] = None
+        filter_dict: Optional[Dict[str, Any]] = None,
+        user_id: Optional[int] = None,
+        org_id: Optional[int] = None,
+        is_superuser: bool = False
     ) -> List[Document]:
         """
-        Perform similarity search
+        Perform similarity search with permission filtering
         
         Args:
             query: Search query
             k: Number of results to return
             filter_dict: Metadata filters
+            user_id: Current user ID for permission filtering
+            org_id: Current user's organization ID
+            is_superuser: Is user a superuser
         
         Returns:
             List of matching documents
         """
         try:
+            # Merge permission filter with custom filters
+            permission_filters = self.build_permission_filter(user_id, org_id, is_superuser)
+            
+            # Combine with existing filters
+            if filter_dict:
+                # Convert filter_dict to ES filter format and merge
+                combined_filter = filter_dict.copy()
+                if permission_filters:
+                    # Note: This is a simplified merge. For complex cases, 
+                    # we'd need to construct a proper bool query
+                    if "bool" not in combined_filter:
+                        combined_filter["bool"] = {}
+                    if "filter" not in combined_filter["bool"]:
+                        combined_filter["bool"]["filter"] = []
+                    combined_filter["bool"]["filter"].extend(permission_filters)
+                filter_dict = combined_filter
+            elif permission_filters:
+                filter_dict = {"bool": {"filter": permission_filters}}
+            
             results = self.store.similarity_search(
                 query=query,
                 k=k,
@@ -407,10 +488,13 @@ class VectorStore:
         k: int = 5,
         filter_dict: Optional[Dict[str, Any]] = None,
         vector_weight: Optional[float] = None,
-        bm25_weight: Optional[float] = None
+        bm25_weight: Optional[float] = None,
+        user_id: Optional[int] = None,
+        org_id: Optional[int] = None,
+        is_superuser: bool = False
     ) -> List[Dict[str, Any]]:
         """
-        Perform hybrid search (vector + BM25)
+        Perform hybrid search (vector + BM25) with permission filtering
         
         Args:
             query: Search query
@@ -418,6 +502,9 @@ class VectorStore:
             filter_dict: Metadata filters
             vector_weight: Weight for vector search (default from config)
             bm25_weight: Weight for BM25 search (default from config)
+            user_id: Current user ID for permission filtering
+            org_id: Current user's organization ID
+            is_superuser: Is user a superuser
         
         Returns:
             List of matching documents with scores
@@ -425,6 +512,9 @@ class VectorStore:
         hybrid_config = self.config.get('hybrid_search', {})
         vector_weight = vector_weight or hybrid_config.get('vector_weight', 0.7)
         bm25_weight = bm25_weight or hybrid_config.get('bm25_weight', 0.3)
+        
+        # Build permission filters
+        permission_filters = self.build_permission_filter(user_id, org_id, is_superuser)
         
         try:
             # Handle empty query (match_all + filters)
@@ -438,9 +528,11 @@ class VectorStore:
                     }
                 }
                 
-                # Add filters if provided
+                # Build filter clauses (custom filters + permission filters)
+                filter_clauses = []
+                
+                # Add custom filters if provided
                 if filter_dict:
-                    filter_clauses = []
                     for k, v in filter_dict.items():
                         if k == "filename" and isinstance(v, str):
                             search_val = v if '*' in v else f"*{v}*"
@@ -454,7 +546,12 @@ class VectorStore:
                             })
                         else:
                             filter_clauses.append({"term": {f"metadata.{k}": v}})
-                    
+                
+                # Add permission filters
+                if permission_filters:
+                    filter_clauses.extend(permission_filters)
+                
+                if filter_clauses:
                     query_body["query"]["bool"]["filter"] = filter_clauses
                 
                 # Execute search
@@ -581,11 +678,11 @@ class VectorStore:
                 }
             }
             
-            # Add filters if provided
+            # Build filter clauses (custom filters + permission filters)
+            filter_clauses = []
+            
+            # Add custom filters if provided
             if filter_dict:
-                # Initialize filter list
-                filter_clauses = []
-                
                 for k, v in filter_dict.items():
                     # Special handling for filename (wildcard search)
                     if k == "filename" and isinstance(v, str):
@@ -603,7 +700,12 @@ class VectorStore:
                     # Standard exact match for other fields (file_type, etc.)
                     else:
                         filter_clauses.append({"term": {f"metadata.{k}": v}})
-                
+            
+            # Add permission filters
+            if permission_filters:
+                filter_clauses.extend(permission_filters)
+            
+            if filter_clauses:
                 query_body["query"]["bool"]["filter"] = filter_clauses
             
             # Execute search

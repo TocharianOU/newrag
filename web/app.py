@@ -30,7 +30,9 @@ from src.task_manager import task_manager, TaskStatus, TaskStage
 
 # Import routers from separate modules
 from web.routes import document_router, cleanup_router
+from web.routes.auth_routes import router as auth_router
 from web.handlers import extract_matched_bboxes_from_file
+from web.middleware.auth import AuthMiddleware
 
 # Initialize logging with configuration from config.yaml
 setup_logging(log_config=config.logging_config)
@@ -58,6 +60,11 @@ if cors_config.get('enabled', True):
         allow_headers=cors_config.get('allow_headers', ["*"]),
     )
 
+# Add JWT authentication middleware (after CORS)
+security_config = config.security_config
+if security_config.get('auth', {}).get('enabled', False):
+    app.add_middleware(AuthMiddleware)
+
 # Setup templates and static files
 templates = Jinja2Templates(directory="web/templates")
 app.mount("/static", StaticFiles(directory="web/static"), name="static")
@@ -67,6 +74,7 @@ pipeline = ProcessingPipeline()
 db = DatabaseManager()
 
 # Include routers
+app.include_router(auth_router)
 app.include_router(document_router)
 app.include_router(cleanup_router)
 
