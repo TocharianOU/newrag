@@ -186,8 +186,12 @@ async def search(
                     'is_superuser': False
                 }
             elif target_org_id:
-                # Superuser with organization filter: only show documents from that org
-                permission_filters['org_id'] = target_org_id
+                # Superuser with organization filter: filter by org_id
+                permission_filters['user_permissions'] = {
+                    'user_id': current_user.id,
+                    'org_id': target_org_id,
+                    'is_superuser': True  # Still superuser, but with org filter
+                }
             # Superusers without org filter can see everything (no additional filters)
         else:
             # Unauthenticated users can only see public documents

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, FileText, Calendar, Loader2, RefreshCw, Cloud, CheckSquare, Square, Shield } from 'lucide-react';
+import { Trash2, FileText, Calendar, Loader2, RefreshCw, Cloud, CheckSquare, Square, Shield, X } from 'lucide-react';
 import { documentAPI } from '../api/documents';
 import DocumentPermissionModal from '../components/DocumentPermissionModal';
 import { getAccessToken } from '../utils/auth';
@@ -142,6 +142,7 @@ export default function DocumentsPage() {
   }
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
+  const filteredOrgName = selectedOrgId && organizations ? organizations.find(o => o.id === selectedOrgId)?.name : null;
 
   return (
     <div className="space-y-6">
@@ -151,7 +152,12 @@ export default function DocumentsPage() {
             文档库
           </h2>
           <p className="text-slate-500 text-sm mt-1">
-            管理已上传的文档和知识库资源
+            {filteredOrgName ? (
+              <>显示 <span className="font-medium text-indigo-600">{filteredOrgName}</span> 的文档</>
+            ) : (
+              '管理已上传的文档和知识库资源'
+            )}
+            {data && <span className="ml-2">（共 {data.total} 个文档）</span>}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -177,25 +183,44 @@ export default function DocumentsPage() {
       {/* Filter Bar */}
       {organizations && organizations.length > 1 && (
         <div className="card bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-          <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              筛选机构:
-            </label>
-            <select
-              value={selectedOrgId ?? ''}
-              onChange={(e) => {
-                setSelectedOrgId(e.target.value ? parseInt(e.target.value) : undefined);
-                setPage(1); // Reset to first page when filter changes
-              }}
-              className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-            >
-              <option value="">全部机构</option>
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                筛选机构:
+              </label>
+              <select
+                value={selectedOrgId ?? ''}
+                onChange={(e) => {
+                  setSelectedOrgId(e.target.value ? parseInt(e.target.value) : undefined);
+                  setPage(1); // Reset to first page when filter changes
+                }}
+                className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all min-w-[200px]"
+              >
+                <option value="">全部机构</option>
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedOrgId && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-md font-medium border border-indigo-100 dark:border-indigo-800">
+                  筛选中: {organizations.find(o => o.id === selectedOrgId)?.name}
+                </span>
+                <button
+                  onClick={() => {
+                    setSelectedOrgId(undefined);
+                    setPage(1);
+                  }}
+                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  title="清除筛选"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

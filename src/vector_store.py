@@ -74,10 +74,11 @@ class VectorStore:
         Build Elasticsearch filter clauses for permission filtering
         
         Permission logic (same as DatabaseManager):
-        - Superuser: no filter (sees everything)
+        - Superuser with org_id: filter by org_id only
+        - Superuser without org_id: no filter (sees everything)
         - Regular user: can see:
           1. Public documents (visibility=public OR visibility field missing - legacy docs)
-          2. Organization documents (visibility=org AND org_id matches)
+          2. Organization documents (visibility=organization AND org_id matches)
           3. Documents they own (owner_id matches)
           4. Documents explicitly shared with them (user_id in shared_with_users)
         
@@ -85,7 +86,10 @@ class VectorStore:
             List of filter clauses for ES bool query
         """
         if is_superuser:
-            # Superuser sees everything, no filter needed
+            # Superuser with org filter: only show docs from that org
+            if org_id is not None:
+                return [{"term": {"metadata.org_id": org_id}}]
+            # Superuser without org filter: sees everything, no filter needed
             return []
         
         # Build OR conditions for permissions
@@ -107,7 +111,7 @@ class VectorStore:
             should_clauses.append({
                 "bool": {
                     "must": [
-                        {"term": {"metadata.visibility": "org"}},
+                        {"term": {"metadata.visibility": "organization"}},
                         {"term": {"metadata.org_id": org_id}}
                     ]
                 }
