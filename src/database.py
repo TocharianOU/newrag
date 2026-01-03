@@ -907,6 +907,10 @@ class DatabaseManager:
                 session.add(master)
                 session.commit()
                 session.refresh(master)
+                
+                # Expunge the object from session so it can be used after session closes
+                session.expunge(master)
+                
                 return master
             except Exception as e:
                 session.rollback()
@@ -954,6 +958,9 @@ class DatabaseManager:
                     master.latest_version_id = doc_version.id
                     master.updated_at = datetime.utcnow()
                     session.commit()
+                
+                # Expunge the object from session so it can be used after session closes
+                session.expunge(doc_version)
                 
                 return doc_version
             except Exception as e:
@@ -1111,6 +1118,9 @@ class DatabaseManager:
                     master.updated_at = datetime.utcnow()
                     session.commit()
                 
+                # Expunge the object from session so it can be used after session closes
+                session.expunge(new_version)
+                
                 return new_version
             except Exception as e:
                 session.rollback()
@@ -1158,6 +1168,10 @@ class DatabaseManager:
                 master.updated_at = datetime.utcnow()
                 session.commit()
                 session.refresh(master)
+                
+                # Expunge the object from session so it can be used after session closes
+                session.expunge(master)
+                
                 return master
             except Exception as e:
                 session.rollback()
@@ -1196,6 +1210,10 @@ class DatabaseManager:
                 
                 session.commit()
                 session.refresh(version)
+                
+                # Expunge the object from session so it can be used after session closes
+                session.expunge(version)
+                
                 return version
             except Exception as e:
                 session.rollback()
