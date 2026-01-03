@@ -5,6 +5,7 @@ export interface SearchRequest {
   k?: number;
   filters?: Record<string, any>;
   use_hybrid?: boolean;
+  organization_id?: number;
 }
 
 export interface PageData {

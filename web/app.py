@@ -104,6 +104,7 @@ class SearchRequest(BaseModel):
     k: int = 5
     filters: Optional[dict] = None
     use_hybrid: bool = True
+    organization_id: Optional[int] = None  # Organization filter for search
 
 
 class SearchResponse(BaseModel):
@@ -156,11 +157,21 @@ async def search(
     current_user: Optional[User] = Depends(get_optional_user)
 ):
     """
-    Search knowledge base with permission filtering
+    Search knowledge base with permission filtering and organization filtering
     """
     try:
         # Build permission filters based on current user
         permission_filters = {}
+        
+        # Handle organization filtering
+        target_org_id = None
+        if request.organization_id is not None:
+            if current_user and current_user.is_superuser:
+                # Superuser can filter by any organization
+                target_org_id = request.organization_id
+            elif current_user:
+                # Non-superuser can only filter by their own organization
+                target_org_id = current_user.org_id if current_user.org_id else None
         
         if current_user:
             if not current_user.is_superuser:
@@ -171,10 +182,13 @@ async def search(
                 # Note: Elasticsearch filtering will be handled by adding these to the query
                 permission_filters['user_permissions'] = {
                     'user_id': current_user.id,
-                    'org_id': current_user.org_id,
+                    'org_id': target_org_id if target_org_id else current_user.org_id,
                     'is_superuser': False
                 }
-            # Superusers can see everything (no additional filters)
+            elif target_org_id:
+                # Superuser with organization filter: only show documents from that org
+                permission_filters['org_id'] = target_org_id
+            # Superusers without org filter can see everything (no additional filters)
         else:
             # Unauthenticated users can only see public documents
             permission_filters['visibility'] = 'public'

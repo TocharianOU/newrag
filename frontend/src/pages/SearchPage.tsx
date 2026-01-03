@@ -4,13 +4,22 @@ import { Search, Loader2, ArrowRight, Filter, X } from 'lucide-react';
 import { searchAPI } from '../api/search';
 import type { SearchRequest } from '../api/search';
 import { SearchResultCard } from '../components/SearchResultCard';
+import { documentAPI } from '../api/documents';
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
   const [filenameQuery, setFilenameQuery] = useState('');
   const [selectedFileType, setSelectedFileType] = useState<string>('');
+  const [selectedOrgId, setSelectedOrgId] = useState<number | undefined>(undefined);
   const [showFilters, setShowFilters] = useState(false);
   const [searchParams, setSearchParams] = useState<SearchRequest | null>(null);
+
+  // Fetch organizations for filter
+  const { data: organizations } = useQuery({
+    queryKey: ['organizations'],
+    queryFn: documentAPI.getOrganizations,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['search', searchParams],
@@ -22,7 +31,7 @@ export default function SearchPage() {
     if (e) e.preventDefault();
     
     // Allow search if query exists OR if any filter is set
-    if (query.trim() || filenameQuery.trim() || selectedFileType) {
+    if (query.trim() || filenameQuery.trim() || selectedFileType || selectedOrgId) {
       const filters: Record<string, any> = {};
       
       if (filenameQuery.trim()) {
@@ -37,7 +46,8 @@ export default function SearchPage() {
         query: query.trim(),
         k: 10,
         use_hybrid: true,
-        filters: Object.keys(filters).length > 0 ? filters : undefined
+        filters: Object.keys(filters).length > 0 ? filters : undefined,
+        organization_id: selectedOrgId
       });
     }
   };
@@ -45,6 +55,7 @@ export default function SearchPage() {
   const clearFilters = () => {
     setFilenameQuery('');
     setSelectedFileType('');
+    setSelectedOrgId(undefined);
   };
 
   return (
@@ -72,7 +83,7 @@ export default function SearchPage() {
                 type="button"
                 onClick={() => setShowFilters(!showFilters)}
                 className={`p-2 rounded-xl transition-colors ${
-                  showFilters || filenameQuery || selectedFileType
+                  showFilters || filenameQuery || selectedFileType || selectedOrgId
                     ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
                     : 'hover:bg-slate-100 text-slate-400 dark:hover:bg-slate-800'
                 }`}
@@ -82,7 +93,7 @@ export default function SearchPage() {
               </button>
               <button
                 type="submit"
-                disabled={(!query.trim() && !filenameQuery && !selectedFileType) || isLoading}
+                disabled={(!query.trim() && !filenameQuery && !selectedFileType && !selectedOrgId) || isLoading}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 h-full rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isLoading ? <Loader2 className="animate-spin" size={18} /> : <ArrowRight size={18} />}
@@ -92,7 +103,7 @@ export default function SearchPage() {
           </form>
 
           {/* Filters Panel */}
-          {(showFilters || filenameQuery || selectedFileType) && (
+          {(showFilters || filenameQuery || selectedFileType || selectedOrgId) && (
             <div className={`
               bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 
               animate-in fade-in slide-in-from-top-2 transition-all
@@ -100,7 +111,7 @@ export default function SearchPage() {
             `}>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-medium text-slate-500">高级筛选条件</span>
-                {(filenameQuery || selectedFileType) && (
+                {(filenameQuery || selectedFileType || selectedOrgId) && (
                   <button 
                     onClick={clearFilters}
                     className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
@@ -111,6 +122,24 @@ export default function SearchPage() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {organizations && organizations.length > 1 && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500 ml-1">所属机构</label>
+                    <select
+                      value={selectedOrgId ?? ''}
+                      onChange={(e) => setSelectedOrgId(e.target.value ? parseInt(e.target.value) : undefined)}
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500 transition-colors appearance-none"
+                    >
+                      <option value="">所有机构</option>
+                      {organizations.map((org) => (
+                        <option key={org.id} value={org.id}>
+                          {org.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-500 ml-1">文档名称</label>
                   <input
@@ -159,6 +188,11 @@ export default function SearchPage() {
               找到 {data.total} 个相关结果
             </span>
             <div className="flex gap-2">
+              {selectedOrgId && organizations && (
+                <span className="text-xs px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-md font-medium border border-indigo-100 dark:border-indigo-800">
+                  机构: {organizations.find(o => o.id === selectedOrgId)?.name}
+                </span>
+              )}
               {filenameQuery && (
                 <span className="text-xs px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-md font-medium border border-indigo-100 dark:border-indigo-800">
                   文件: {filenameQuery}
