@@ -485,20 +485,26 @@ class DatabaseManager:
         Apply permission filter to document query
         
         Permission logic:
-        - Superuser: can see all documents
+        - Superuser with org filter: can see all documents from that org
+        - Superuser without org filter: can see all documents
         - Regular user: can see:
           1. Public documents
           2. Organization documents (if same org_id)
           3. Documents they own
           4. Documents explicitly shared with them
         """
-        if is_superuser:
-            # Superuser sees everything
-            return query
-        
         # Default to Document model if not provided
         if model_class is None:
             model_class = Document
+        
+        # Superuser logic
+        if is_superuser:
+            if org_id is not None:
+                # Superuser with org filter: only show docs from that org
+                return query.filter(model_class.org_id == org_id)
+            else:
+                # Superuser without org filter: sees everything
+                return query
         
         if user_id is None:
             # Anonymous users only see public documents
@@ -1400,6 +1406,22 @@ class DatabaseManager:
                 DocumentVersion.document_master_id == document_master_id,
                 DocumentVersion.checksum == checksum
             ).first()
+        finally:
+            session.close()
+    
+    def count_documents_by_org(self, org_id: int) -> int:
+        """
+        Count total documents for an organization.
+        Counts DocumentMaster records (versioned architecture).
+        """
+        session = self.get_session()
+        try:
+            # Count versioned documents (DocumentMaster)
+            count = session.query(DocumentMaster).filter(
+                DocumentMaster.org_id == org_id
+            ).count()
+            
+            return count
         finally:
             session.close()
 

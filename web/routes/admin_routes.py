@@ -477,9 +477,7 @@ async def list_organizations(
     result = []
     for org in orgs:
         members = auth_manager.get_organization_members(org.id)
-        # TODO: Count documents (need to add query to DatabaseManager)
-        # For now, use 0
-        document_count = 0
+        document_count = db_manager.count_documents_by_org(org.id)
         
         result.append({
             'id': org.id,
