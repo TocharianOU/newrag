@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 import threading
 import json
+import uuid
 
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, Boolean, Text, ForeignKey, Table
 from sqlalchemy.ext.declarative import declarative_base
@@ -42,6 +43,7 @@ class Organization(Base):
     # Relationships
     users = relationship('User', back_populates='organization', cascade='all, delete-orphan')
     documents = relationship('Document', back_populates='organization')
+    document_masters = relationship('DocumentMaster', back_populates='organization')
 
 
 class User(Base):
@@ -68,6 +70,8 @@ class User(Base):
     # Relationships
     roles = relationship('Role', secondary=user_roles, back_populates='users')
     documents = relationship('Document', back_populates='owner')
+    document_masters = relationship('DocumentMaster', foreign_keys='DocumentMaster.owner_id', back_populates='owner')
+    document_versions_uploaded = relationship('DocumentVersion', foreign_keys='DocumentVersion.uploaded_by_id', back_populates='uploaded_by')
     mcp_tokens = relationship('McpToken', back_populates='user', cascade='all, delete-orphan')
     refresh_tokens = relationship('RefreshToken', back_populates='user', cascade='all, delete-orphan')
     
@@ -180,7 +184,7 @@ class Document(Base):
     file_path = Column(String(1000))
     file_type = Column(String(50))
     file_size = Column(Integer)
-    checksum = Column(String(64), unique=True)
+    checksum = Column(String(64), unique=True)  # Legacy: will be migrated to version control
     
     # Ownership and permissions
     owner_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
@@ -249,6 +253,188 @@ class Document(Base):
             'visibility': self.visibility,
             'shared_with_users': json.loads(self.shared_with_users) if self.shared_with_users else [],
             'shared_with_roles': json.loads(self.shared_with_roles) if self.shared_with_roles else []
+        }
+
+
+class DocumentMaster(Base):
+    """Document Master model - represents a logical document with multiple versions"""
+    __tablename__ = 'document_masters'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    document_group_id = Column(String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
+    filename_base = Column(String(500), nullable=False)
+    
+    # Ownership and permissions (inherited by all versions)
+    owner_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
+    org_id = Column(Integer, ForeignKey('organizations.id', ondelete='SET NULL'))
+    visibility = Column(String(20), default='private')  # private, organization, public
+    shared_with_users = Column(Text, default='[]')  # JSON array: [1, 2, 3]
+    shared_with_roles = Column(Text, default='[]')  # JSON array: ["analyst", "editor"]
+    
+    # Metadata (inherited by all versions but can be updated)
+    category = Column(String(100))
+    tags = Column(Text)  # Comma-separated
+    author = Column(String(200))
+    description = Column(Text)
+    
+    # Version tracking
+    latest_version_id = Column(Integer, ForeignKey('document_versions.id', ondelete='SET NULL', use_alter=True))
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    owner = relationship('User', foreign_keys=[owner_id])
+    organization = relationship('Organization', foreign_keys=[org_id])
+    versions = relationship('DocumentVersion', back_populates='master', foreign_keys='DocumentVersion.document_master_id')
+    latest_version = relationship('DocumentVersion', foreign_keys=[latest_version_id], post_update=True)
+    
+    def to_dict(self, include_versions=False):
+        """Convert to dictionary"""
+        result = {
+            'id': self.id,
+            'document_group_id': self.document_group_id,
+            'filename_base': self.filename_base,
+            'category': self.category,
+            'tags': self.tags.split(',') if self.tags else [],
+            'author': self.author,
+            'description': self.description,
+            'owner_id': self.owner_id,
+            'org_id': self.org_id,
+            'visibility': self.visibility,
+            'shared_with_users': json.loads(self.shared_with_users) if self.shared_with_users else [],
+            'shared_with_roles': json.loads(self.shared_with_roles) if self.shared_with_roles else [],
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'latest_version_id': self.latest_version_id,
+        }
+        
+        if include_versions and self.versions:
+            result['versions'] = [v.to_dict() for v in self.versions]
+        
+        if self.latest_version:
+            result['version'] = self.latest_version.version
+            result['version_count'] = len(self.versions) if self.versions else 0
+        
+        return result
+
+
+class DocumentVersion(Base):
+    """Document Version model - represents a specific version of a document"""
+    __tablename__ = 'document_versions'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    document_master_id = Column(Integer, ForeignKey('document_masters.id', ondelete='CASCADE'), nullable=False)
+    version = Column(Integer, nullable=False)  # 1, 2, 3, ...
+    
+    # Physical file information
+    file_path = Column(String(1000))
+    file_type = Column(String(50))
+    file_size = Column(Integer)
+    checksum = Column(String(64), nullable=False)  # No UNIQUE constraint - same file can exist in different masters
+    
+    # Processing status
+    status = Column(String(50), default='pending')  # pending, queued, processing, completed, failed
+    num_chunks = Column(Integer, default=0)
+    error_message = Column(Text)
+    
+    # Progress tracking
+    progress_percentage = Column(Integer, default=0)  # 0-100
+    progress_message = Column(String(500))
+    total_pages = Column(Integer, default=0)
+    processed_pages = Column(Integer, default=0)
+    
+    # ES info
+    es_document_ids = Column(Text)  # JSON string of document IDs
+    
+    # OCR Processing info
+    ocr_engine = Column(String(20))  # easy, paddle, vision
+    pages_data = Column(Text)  # JSON string of pages info (image paths, ocr data, etc.)
+    
+    # Version metadata
+    version_note = Column(Text)  # User-provided note about this version
+    uploaded_by_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
+    
+    # Timestamps
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    processed_at = Column(DateTime)
+    
+    # Soft delete
+    is_active = Column(Boolean, default=True)
+    
+    # Relationships
+    master = relationship('DocumentMaster', back_populates='versions', foreign_keys=[document_master_id])
+    uploaded_by = relationship('User', foreign_keys=[uploaded_by_id])
+    
+    def to_dict(self):
+        """Convert to dictionary"""
+        return {
+            'id': self.id,
+            'document_master_id': self.document_master_id,
+            'version': self.version,
+            'file_path': self.file_path,
+            'file_type': self.file_type,
+            'file_size': self.file_size,
+            'checksum': self.checksum,
+            'status': self.status,
+            'num_chunks': self.num_chunks,
+            'error_message': self.error_message,
+            'progress_percentage': self.progress_percentage or 0,
+            'progress_message': self.progress_message or '',
+            'total_pages': self.total_pages or 0,
+            'processed_pages': self.processed_pages or 0,
+            'ocr_engine': self.ocr_engine,
+            'pages_data': json.loads(self.pages_data) if self.pages_data else None,
+            'es_document_ids': self.es_document_ids,
+            'version_note': self.version_note,
+            'uploaded_by_id': self.uploaded_by_id,
+            'uploaded_at': self.uploaded_at.isoformat() if self.uploaded_at else None,
+            'processed_at': self.processed_at.isoformat() if self.processed_at else None,
+            'is_active': self.is_active,
+        }
+    
+    def to_combined_dict(self, master: 'DocumentMaster' = None):
+        """Convert to dictionary with master metadata for API compatibility"""
+        if not master:
+            master = self.master
+        
+        return {
+            # Version-specific fields
+            'id': self.id,
+            'filename': master.filename_base if master else '',
+            'file_path': self.file_path,
+            'file_type': self.file_type,
+            'file_size': self.file_size,
+            'checksum': self.checksum,
+            'status': self.status,
+            'num_chunks': self.num_chunks,
+            'error_message': self.error_message,
+            'progress_percentage': self.progress_percentage or 0,
+            'progress_message': self.progress_message or '',
+            'total_pages': self.total_pages or 0,
+            'processed_pages': self.processed_pages or 0,
+            'ocr_engine': self.ocr_engine,
+            'pages_data': json.loads(self.pages_data) if self.pages_data else None,
+            
+            # Master metadata
+            'document_group_id': master.document_group_id if master else None,
+            'version': self.version,
+            'is_latest': (master.latest_version_id == self.id) if master else False,
+            'version_count': len(master.versions) if master and master.versions else 1,
+            'category': master.category if master else None,
+            'tags': master.tags.split(',') if (master and master.tags) else [],
+            'author': master.author if master else None,
+            'description': master.description if master else None,
+            'owner_id': master.owner_id if master else None,
+            'org_id': master.org_id if master else None,
+            'visibility': master.visibility if master else 'private',
+            'shared_with_users': json.loads(master.shared_with_users) if (master and master.shared_with_users) else [],
+            'shared_with_roles': json.loads(master.shared_with_roles) if (master and master.shared_with_roles) else [],
+            
+            # Timestamps
+            'created_at': self.uploaded_at.isoformat() if self.uploaded_at else None,
+            'updated_at': self.processed_at.isoformat() if self.processed_at else None,
         }
 
 
@@ -683,6 +869,455 @@ class DatabaseManager:
                 'processing': processing,
                 'total_pages': total_pages
             }
+        finally:
+            session.close()
+    
+    # ===== Version Control Methods =====
+    
+    def create_document_master(
+        self,
+        filename_base: str,
+        owner_id: int,
+        org_id: int,
+        visibility: str = 'private',
+        category: str = None,
+        tags: List[str] = None,
+        author: str = None,
+        description: str = None,
+        shared_with_users: List[int] = None,
+        shared_with_roles: List[str] = None
+    ) -> DocumentMaster:
+        """Create a new document master"""
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                master = DocumentMaster(
+                    document_group_id=str(uuid.uuid4()),
+                    filename_base=filename_base,
+                    owner_id=owner_id,
+                    org_id=org_id,
+                    visibility=visibility,
+                    category=category,
+                    tags=','.join(tags) if tags else None,
+                    author=author,
+                    description=description,
+                    shared_with_users=json.dumps(shared_with_users or []),
+                    shared_with_roles=json.dumps(shared_with_roles or [])
+                )
+                session.add(master)
+                session.commit()
+                session.refresh(master)
+                return master
+            except Exception as e:
+                session.rollback()
+                raise e
+            finally:
+                session.close()
+    
+    def create_document_version(
+        self,
+        document_master_id: int,
+        version: int,
+        file_path: str,
+        file_type: str,
+        file_size: int,
+        checksum: str,
+        ocr_engine: str,
+        uploaded_by_id: int,
+        version_note: str = None
+    ) -> DocumentVersion:
+        """Create a new document version"""
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                doc_version = DocumentVersion(
+                    document_master_id=document_master_id,
+                    version=version,
+                    file_path=file_path,
+                    file_type=file_type,
+                    file_size=file_size,
+                    checksum=checksum,
+                    ocr_engine=ocr_engine,
+                    uploaded_by_id=uploaded_by_id,
+                    version_note=version_note,
+                    status='pending'
+                )
+                session.add(doc_version)
+                session.commit()
+                session.refresh(doc_version)
+                
+                # Update master's latest_version_id
+                master = session.query(DocumentMaster).filter(
+                    DocumentMaster.id == document_master_id
+                ).first()
+                if master:
+                    master.latest_version_id = doc_version.id
+                    master.updated_at = datetime.utcnow()
+                    session.commit()
+                
+                return doc_version
+            except Exception as e:
+                session.rollback()
+                raise e
+            finally:
+                session.close()
+    
+    def get_document_master_by_filename(
+        self,
+        filename: str,
+        org_id: int
+    ) -> Optional[DocumentMaster]:
+        """Get document master by filename and organization"""
+        session = self.get_session()
+        try:
+            return session.query(DocumentMaster).filter(
+                DocumentMaster.filename_base == filename,
+                DocumentMaster.org_id == org_id
+            ).first()
+        finally:
+            session.close()
+    
+    def get_document_master_by_group_id(
+        self,
+        document_group_id: str
+    ) -> Optional[DocumentMaster]:
+        """Get document master by group ID"""
+        session = self.get_session()
+        try:
+            return session.query(DocumentMaster).filter(
+                DocumentMaster.document_group_id == document_group_id
+            ).first()
+        finally:
+            session.close()
+    
+    def get_latest_version(
+        self,
+        document_master_id: int
+    ) -> Optional[DocumentVersion]:
+        """Get latest version of a document"""
+        session = self.get_session()
+        try:
+            master = session.query(DocumentMaster).filter(
+                DocumentMaster.id == document_master_id
+            ).first()
+            if master and master.latest_version_id:
+                return session.query(DocumentVersion).filter(
+                    DocumentVersion.id == master.latest_version_id
+                ).first()
+            return None
+        finally:
+            session.close()
+    
+    def get_version_history(
+        self,
+        document_master_id: int
+    ) -> List[DocumentVersion]:
+        """Get all versions of a document, ordered by version number descending"""
+        session = self.get_session()
+        try:
+            return session.query(DocumentVersion).filter(
+                DocumentVersion.document_master_id == document_master_id,
+                DocumentVersion.is_active == True
+            ).order_by(DocumentVersion.version.desc()).all()
+        finally:
+            session.close()
+    
+    def get_document_version_by_id(
+        self,
+        version_id: int
+    ) -> Optional[DocumentVersion]:
+        """Get specific document version by ID"""
+        session = self.get_session()
+        try:
+            return session.query(DocumentVersion).filter(
+                DocumentVersion.id == version_id
+            ).first()
+        finally:
+            session.close()
+    
+    def get_document_version_by_number(
+        self,
+        document_master_id: int,
+        version_number: int
+    ) -> Optional[DocumentVersion]:
+        """Get specific version by number"""
+        session = self.get_session()
+        try:
+            return session.query(DocumentVersion).filter(
+                DocumentVersion.document_master_id == document_master_id,
+                DocumentVersion.version == version_number
+            ).first()
+        finally:
+            session.close()
+    
+    def restore_version(
+        self,
+        document_master_id: int,
+        version_number: int
+    ) -> DocumentVersion:
+        """
+        Restore a specific version by making it the latest.
+        Creates a new version that is a copy of the specified version.
+        """
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                # Get the version to restore
+                old_version = session.query(DocumentVersion).filter(
+                    DocumentVersion.document_master_id == document_master_id,
+                    DocumentVersion.version == version_number
+                ).first()
+                
+                if not old_version:
+                    raise ValueError(f"Version {version_number} not found")
+                
+                # Get current latest version number
+                latest = session.query(DocumentVersion).filter(
+                    DocumentVersion.document_master_id == document_master_id
+                ).order_by(DocumentVersion.version.desc()).first()
+                
+                new_version_number = (latest.version + 1) if latest else 1
+                
+                # Create new version as a copy
+                new_version = DocumentVersion(
+                    document_master_id=document_master_id,
+                    version=new_version_number,
+                    file_path=old_version.file_path,
+                    file_type=old_version.file_type,
+                    file_size=old_version.file_size,
+                    checksum=old_version.checksum,
+                    ocr_engine=old_version.ocr_engine,
+                    uploaded_by_id=old_version.uploaded_by_id,
+                    version_note=f"Restored from version {version_number}",
+                    status=old_version.status,
+                    num_chunks=old_version.num_chunks,
+                    progress_percentage=old_version.progress_percentage,
+                    total_pages=old_version.total_pages,
+                    processed_pages=old_version.processed_pages,
+                    es_document_ids=old_version.es_document_ids,
+                    pages_data=old_version.pages_data,
+                    processed_at=old_version.processed_at
+                )
+                session.add(new_version)
+                session.commit()
+                session.refresh(new_version)
+                
+                # Update master's latest_version_id
+                master = session.query(DocumentMaster).filter(
+                    DocumentMaster.id == document_master_id
+                ).first()
+                if master:
+                    master.latest_version_id = new_version.id
+                    master.updated_at = datetime.utcnow()
+                    session.commit()
+                
+                return new_version
+            except Exception as e:
+                session.rollback()
+                raise e
+            finally:
+                session.close()
+    
+    def update_document_master_metadata(
+        self,
+        document_master_id: int,
+        category: str = None,
+        tags: List[str] = None,
+        author: str = None,
+        description: str = None,
+        visibility: str = None,
+        shared_with_users: List[int] = None,
+        shared_with_roles: List[str] = None
+    ) -> DocumentMaster:
+        """Update document master metadata"""
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                master = session.query(DocumentMaster).filter(
+                    DocumentMaster.id == document_master_id
+                ).first()
+                
+                if not master:
+                    raise ValueError(f"Document master {document_master_id} not found")
+                
+                if category is not None:
+                    master.category = category
+                if tags is not None:
+                    master.tags = ','.join(tags) if tags else None
+                if author is not None:
+                    master.author = author
+                if description is not None:
+                    master.description = description
+                if visibility is not None:
+                    master.visibility = visibility
+                if shared_with_users is not None:
+                    master.shared_with_users = json.dumps(shared_with_users)
+                if shared_with_roles is not None:
+                    master.shared_with_roles = json.dumps(shared_with_roles)
+                
+                master.updated_at = datetime.utcnow()
+                session.commit()
+                session.refresh(master)
+                return master
+            except Exception as e:
+                session.rollback()
+                raise e
+            finally:
+                session.close()
+    
+    def update_document_version_status(
+        self,
+        version_id: int,
+        status: str,
+        progress_percentage: int = None,
+        progress_message: str = None,
+        error_message: str = None
+    ) -> DocumentVersion:
+        """Update document version processing status"""
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                version = session.query(DocumentVersion).filter(
+                    DocumentVersion.id == version_id
+                ).first()
+                
+                if not version:
+                    raise ValueError(f"Document version {version_id} not found")
+                
+                version.status = status
+                if progress_percentage is not None:
+                    version.progress_percentage = progress_percentage
+                if progress_message is not None:
+                    version.progress_message = progress_message
+                if error_message is not None:
+                    version.error_message = error_message
+                if status == 'completed':
+                    version.processed_at = datetime.utcnow()
+                
+                session.commit()
+                session.refresh(version)
+                return version
+            except Exception as e:
+                session.rollback()
+                raise e
+            finally:
+                session.close()
+    
+    def delete_document_version(
+        self,
+        version_id: int,
+        soft_delete: bool = True
+    ) -> bool:
+        """Delete a document version (soft or hard delete)"""
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                version = session.query(DocumentVersion).filter(
+                    DocumentVersion.id == version_id
+                ).first()
+                
+                if not version:
+                    return False
+                
+                if soft_delete:
+                    version.is_active = False
+                    session.commit()
+                else:
+                    session.delete(version)
+                    session.commit()
+                
+                return True
+            except Exception as e:
+                session.rollback()
+                raise e
+            finally:
+                session.close()
+    
+    def delete_document_master(
+        self,
+        document_master_id: int
+    ) -> bool:
+        """Delete document master and all its versions"""
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                master = session.query(DocumentMaster).filter(
+                    DocumentMaster.id == document_master_id
+                ).first()
+                
+                if not master:
+                    return False
+                
+                # Delete all versions (cascade should handle this, but being explicit)
+                session.query(DocumentVersion).filter(
+                    DocumentVersion.document_master_id == document_master_id
+                ).delete()
+                
+                # Delete master
+                session.delete(master)
+                session.commit()
+                return True
+            except Exception as e:
+                session.rollback()
+                raise e
+            finally:
+                session.close()
+    
+    def list_document_masters(
+        self,
+        org_id: int = None,
+        user_id: int = None,
+        limit: int = 100,
+        offset: int = 0,
+        status: str = None
+    ) -> List[Dict[str, Any]]:
+        """
+        List document masters with their latest versions.
+        Returns combined view compatible with old Document API.
+        """
+        session = self.get_session()
+        try:
+            query = session.query(DocumentMaster).options(
+                joinedload(DocumentMaster.latest_version)
+            )
+            
+            # Apply filters
+            if org_id:
+                query = self.apply_permission_filter(query, user_id, org_id, DocumentMaster)
+            
+            # Order by updated_at desc
+            query = query.order_by(DocumentMaster.updated_at.desc())
+            
+            # Pagination
+            query = query.limit(limit).offset(offset)
+            
+            masters = query.all()
+            
+            # Convert to combined dict format
+            results = []
+            for master in masters:
+                if master.latest_version:
+                    # Filter by status if specified
+                    if status and master.latest_version.status != status:
+                        continue
+                    results.append(master.latest_version.to_combined_dict(master))
+            
+            return results
+        finally:
+            session.close()
+    
+    def check_version_exists_by_checksum(
+        self,
+        document_master_id: int,
+        checksum: str
+    ) -> Optional[DocumentVersion]:
+        """Check if a version with this checksum already exists for this master"""
+        session = self.get_session()
+        try:
+            return session.query(DocumentVersion).filter(
+                DocumentVersion.document_master_id == document_master_id,
+                DocumentVersion.checksum == checksum
+            ).first()
         finally:
             session.close()
 

@@ -47,6 +47,7 @@ async def list_documents(
     """
     List uploaded documents with permission filtering
     
+    Supports version control: returns latest version of each document master.
     Requires authentication. Returns only documents the user has permission to see.
     """
     try:
@@ -58,19 +59,45 @@ async def list_documents(
         org_id = current_user.org_id if current_user else None
         is_superuser = current_user.is_superuser if current_user else False
         
-        docs = db.list_documents(
-            limit=limit, 
-            offset=offset, 
-            status=status, 
-            exclude_file_types=exclude_types,
-            user_id=user_id,
-            org_id=org_id,
-            is_superuser=is_superuser
-        )
-        return JSONResponse(content={
-            "documents": [doc.to_dict() for doc in docs],
-            "total": len(docs)
-        })
+        # Try version control method first
+        try:
+            docs_combined = db.list_document_masters(
+                org_id=org_id,
+                user_id=user_id,
+                limit=limit,
+                offset=offset,
+                status=status
+            )
+            
+            # Filter by file type if needed
+            if exclude_types:
+                docs_combined = [
+                    doc for doc in docs_combined 
+                    if doc.get('file_type') not in exclude_types
+                ]
+            
+            return JSONResponse(content={
+                "documents": docs_combined,
+                "total": len(docs_combined)
+            })
+        except Exception as version_err:
+            # Fallback to old method for backward compatibility
+            logger.warning("version_control_list_failed_fallback_to_legacy", 
+                         error=str(version_err), user_id=user_id)
+            
+            docs = db.list_documents(
+                limit=limit, 
+                offset=offset, 
+                status=status, 
+                exclude_file_types=exclude_types,
+                user_id=user_id,
+                org_id=org_id,
+                is_superuser=is_superuser
+            )
+            return JSONResponse(content={
+                "documents": [doc.to_dict() for doc in docs],
+                "total": len(docs)
+            })
     except Exception as e:
         logger.error("list_documents_failed", error=str(e), user_id=user_id if current_user else None)
         raise HTTPException(status_code=500, detail=str(e))
@@ -644,39 +671,96 @@ async def upload_file(
         with open(file_path, 'rb') as f:
             checksum = hashlib.sha256(f.read()).hexdigest()
         
-        # Check if already exists
-        existing = db.get_document_by_checksum(checksum)
-        if existing:
-            if file_path.exists():
-                os.remove(file_path)
-            return JSONResponse(content={
-                "status": "duplicate",
-                "message": "File already exists",
-                "document": existing.to_dict()
-            })
-        
-        # Create database record with user and organization info
-        doc = db.create_document(
+        # ===== Version Control Logic =====
+        # Check if a document with this filename already exists in the organization
+        existing_master = db.get_document_master_by_filename(
             filename=file.filename,
-            file_path=str(file_path),
-            file_type=file_ext,
-            file_size=file_size,
-            checksum=checksum,
-            category=category,
-            tags=tags.split(',') if tags else None,
-            author=author,
-            description=description,
-            ocr_engine=ocr_engine,
-            owner_id=current_user.id,
-            org_id=organization_id,
-            visibility=visibility
+            org_id=organization_id
         )
-        doc_id = doc.id
-        logger.info("document_created", doc_id=doc_id, file_type=file_ext)
+        
+        is_new_version = False
+        version_number = 1
+        
+        if existing_master:
+            # Document with this filename exists
+            latest_version = db.get_latest_version(existing_master.id)
+            
+            if latest_version and checksum == latest_version.checksum:
+                # Exact same file content
+                if file_path.exists():
+                    os.remove(file_path)
+                return JSONResponse(content={
+                    "status": "duplicate",
+                    "message": "文件内容完全相同",
+                    "version": latest_version.version,
+                    "document": latest_version.to_combined_dict(existing_master)
+                })
+            
+            # Different content - create new version
+            is_new_version = True
+            version_number = latest_version.version + 1 if latest_version else 1
+            
+            logger.info("creating_new_version", 
+                       filename=file.filename, 
+                       version=version_number,
+                       master_id=existing_master.id)
+            
+            # Create new version
+            doc_version = db.create_document_version(
+                document_master_id=existing_master.id,
+                version=version_number,
+                file_path=str(file_path),
+                file_type=file_ext,
+                file_size=file_size,
+                checksum=checksum,
+                ocr_engine=ocr_engine,
+                uploaded_by_id=current_user.id,
+                version_note=f"Version {version_number}"
+            )
+            doc_id = doc_version.id
+            logger.info("new_version_created", 
+                       doc_id=doc_id, 
+                       version=version_number,
+                       master_id=existing_master.id)
+        else:
+            # New document - create master + version 1
+            logger.info("creating_new_document_master", filename=file.filename)
+            
+            # Create document master
+            master = db.create_document_master(
+                filename_base=file.filename,
+                owner_id=current_user.id,
+                org_id=organization_id,
+                visibility=visibility,
+                category=category,
+                tags=tags.split(',') if tags else None,
+                author=author,
+                description=description
+            )
+            
+            logger.info("document_master_created", 
+                       master_id=master.id,
+                       document_group_id=master.document_group_id)
+            
+            # Create version 1
+            doc_version = db.create_document_version(
+                document_master_id=master.id,
+                version=1,
+                file_path=str(file_path),
+                file_type=file_ext,
+                file_size=file_size,
+                checksum=checksum,
+                ocr_engine=ocr_engine,
+                uploaded_by_id=current_user.id,
+                version_note="Initial version"
+            )
+            doc_id = doc_version.id
+            existing_master = master
+            logger.info("initial_version_created", doc_id=doc_id)
         
         # Update status to processing
-        db.update_document_status(doc_id, 'processing')
-        logger.info("status_updated_to_processing", doc_id=doc_id)
+        db.update_document_version_status(doc_id, 'processing')
+        logger.info("status_updated_to_processing", doc_id=doc_id, version=version_number)
         
         # Prepare metadata
         metadata = {}
@@ -704,20 +788,33 @@ async def upload_file(
         thread.start()
         
         # Return immediately with task info
-        return JSONResponse(content={
-            'status': 'processing',
-            'message': 'Document uploaded and processing started',
+        response_content = {
+            'status': 'new_version' if is_new_version else 'created',
+            'message': f'版本 {version_number} 已创建并开始处理' if is_new_version else 'Document uploaded and processing started',
             'document_id': doc_id,
             'checksum': checksum,
-            'filename': file.filename
-        })
+            'filename': file.filename,
+            'version': version_number
+        }
+        
+        if existing_master:
+            response_content['document_group_id'] = existing_master.document_group_id
+        
+        return JSONResponse(content=response_content)
     
     except Exception as e:
         logger.error("upload_failed", error=str(e))
         
         # Update database if record was created
         if doc_id:
-            db.update_document_status(doc_id, 'failed', error_message=str(e))
+            try:
+                db.update_document_version_status(doc_id, 'failed', error_message=str(e))
+            except:
+                # Fallback to old method for backward compatibility
+                try:
+                    db.update_document_status(doc_id, 'failed', error_message=str(e))
+                except:
+                    pass
         
         # Clean up file
         if file_path and file_path.exists():
@@ -1127,4 +1224,262 @@ async def update_document_permissions(
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         session.close()
+
+
+# ===== Version Control API Endpoints =====
+
+@router.get("/documents/{group_id}/versions")
+async def get_version_history(
+    group_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get version history for a document by its group ID.
+    Returns all versions ordered by version number (newest first).
+    """
+    try:
+        # Get document master
+        master = db.get_document_master_by_group_id(group_id)
+        if not master:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Check permissions (simplified - should use permission system)
+        if not current_user.is_superuser:
+            if master.owner_id != current_user.id and master.org_id != current_user.org_id:
+                raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Get version history
+        versions = db.get_version_history(master.id)
+        
+        # Convert to dict with user info
+        version_list = []
+        for v in versions:
+            version_dict = v.to_dict()
+            
+            # Add uploader info
+            if v.uploaded_by_id:
+                uploader = auth_manager.get_user_by_id(v.uploaded_by_id)
+                if uploader:
+                    version_dict['uploaded_by'] = {
+                        'id': uploader.id,
+                        'username': uploader.username,
+                        'email': uploader.email
+                    }
+            
+            # Mark if this is the latest version
+            version_dict['is_latest'] = (master.latest_version_id == v.id)
+            
+            version_list.append(version_dict)
+        
+        return JSONResponse(content={
+            "document_group_id": group_id,
+            "filename": master.filename_base,
+            "versions": version_list,
+            "total_versions": len(version_list)
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_version_history_failed", group_id=group_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/documents/{group_id}/versions/{version_number}")
+async def get_specific_version(
+    group_id: str,
+    version_number: int,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get a specific version of a document.
+    """
+    try:
+        # Get document master
+        master = db.get_document_master_by_group_id(group_id)
+        if not master:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Check permissions
+        if not current_user.is_superuser:
+            if master.owner_id != current_user.id and master.org_id != current_user.org_id:
+                raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Get specific version
+        version = db.get_document_version_by_number(master.id, version_number)
+        if not version:
+            raise HTTPException(status_code=404, detail=f"Version {version_number} not found")
+        
+        # Return combined view
+        return JSONResponse(content=version.to_combined_dict(master))
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_specific_version_failed", 
+                    group_id=group_id, version=version_number, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/documents/{group_id}/versions/{version_number}/restore")
+async def restore_version(
+    group_id: str,
+    version_number: int,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Restore a specific version by creating a new version that is a copy of it.
+    This makes the specified version the latest version.
+    """
+    try:
+        # Get document master
+        master = db.get_document_master_by_group_id(group_id)
+        if not master:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Check permissions (only owner or superuser can restore)
+        if not current_user.is_superuser and master.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=403, 
+                detail="Only document owner can restore versions"
+            )
+        
+        # Restore version
+        new_version = db.restore_version(master.id, version_number)
+        
+        logger.info("version_restored", 
+                   group_id=group_id, 
+                   restored_from=version_number,
+                   new_version=new_version.version,
+                   user_id=current_user.id)
+        
+        return JSONResponse(content={
+            "message": f"Version {version_number} restored successfully",
+            "new_version": new_version.version,
+            "document": new_version.to_combined_dict(master)
+        })
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("restore_version_failed", 
+                    group_id=group_id, version=version_number, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/documents/{group_id}/versions/{version_number}")
+async def delete_version(
+    group_id: str,
+    version_number: int,
+    hard_delete: bool = False,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Delete a specific version (soft delete by default).
+    Cannot delete the only remaining version.
+    """
+    try:
+        # Get document master
+        master = db.get_document_master_by_group_id(group_id)
+        if not master:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Check permissions
+        if not current_user.is_superuser and master.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=403, 
+                detail="Only document owner can delete versions"
+            )
+        
+        # Get all versions
+        all_versions = db.get_version_history(master.id)
+        if len(all_versions) <= 1:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot delete the only remaining version"
+            )
+        
+        # Get the version to delete
+        version = db.get_document_version_by_number(master.id, version_number)
+        if not version:
+            raise HTTPException(status_code=404, detail=f"Version {version_number} not found")
+        
+        # Delete version
+        success = db.delete_document_version(version.id, soft_delete=not hard_delete)
+        
+        if success:
+            logger.info("version_deleted", 
+                       group_id=group_id, 
+                       version=version_number,
+                       hard_delete=hard_delete,
+                       user_id=current_user.id)
+            
+            return JSONResponse(content={
+                "message": f"Version {version_number} deleted successfully",
+                "deleted_type": "hard" if hard_delete else "soft"
+            })
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete version")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("delete_version_failed", 
+                    group_id=group_id, version=version_number, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/documents/{group_id}/metadata")
+async def update_document_metadata(
+    group_id: str,
+    category: Optional[str] = None,
+    tags: Optional[str] = None,
+    author: Optional[str] = None,
+    description: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update document master metadata (affects all versions).
+    """
+    try:
+        # Get document master
+        master = db.get_document_master_by_group_id(group_id)
+        if not master:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Check permissions
+        if not current_user.is_superuser and master.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=403, 
+                detail="Only document owner can update metadata"
+            )
+        
+        # Parse tags
+        tags_list = tags.split(',') if tags else None
+        
+        # Update metadata
+        updated_master = db.update_document_master_metadata(
+            document_master_id=master.id,
+            category=category,
+            tags=tags_list,
+            author=author,
+            description=description
+        )
+        
+        logger.info("document_metadata_updated", 
+                   group_id=group_id, 
+                   user_id=current_user.id)
+        
+        return JSONResponse(content={
+            "message": "Metadata updated successfully",
+            "document": updated_master.to_dict()
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("update_metadata_failed", group_id=group_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 

@@ -16,6 +16,34 @@ export interface Document {
   updated_at: string;
   category?: string;
   tags?: string[];
+  // Version control fields
+  document_group_id?: string;
+  version?: number;
+  is_latest?: boolean;
+  version_count?: number;
+}
+
+export interface DocumentVersion {
+  id: number;
+  version: number;
+  file_size: number;
+  status: string;
+  uploaded_at: string;
+  uploaded_by?: {
+    id: number;
+    username: string;
+    email: string;
+  };
+  version_note?: string;
+  is_latest: boolean;
+  checksum: string;
+}
+
+export interface VersionHistoryResponse {
+  document_group_id: string;
+  filename: string;
+  versions: DocumentVersion[];
+  total_versions: number;
 }
 
 export interface DocumentListResponse {
@@ -97,6 +125,51 @@ export const documentAPI = {
   // 删除文档
   delete: async (docId: number) => {
     const response = await apiClient.delete(`/documents/${docId}`);
+    return response.data;
+  },
+
+  // ===== Version Control APIs =====
+  
+  // 获取文档版本历史
+  getVersionHistory: async (documentGroupId: string) => {
+    const response = await apiClient.get<VersionHistoryResponse>(`/documents/${documentGroupId}/versions`);
+    return response.data;
+  },
+
+  // 获取特定版本
+  getSpecificVersion: async (documentGroupId: string, versionNumber: number) => {
+    const response = await apiClient.get<Document>(`/documents/${documentGroupId}/versions/${versionNumber}`);
+    return response.data;
+  },
+
+  // 恢复版本
+  restoreVersion: async (documentGroupId: string, versionNumber: number) => {
+    const response = await apiClient.post(`/documents/${documentGroupId}/versions/${versionNumber}/restore`);
+    return response.data;
+  },
+
+  // 删除版本
+  deleteVersion: async (documentGroupId: string, versionNumber: number, hardDelete: boolean = false) => {
+    const response = await apiClient.delete(`/documents/${documentGroupId}/versions/${versionNumber}`, {
+      params: { hard_delete: hardDelete }
+    });
+    return response.data;
+  },
+
+  // 更新文档元数据
+  updateMetadata: async (documentGroupId: string, metadata: {
+    category?: string;
+    tags?: string;
+    author?: string;
+    description?: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (metadata.category) params.append('category', metadata.category);
+    if (metadata.tags) params.append('tags', metadata.tags);
+    if (metadata.author) params.append('author', metadata.author);
+    if (metadata.description) params.append('description', metadata.description);
+    
+    const response = await apiClient.put(`/documents/${documentGroupId}/metadata?${params.toString()}`);
     return response.data;
   },
 
