@@ -1,0 +1,26 @@
+{
+  "page_number": 1,
+  "stage1_global": {
+    "resolution": "300 DPI",
+    "image": "page_001_300dpi.png",
+    "ocr_json": "page_001_global_ocr.json",
+    "visualized": "page_001_global_visualized.png"
+  },
+  "performance": {
+    "stage1_global_ocr_seconds": 14.422399044036865,
+    "stage2_analyze_seconds": 0.0,
+    "stage3_refine_regions_seconds": 0.0,
+    "stage4_vlm_seconds": 22.96475100517273,
+    "total_seconds": 37.387150049209595
+  },
+  "stage2_refined_regions": [],
+  "total_refined_regions": 0,
+  "statistics": {
+    "total_text_blocks": 44,
+    "average_confidence": 0.6875345546912319,
+    "low_confidence_blocks": 19
+  },
+  "stage3_vlm": {
+    "vlm_json": "page_001_vlm.json"
+  }
+}

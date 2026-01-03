@@ -7,11 +7,11 @@
     "visualized": "page_001_global_visualized.png"
   },
   "performance": {
-    "stage1_global_ocr_seconds": 15.922154903411865,
-    "stage2_analyze_seconds": 0.0002582073211669922,
-    "stage3_refine_regions_seconds": 83.7495379447937,
-    "stage4_vlm_seconds": 24.82922601699829,
-    "total_seconds": 124.50117707252502
+    "stage1_global_ocr_seconds": 14.583670139312744,
+    "stage2_analyze_seconds": 0.0002639293670654297,
+    "stage3_refine_regions_seconds": 84.59293103218079,
+    "stage4_vlm_seconds": 24.453214168548584,
+    "total_seconds": 123.63007926940918
   },
   "stage2_refined_regions": [
     {

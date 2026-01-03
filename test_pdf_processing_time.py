@@ -93,7 +93,8 @@ class TimingReport:
 
 
 def test_pdf_processing(pdf_path: str, output_dir: str = None, 
-                         ocr_engine: str = 'easy', max_pages: int = None):
+                         ocr_engine: str = 'easy', max_pages: int = None,
+                         processing_mode: str = 'deep'):
     """
     测试PDF处理性能
     
@@ -102,6 +103,7 @@ def test_pdf_processing(pdf_path: str, output_dir: str = None,
         output_dir: 输出目录
         ocr_engine: OCR引擎 (vision/easy/paddle)
         max_pages: 最大处理页数（None=处理所有页）
+        processing_mode: 处理模式 ('fast': 快速模式, 'deep': 深度模式, 默认: deep)
     """
     pdf_path = Path(pdf_path)
     if not pdf_path.exists():
@@ -125,12 +127,17 @@ def test_pdf_processing(pdf_path: str, output_dir: str = None,
     print(f"PDF文件: {pdf_path.name}")
     print(f"输出目录: {output_dir}")
     print(f"OCR引擎: {ocr_engine}")
+    print(f"处理模式: {'🔬 DEEP (完整4阶段)' if processing_mode == 'deep' else '⚡ FAST (OCR+VLM)'}")
     print(f"开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*80)
     
     # 初始化流水线
     report.start_stage("初始化")
-    pipeline = AdaptiveOCRPipeline(ocr_engine=ocr_engine, confidence_threshold=0.7)
+    pipeline = AdaptiveOCRPipeline(
+        ocr_engine=ocr_engine, 
+        confidence_threshold=0.7,
+        processing_mode=processing_mode
+    )
     report.end_stage()
     
     # 打开PDF
@@ -185,7 +192,10 @@ def test_pdf_processing(pdf_path: str, output_dir: str = None,
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="测试PDF处理性能")
+    parser = argparse.ArgumentParser(
+        description="测试PDF处理性能（默认使用深度模式）",
+        epilog="深度模式包含4个阶段：300 DPI OCR → 分析 → 600 DPI局部放大 → VLM精炼"
+    )
     parser.add_argument("pdf", help="PDF文件路径")
     parser.add_argument("-o", "--output", help="输出目录")
     parser.add_argument("--ocr-engine", default="easy", 
@@ -193,6 +203,9 @@ if __name__ == "__main__":
                        help="OCR引擎 (默认: easy)")
     parser.add_argument("--max-pages", type=int, 
                        help="最大处理页数（用于快速测试）")
+    parser.add_argument("--mode", default="deep",
+                       choices=["fast", "deep"],
+                       help="处理模式: deep=深度模式(默认), fast=快速模式")
     
     args = parser.parse_args()
     
@@ -200,6 +213,7 @@ if __name__ == "__main__":
         args.pdf,
         args.output,
         args.ocr_engine,
-        args.max_pages
+        args.max_pages,
+        args.mode
     )
 

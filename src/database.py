@@ -323,15 +323,14 @@ class DatabaseManager:
         
         # Add organization filter if user belongs to an organization
         if org_id:
+            from sqlalchemy import and_
             conditions.append(
-                (Document.visibility == 'org') & (Document.org_id == org_id)
+                and_(Document.visibility == 'org', Document.org_id == org_id)
             )
         
-        # Add shared with user filter (check if user_id in shared_with_users JSON)
-        # SQLite JSON handling: shared_with_users is TEXT field containing JSON array
-        conditions.append(
-            Document.shared_with_users.like(f'%{user_id}%')
-        )
+        # Note: For shared documents, we'll filter in Python after query
+        # because SQLite JSON array matching is complex and error-prone
+        # The SQL LIKE approach can cause false positives (e.g., user_id=2 matching "12")
         
         return query.filter(or_(*conditions))
     
@@ -570,7 +569,33 @@ class DatabaseManager:
                 query = query.filter(Document.status == status)
             if exclude_file_types:
                 query = query.filter(Document.file_type.notin_(exclude_file_types))
-            return query.order_by(Document.uploaded_at.desc()).limit(limit).offset(offset).all()
+            
+            docs = query.order_by(Document.uploaded_at.desc()).limit(limit * 2).offset(offset).all()
+            
+            # Post-filter for shared documents (to avoid SQL LIKE false positives)
+            if user_id and not is_superuser:
+                filtered_docs = []
+                for doc in docs:
+                    # Check if already passed SQL filters (public, owned, org)
+                    if (doc.visibility == 'public' or 
+                        doc.owner_id == user_id or 
+                        (doc.visibility == 'org' and doc.org_id == org_id)):
+                        filtered_docs.append(doc)
+                    # Check shared_with_users JSON array
+                    elif doc.shared_with_users:
+                        try:
+                            shared_users = json.loads(doc.shared_with_users)
+                            if user_id in shared_users:
+                                filtered_docs.append(doc)
+                        except (json.JSONDecodeError, TypeError):
+                            pass  # Skip malformed JSON
+                    
+                    if len(filtered_docs) >= limit:
+                        break
+                
+                return filtered_docs[:limit]
+            
+            return docs[:limit]
         finally:
             session.close()
     

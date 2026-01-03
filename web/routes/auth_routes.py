@@ -251,8 +251,12 @@ async def login(
     db_manager = get_db_manager()
     auth_manager = AuthManager(db_manager.engine)
     
-    # Get user by username
+    # Get user by username or email
     user = auth_manager.get_user_by_username(request.username)
+    if not user:
+        # Try to find by email if username not found
+        user = auth_manager.get_user_by_email(request.username)
+    
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

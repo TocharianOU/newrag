@@ -5,14 +5,14 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, Globe, Building2, Lock, Users, Shield } from 'lucide-react';
+import { X, Globe, Building2, Lock, Users } from 'lucide-react';
 import {
   getDocumentPermissions,
   updateDocumentPermissions,
   type DocumentPermission,
   type DocumentPermissionDetail
 } from '../api/permissions';
-import { listUsers, listRoles, type User, type Role } from '../api/admin';
+import { listUsers, type User } from '../api/admin';
 
 interface DocumentPermissionModalProps {
   documentId: number;
@@ -35,10 +35,8 @@ export default function DocumentPermissionModal({
   
   const [visibility, setVisibility] = useState<'public' | 'organization' | 'private'>('private');
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
-  const [selectedRoleCodes, setSelectedRoleCodes] = useState<string[]>([]);
   
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
-  const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
   
   // Load permissions and available options
   useEffect(() => {
@@ -55,7 +53,6 @@ export default function DocumentPermissionModal({
       setPermissions(data);
       setVisibility(data.visibility as any || 'private');
       setSelectedUserIds(data.shared_users.map(u => u.id));
-      setSelectedRoleCodes(data.shared_roles.map(r => r.code));
     } catch (error: any) {
       console.error('Failed to load permissions:', error);
       alert(`加载权限失败: ${error.message}`);
@@ -69,10 +66,6 @@ export default function DocumentPermissionModal({
       // Load users (first page, 100 users)
       const usersData = await listUsers({ page: 1, per_page: 100 });
       setAvailableUsers(usersData.items);
-      
-      // Load roles
-      const rolesData = await listRoles();
-      setAvailableRoles(rolesData);
     } catch (error: any) {
       console.error('Failed to load options:', error);
     }
@@ -84,7 +77,7 @@ export default function DocumentPermissionModal({
       const permissionData: DocumentPermission = {
         visibility,
         shared_with_users: selectedUserIds,
-        shared_with_roles: selectedRoleCodes
+        shared_with_roles: []  // Always empty - role sharing removed
       };
       
       await updateDocumentPermissions(documentId, permissionData);
@@ -104,14 +97,6 @@ export default function DocumentPermissionModal({
       prev.includes(userId)
         ? prev.filter(id => id !== userId)
         : [...prev, userId]
-    );
-  };
-  
-  const toggleRole = (roleCode: string) => {
-    setSelectedRoleCodes(prev =>
-      prev.includes(roleCode)
-        ? prev.filter(code => code !== roleCode)
-        : [...prev, roleCode]
     );
   };
   
@@ -253,45 +238,6 @@ export default function DocumentPermissionModal({
                               {user.org_name}
                             </span>
                           )}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Shared Roles Section */}
-              <div>
-                <label className="flex items-center text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-                  <Shield className="mr-2" size={16} />
-                  共享给角色
-                </label>
-                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                  {availableRoles.length === 0 ? (
-                    <p className="text-sm text-slate-500 text-center py-2">暂无可用角色</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {availableRoles.map(role => (
-                        <label
-                          key={role.code}
-                          className="flex items-center p-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedRoleCodes.includes(role.code)}
-                            onChange={() => toggleRole(role.code)}
-                            className="mr-3"
-                          />
-                          <div className="flex-1">
-                            <div className="text-sm font-medium text-slate-900 dark:text-white">
-                              {role.name}
-                            </div>
-                            {role.description && (
-                              <div className="text-xs text-slate-600 dark:text-slate-400">
-                                {role.description}
-                              </div>
-                            )}
-                          </div>
                         </label>
                       ))}
                     </div>
