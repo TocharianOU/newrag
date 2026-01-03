@@ -192,7 +192,13 @@ async def search(
                     'org_id': target_org_id,
                     'is_superuser': True  # Still superuser, but with org filter
                 }
-            # Superusers without org filter can see everything (no additional filters)
+            else:
+                # Superuser without org filter: can see everything
+                # IMPORTANT: Still must pass is_superuser flag to avoid being treated as anonymous
+                permission_filters['user_permissions'] = {
+                    'user_id': current_user.id,
+                    'is_superuser': True
+                }
         else:
             # Unauthenticated users can only see public documents
             permission_filters['visibility'] = 'public'

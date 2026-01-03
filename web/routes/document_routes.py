@@ -77,7 +77,8 @@ async def list_documents(
                 user_id=user_id,
                 limit=limit,
                 offset=offset,
-                status=status
+                status=status,
+                is_superuser=is_superuser
             )
             
             # Filter by file type if needed

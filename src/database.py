@@ -479,7 +479,8 @@ class DatabaseManager:
     
     def apply_permission_filter(self, query, user_id: Optional[int] = None, 
                                 org_id: Optional[int] = None, 
-                                is_superuser: bool = False):
+                                is_superuser: bool = False,
+                                model_class=None):
         """
         Apply permission filter to document query
         
@@ -495,23 +496,31 @@ class DatabaseManager:
             # Superuser sees everything
             return query
         
+        # Default to Document model if not provided
+        if model_class is None:
+            model_class = Document
+        
         if user_id is None:
             # Anonymous users only see public documents
-            return query.filter(Document.visibility == 'public')
+            return query.filter(model_class.visibility == 'public')
         
         # Build permission conditions
         from sqlalchemy import or_
         
         conditions = [
-            Document.visibility == 'public',  # Public documents
-            Document.owner_id == user_id,  # Documents owned by user
+            model_class.visibility == 'public',  # Public documents
+            model_class.owner_id == user_id,  # Documents owned by user
         ]
         
         # Add organization filter if user belongs to an organization
         if org_id:
             from sqlalchemy import and_
             conditions.append(
-                and_(Document.visibility == 'org', Document.org_id == org_id)
+                and_(model_class.visibility == 'organization', model_class.org_id == org_id)
+            )
+            # Also support legacy 'org' value
+            conditions.append(
+                and_(model_class.visibility == 'org', model_class.org_id == org_id)
             )
         
         # Note: For shared documents, we'll filter in Python after query
@@ -1328,11 +1337,20 @@ class DatabaseManager:
         user_id: int = None,
         limit: int = 100,
         offset: int = 0,
-        status: str = None
+        status: str = None,
+        is_superuser: bool = False
     ) -> List[Dict[str, Any]]:
         """
         List document masters with their latest versions.
         Returns combined view compatible with old Document API.
+        
+        Args:
+            org_id: Filter by organization ID (for superusers, None means all orgs)
+            user_id: Current user ID for permission check
+            limit: Maximum number of results
+            offset: Pagination offset
+            status: Filter by status
+            is_superuser: Whether user is superuser
         """
         session = self.get_session()
         try:
@@ -1340,9 +1358,14 @@ class DatabaseManager:
                 joinedload(DocumentMaster.latest_version)
             )
             
-            # Apply filters
-            if org_id:
-                query = self.apply_permission_filter(query, user_id, org_id, DocumentMaster)
+            # Apply permission filters
+            query = self.apply_permission_filter(
+                query, 
+                user_id=user_id, 
+                org_id=org_id, 
+                is_superuser=is_superuser,
+                model_class=DocumentMaster
+            )
             
             # Order by updated_at desc
             query = query.order_by(DocumentMaster.updated_at.desc())
