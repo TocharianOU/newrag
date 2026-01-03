@@ -17,14 +17,16 @@ import numpy as np
 class AdaptiveOCRPipeline:
     """自适应 OCR 处理流水线"""
     
-    def __init__(self, ocr_engine='easy', confidence_threshold=0.7):
+    def __init__(self, ocr_engine='easy', confidence_threshold=0.7, processing_mode='fast'):
         """
         Args:
             ocr_engine: OCR 引擎 (vision/paddle/easy)
             confidence_threshold: 置信度阈值，低于此值的区域需要重新识别
+            processing_mode: 处理模式 ('fast': 快速模式，OCR+VLM一次处理; 'deep': 深度模式，完整4阶段处理)
         """
         self.ocr_engine = ocr_engine
         self.confidence_threshold = confidence_threshold
+        self.processing_mode = processing_mode
         
         # 脚本路径
         script_dir = Path("document_ocr_pipeline")
@@ -42,7 +44,7 @@ class AdaptiveOCRPipeline:
         output_path.mkdir(exist_ok=True)
         
         print(f"{'='*80}")
-        print(f"📄 Page {page_num} - Adaptive OCR Pipeline")
+        print(f"📄 Page {page_num} - Adaptive OCR Pipeline ({self.processing_mode.upper()} mode)")
         print(f"{'='*80}")
         
         # ============ 阶段1：全局识别 (300 DPI) ============
@@ -85,6 +87,54 @@ class AdaptiveOCRPipeline:
         
         stage_times['stage1_global_ocr'] = time.time() - stage1_start
         print(f"      ⏱️  Stage 1 耗时: {stage_times['stage1_global_ocr']:.2f}秒")
+        
+        # ============ 快速模式：直接进入VLM处理 ============
+        if self.processing_mode == 'fast':
+            print(f"\n⚡ FAST MODE: Skipping region refinement, proceeding to VLM")
+            print("-" * 80)
+            
+            # 读取全局OCR数据
+            with open(ocr_global_json, 'r', encoding='utf-8') as f:
+                ocr_data = json.load(f)
+            
+            # 直接进入 VLM 处理
+            print(f"\n🤖 Stage 4: VLM Refinement (AI Understanding)")
+            print("-" * 80)
+            print(f"[4.1] Analyzing with VLM (this may take 10-30 seconds)...")
+            
+            stage4_start = time.time()
+            
+            script_dir = Path("document_ocr_pipeline")
+            refine_script = script_dir / "refine_with_vlm.py"
+            vlm_json_path = output_path / f"page_{page_num:03d}_vlm.json"
+            
+            subprocess.run([
+                sys.executable,
+                str(refine_script),
+                str(img_300_path),
+                str(ocr_global_json),
+                "-o", str(vlm_json_path),
+                "-p", str(page_num)
+            ], check=True)
+            
+            stage_times['stage2_analyze'] = 0.0  # 快速模式跳过
+            stage_times['stage3_refine_regions'] = 0.0  # 快速模式跳过
+            stage_times['stage4_vlm'] = time.time() - stage4_start
+            
+            print(f"      ✓ VLM analysis complete: {vlm_json_path.name}")
+            print(f"      ⏱️  Stage 4 耗时: {stage_times['stage4_vlm']:.2f}秒")
+            
+            # 打印总时间统计
+            total_time = sum(stage_times.values())
+            print(f"\n⏱️  页面总耗时: {total_time:.2f}秒 ({total_time/60:.2f}分钟)")
+            print(f"   - Stage 1 (全局OCR 300 DPI): {stage_times['stage1_global_ocr']:.2f}秒 ({stage_times['stage1_global_ocr']/total_time*100:.1f}%)")
+            print(f"   - Stage 2 (分析): ⚡ SKIPPED (快速模式)")
+            print(f"   - Stage 3 (局部放大): ⚡ SKIPPED (快速模式)")
+            print(f"   - Stage 4 (VLM 精炼): {stage_times['stage4_vlm']:.2f}秒 ({stage_times['stage4_vlm']/total_time*100:.1f}%)")
+            
+            return self._create_result_summary(page_num, output_path, has_regions=False,
+                                              ocr_data=ocr_data, vlm_json=str(vlm_json_path.name),
+                                              stage_times=stage_times)
         
         # ============ 阶段2：分析低置信度区域 ============
         print(f"\n🎯 Stage 2: Analyzing Low-Confidence Regions")
@@ -394,6 +444,8 @@ def main():
                        help="Confidence threshold for refinement (default: 0.7)")
     parser.add_argument("--output-dir", type=str, default=None,
                        help="Output directory (default: PDF_name_adaptive)")
+    parser.add_argument("--processing-mode", type=str, default='fast', choices=['fast', 'deep'],
+                       help="Processing mode: fast=OCR+VLM once (default), deep=full 4-stage processing")
     
     args = parser.parse_args()
     
@@ -433,7 +485,8 @@ def main():
     # 初始化流水线
     pipeline = AdaptiveOCRPipeline(
         ocr_engine=args.ocr_engine,
-        confidence_threshold=args.confidence
+        confidence_threshold=args.confidence,
+        processing_mode=args.processing_mode
     )
     
     # 处理 PDF

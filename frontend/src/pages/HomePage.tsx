@@ -7,6 +7,7 @@ import { getAccessToken } from '../utils/auth';
 export default function HomePage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [ocrEngine, setOcrEngine] = useState('vision');
+  const [processingMode, setProcessingMode] = useState<string>('fast');
   const [isDragging, setIsDragging] = useState(false);
   const [visibility, setVisibility] = useState<string>('organization');
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null);
@@ -40,6 +41,7 @@ export default function HomePage() {
     mutationFn: (files: File[]) => {
       const metadata = {
         ocr_engine: ocrEngine,
+        processing_mode: processingMode,
         organization_id: selectedOrgId || undefined,
         visibility: visibility
       };
@@ -205,6 +207,23 @@ export default function HomePage() {
                   </select>
                   <p className="text-xs text-slate-500 mt-2">
                     EasyOCR 速度最快；PaddleOCR 识别最精确；Apple Vision 对复杂布局适配最好。
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    处理模式
+                  </label>
+                  <select
+                    value={processingMode}
+                    onChange={(e) => setProcessingMode(e.target.value)}
+                    className="input-field w-full appearance-none"
+                  >
+                    <option value="fast">⚡ 快速模式 - OCR+VLM 一次处理 (推荐)</option>
+                    <option value="deep">🔬 深度模式 - 完整4阶段精细处理</option>
+                  </select>
+                  <p className="text-xs text-slate-500 mt-2">
+                    快速模式：约40秒/页，适合大批量处理；深度模式：约125秒/页，最高精度。
                   </p>
                 </div>
 

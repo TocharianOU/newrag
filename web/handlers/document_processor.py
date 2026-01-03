@@ -47,11 +47,11 @@ def processing_worker():
             if task_args is None:
                 break  # Sentinel to stop worker
             
-            doc_id, file_path, metadata, ocr_engine, checksum = task_args
+            doc_id, file_path, metadata, ocr_engine, checksum, processing_mode = task_args
             
             try:
-                logger.info("worker_picked_task", doc_id=doc_id, thread=threading.current_thread().name)
-                _real_process_document(doc_id, file_path, metadata, ocr_engine, checksum)
+                logger.info("worker_picked_task", doc_id=doc_id, processing_mode=processing_mode, thread=threading.current_thread().name)
+                _real_process_document(doc_id, file_path, metadata, ocr_engine, checksum, processing_mode)
             except Exception as e:
                 logger.error("worker_task_failed", doc_id=doc_id, error=str(e))
                 task_manager.complete_task(doc_id, success=False, error_message=str(e))
@@ -126,8 +126,8 @@ def recover_stuck_tasks():
                     progress_percentage=0
                 )
                 
-                # Enqueue
-                task_queue.put((doc_id, file_path, metadata, ocr_engine, checksum))
+                # Enqueue (use default 'fast' mode for recovered tasks)
+                task_queue.put((doc_id, file_path, metadata, ocr_engine, checksum, 'fast'))
                 logger.info("stuck_task_recovered", doc_id=doc_id, filename=doc.filename)
                 
             except Exception as doc_error:
@@ -273,7 +273,7 @@ def extract_matched_bboxes_from_file(doc_id: int, checksum: str, page_number: in
         return []
 
 
-def process_single_pdf(doc_id: int, pdf_path: Path, metadata: dict, ocr_engine: str, checksum: str, parent_task_id: Optional[int] = None):
+def process_single_pdf(doc_id: int, pdf_path: Path, metadata: dict, ocr_engine: str, checksum: str, parent_task_id: Optional[int] = None, processing_mode: str = 'fast'):
     """Process a single PDF file"""
     try:
         # Update task status
@@ -282,10 +282,10 @@ def process_single_pdf(doc_id: int, pdf_path: Path, metadata: dict, ocr_engine: 
             status=TaskStatus.RUNNING,
             stage=TaskStage.OCR_PROCESSING,
             progress_percentage=10,
-            message=f"Processing {pdf_path.name}...",
+            message=f"Processing {pdf_path.name} ({processing_mode} mode)...",
             filename=pdf_path.name
         )
-        db.update_document_progress(doc_id, 10, f"Starting OCR for {pdf_path.name}...")
+        db.update_document_progress(doc_id, 10, f"Starting OCR for {pdf_path.name} ({processing_mode} mode)...")
         
         # Check for cancellation
         if not task_manager.wait_if_paused(doc_id):
@@ -302,7 +302,8 @@ def process_single_pdf(doc_id: int, pdf_path: Path, metadata: dict, ocr_engine: 
             str(pdf_vlm_script),
             str(pdf_path),
             '--ocr-engine', ocr_engine,
-            '--output-dir', str(doc_output_dir)
+            '--output-dir', str(doc_output_dir),
+            '--processing-mode', processing_mode
         ], check=True)
         
         # Check for cancellation after OCR
@@ -1083,7 +1084,7 @@ def process_single_image(doc_id: int, file_path: Path, metadata: dict, ocr_engin
         raise
 
 
-def _real_process_document(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str):
+def _real_process_document(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str, processing_mode: str = 'fast'):
     """
     Actual logic for processing documents.
     This is called by the worker thread and replaces the old process_document_background logic.
@@ -1096,11 +1097,11 @@ def _real_process_document(doc_id: int, file_path: Path, metadata: dict, ocr_eng
             status=TaskStatus.RUNNING,
             stage=TaskStage.INITIALIZING,
             progress_percentage=0,
-            message="Initializing document processing...",
+            message=f"Initializing document processing ({processing_mode} mode)...",
             filename=file_path.name
         )
         db.update_document_progress(doc_id, 0, "Initializing...")
-        logger.info("background_processing_started", doc_id=doc_id, filename=file_path.name, ocr_engine=ocr_engine)
+        logger.info("background_processing_started", doc_id=doc_id, filename=file_path.name, ocr_engine=ocr_engine, processing_mode=processing_mode)
         
         # Check for cancellation
         if not task_manager.wait_if_paused(doc_id):
@@ -1243,7 +1244,7 @@ def _real_process_document(doc_id: int, file_path: Path, metadata: dict, ocr_eng
                     # Process the file based on type
                     try:
                         if f_ext == '.pdf':
-                            process_single_pdf(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
+                            process_single_pdf(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id, processing_mode=processing_mode)
                         elif f_ext == '.pptx':
                             process_single_pptx(child_doc_id, f_path, metadata, ocr_engine, child_checksum, parent_task_id=doc_id)
                         elif f_ext in ['.docx', '.doc', '.odt', '.txt', '.md']:
@@ -1279,7 +1280,7 @@ def _real_process_document(doc_id: int, file_path: Path, metadata: dict, ocr_eng
         
         elif file_ext == '.pdf':
             # Handle single PDF file
-            process_single_pdf(doc_id, file_path, metadata, ocr_engine, checksum)
+            process_single_pdf(doc_id, file_path, metadata, ocr_engine, checksum, processing_mode=processing_mode)
         
         elif file_ext == '.pptx':
             # Handle PPTX files
@@ -1338,7 +1339,7 @@ def _real_process_document(doc_id: int, file_path: Path, metadata: dict, ocr_eng
                 logger.warning("failed_to_cleanup_temp_dir", error=str(e), dir=str(temp_extract_dir))
 
 
-def process_document_background(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str):
+def process_document_background(doc_id: int, file_path: Path, metadata: dict, ocr_engine: str, checksum: str, processing_mode: str = 'fast'):
     """
     Entry point for background processing.
     Now just enqueues the task for workers.
@@ -1356,5 +1357,5 @@ def process_document_background(doc_id: int, file_path: Path, metadata: dict, oc
     db.update_document_status(doc_id, 'queued', error_message=None)
     
     # Enqueue task
-    task_queue.put((doc_id, file_path, metadata, ocr_engine, checksum))
-    logger.info("task_enqueued", doc_id=doc_id, qsize=task_queue.qsize())
+    task_queue.put((doc_id, file_path, metadata, ocr_engine, checksum, processing_mode))
+    logger.info("task_enqueued", doc_id=doc_id, processing_mode=processing_mode, qsize=task_queue.qsize())

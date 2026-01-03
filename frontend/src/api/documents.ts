@@ -45,6 +45,7 @@ export const documentAPI = {
     author?: string;
     description?: string;
     ocr_engine?: string;
+    processing_mode?: string;
     organization_id?: number;
     visibility?: string;
   }) => {
@@ -72,6 +73,7 @@ export const documentAPI = {
     author?: string;
     description?: string;
     ocr_engine?: string;
+    processing_mode?: string;
     organization_id?: number;
     visibility?: string;
   }) => {

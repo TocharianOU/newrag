@@ -582,7 +582,8 @@ async def upload_file(
     tags: Optional[str] = Form(None),
     author: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
-    ocr_engine: Optional[str] = Form('easy')
+    ocr_engine: Optional[str] = Form('easy'),
+    processing_mode: Optional[str] = Form('fast')
 ):
     """
     Upload and process single file
@@ -694,7 +695,7 @@ async def upload_file(
         # Start background thread
         thread = threading.Thread(
             target=process_document_background,
-            args=(doc_id, file_path, metadata, ocr_engine, checksum),
+            args=(doc_id, file_path, metadata, ocr_engine, checksum, processing_mode),
             daemon=True
         )
         
@@ -733,7 +734,8 @@ async def upload_batch(
     tags: Optional[str] = Form(None),
     author: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
-    ocr_engine: Optional[str] = Form('vision')
+    ocr_engine: Optional[str] = Form('vision'),
+    processing_mode: Optional[str] = Form('fast')
 ):
     """
     Upload and process multiple files asynchronously
@@ -839,7 +841,7 @@ async def upload_batch(
                 # 7. Start Background Task
                 thread = threading.Thread(
                     target=process_document_background,
-                    args=(doc.id, file_path, metadata, ocr_engine, checksum),
+                    args=(doc.id, file_path, metadata, ocr_engine, checksum, processing_mode),
                     daemon=True
                 )
                 task_manager.register_thread(doc.id, thread)

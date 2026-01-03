@@ -288,6 +288,9 @@ def main():
                        help='OCR 引擎选择 (默认: vision)')
     parser.add_argument('--output-dir', type=str, default=None,
                        help='输出目录（默认：PDF名_adaptive）')
+    parser.add_argument('--processing-mode', type=str, default='fast',
+                       choices=['fast', 'deep'],
+                       help='处理模式: fast=快速(OCR+VLM一次处理), deep=深度(完整4阶段处理，默认: fast)')
     
     args = parser.parse_args()
     
@@ -331,7 +334,8 @@ def main():
         str(adaptive_script),
         str(pdf_path),
         '--ocr-engine', args.ocr_engine,
-        '--output-dir', str(output_dir)
+        '--output-dir', str(output_dir),
+        '--processing-mode', args.processing_mode
     ], check=True, cwd=project_root)
     
     # 读取生成的 complete_adaptive_ocr.json
