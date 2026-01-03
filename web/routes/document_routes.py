@@ -852,8 +852,12 @@ async def upload_file(
         db.update_document_version_status(doc_id, 'processing')
         logger.info("status_updated_to_processing", doc_id=doc_id, version=version_number)
         
-        # Prepare metadata
-        metadata = {}
+        # Prepare metadata (include permission fields for Elasticsearch)
+        metadata = {
+            'owner_id': current_user.id,
+            'org_id': organization_id,
+            'visibility': visibility
+        }
         if category:
             metadata['category'] = category
         if tags:
@@ -1018,8 +1022,12 @@ async def upload_batch(
                 # Update status to processing
                 db.update_document_status(doc.id, 'processing')
                 
-                # 6. Prepare Metadata
-                metadata = {}
+                # 6. Prepare Metadata (include permission fields for Elasticsearch)
+                metadata = {
+                    'owner_id': current_user.id,
+                    'org_id': organization_id,
+                    'visibility': visibility
+                }
                 if category: metadata['category'] = category
                 if tags: metadata['tags'] = tags.split(',')
                 if author: metadata['author'] = author
@@ -1086,8 +1094,12 @@ async def upload_zip(
         
         logger.info("zip_uploaded", filename=file.filename)
         
-        # Prepare metadata
-        metadata = {}
+        # Prepare metadata (include permission fields for Elasticsearch)
+        metadata = {
+            'owner_id': current_user.id,
+            'org_id': organization_id,
+            'visibility': visibility
+        }
         if category:
             metadata['category'] = category
         if tags:
