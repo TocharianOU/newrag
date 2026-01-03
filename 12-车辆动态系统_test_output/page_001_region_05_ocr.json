@@ -1,0 +1,111 @@
+{
+  "file": "page_001_region_05_600dpi.png",
+  "image_size": {
+    "width": 1980,
+    "height": 1530
+  },
+  "status": "success",
+  "text_blocks_count": 8,
+  "layout_regions_count": 0,
+  "text_blocks": [
+    {
+      "text": "10<",
+      "bbox": [
+        202.0,
+        0.0,
+        308.0,
+        30.0
+      ],
+      "confidence": 0.07414951283267042,
+      "center_x": 255.0,
+      "center_y": 15.0
+    },
+    {
+      "text": "13-8",
+      "bbox": [
+        1400.0,
+        0.0,
+        1516.0,
+        48.0
+      ],
+      "confidence": 0.7001392101739272,
+      "center_x": 1458.0,
+      "center_y": 24.0
+    },
+    {
+      "text": "d",
+      "bbox": [
+        1268.0,
+        502.0,
+        1444.0,
+        712.0
+      ],
+      "confidence": 0.003587346034361838,
+      "center_x": 1356.0,
+      "center_y": 607.0
+    },
+    {
+      "text": "嚣",
+      "bbox": [
+        55.0,
+        502.0,
+        236.0,
+        713.0
+      ],
+      "confidence": 0.0003253364169015921,
+      "center_x": 145.5,
+      "center_y": 607.5
+    },
+    {
+      "text": "20",
+      "bbox": [
+        1266.0,
+        1154.0,
+        1340.0,
+        1208.0
+      ],
+      "confidence": 0.9999499299111206,
+      "center_x": 1303.0,
+      "center_y": 1181.0
+    },
+    {
+      "text": "C155",
+      "bbox": [
+        1397.0,
+        1151.0,
+        1541.0,
+        1211.0
+      ],
+      "confidence": 0.9071952104568481,
+      "center_x": 1469.0,
+      "center_y": 1181.0
+    },
+    {
+      "text": "可娈电压",
+      "bbox": [
+        53.0,
+        1345.0,
+        281.0,
+        1413.0
+      ],
+      "confidence": 0.9306015372276306,
+      "center_x": 167.0,
+      "center_y": 1379.0
+    },
+    {
+      "text": "点火",
+      "bbox": [
+        1297.0,
+        1347.0,
+        1411.0,
+        1415.0
+      ],
+      "confidence": 0.9688009842244373,
+      "center_x": 1354.0,
+      "center_y": 1381.0
+    }
+  ],
+  "layout_regions": null,
+  "full_text": "10<\n13-8\nd\n嚣\n20\nC155\n可娈电压\n点火",
+  "average_confidence": 0.5730936334097372
+}

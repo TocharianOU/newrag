@@ -1,0 +1,207 @@
+{
+  "page_number": 1,
+  "stage1_global": {
+    "resolution": "300 DPI",
+    "image": "page_001_300dpi.png",
+    "ocr_json": "page_001_global_ocr.json",
+    "visualized": "page_001_global_visualized.png"
+  },
+  "performance": {
+    "stage1_global_ocr_seconds": 15.922154903411865,
+    "stage2_analyze_seconds": 0.0002582073211669922,
+    "stage3_refine_regions_seconds": 83.7495379447937,
+    "stage4_vlm_seconds": 24.82922601699829,
+    "total_seconds": 124.50117707252502
+  },
+  "stage2_refined_regions": [
+    {
+      "region_id": 1,
+      "bbox_300dpi": [
+        0,
+        0,
+        825,
+        637
+      ],
+      "bbox_600dpi": [
+        0,
+        0,
+        1815,
+        1401
+      ],
+      "image": "page_001_region_01_600dpi.png",
+      "ocr_json": "page_001_region_01_ocr.json",
+      "visualized": "page_001_region_01_visualized.png",
+      "text_blocks": 8,
+      "avg_confidence": 0.7375384615000385
+    },
+    {
+      "region_id": 2,
+      "bbox_300dpi": [
+        825,
+        0,
+        1650,
+        637
+      ],
+      "bbox_600dpi": [
+        1485,
+        0,
+        3465,
+        1401
+      ],
+      "image": "page_001_region_02_600dpi.png",
+      "ocr_json": "page_001_region_02_ocr.json",
+      "visualized": "page_001_region_02_visualized.png",
+      "text_blocks": 13,
+      "avg_confidence": 0.7885796482478258
+    },
+    {
+      "region_id": 3,
+      "bbox_300dpi": [
+        1650,
+        0,
+        2475,
+        637
+      ],
+      "bbox_600dpi": [
+        3135,
+        0,
+        5115,
+        1401
+      ],
+      "image": "page_001_region_03_600dpi.png",
+      "ocr_json": "page_001_region_03_ocr.json",
+      "visualized": "page_001_region_03_visualized.png",
+      "text_blocks": 8,
+      "avg_confidence": 0.6508828956393105
+    },
+    {
+      "region_id": 4,
+      "bbox_300dpi": [
+        0,
+        637,
+        825,
+        1275
+      ],
+      "bbox_600dpi": [
+        0,
+        1147,
+        1815,
+        2677
+      ],
+      "image": "page_001_region_04_600dpi.png",
+      "ocr_json": "page_001_region_04_ocr.json",
+      "visualized": "page_001_region_04_visualized.png",
+      "text_blocks": 3,
+      "avg_confidence": 0.2640208109740526
+    },
+    {
+      "region_id": 5,
+      "bbox_300dpi": [
+        825,
+        637,
+        1650,
+        1275
+      ],
+      "bbox_600dpi": [
+        1485,
+        1147,
+        3465,
+        2677
+      ],
+      "image": "page_001_region_05_600dpi.png",
+      "ocr_json": "page_001_region_05_ocr.json",
+      "visualized": "page_001_region_05_visualized.png",
+      "text_blocks": 8,
+      "avg_confidence": 0.5730936334097372
+    },
+    {
+      "region_id": 6,
+      "bbox_300dpi": [
+        825,
+        1275,
+        1650,
+        1912
+      ],
+      "bbox_600dpi": [
+        1485,
+        2423,
+        3465,
+        3951
+      ],
+      "image": "page_001_region_06_600dpi.png",
+      "ocr_json": "page_001_region_06_ocr.json",
+      "visualized": "page_001_region_06_visualized.png",
+      "text_blocks": 7,
+      "avg_confidence": 0.9207407375502606
+    },
+    {
+      "region_id": 7,
+      "bbox_300dpi": [
+        1650,
+        1275,
+        2475,
+        1912
+      ],
+      "bbox_600dpi": [
+        3135,
+        2423,
+        5115,
+        3951
+      ],
+      "image": "page_001_region_07_600dpi.png",
+      "ocr_json": "page_001_region_07_ocr.json",
+      "visualized": "page_001_region_07_visualized.png",
+      "text_blocks": 13,
+      "avg_confidence": 0.7658332934029114
+    },
+    {
+      "region_id": 8,
+      "bbox_300dpi": [
+        2475,
+        1275,
+        3301,
+        1912
+      ],
+      "bbox_600dpi": [
+        4785,
+        2423,
+        6601,
+        3951
+      ],
+      "image": "page_001_region_08_600dpi.png",
+      "ocr_json": "page_001_region_08_ocr.json",
+      "visualized": "page_001_region_08_visualized.png",
+      "text_blocks": 2,
+      "avg_confidence": 0.5770379246777564
+    },
+    {
+      "region_id": 9,
+      "bbox_300dpi": [
+        825,
+        1912,
+        1650,
+        2550
+      ],
+      "bbox_600dpi": [
+        1485,
+        3697,
+        3465,
+        5100
+      ],
+      "image": "page_001_region_09_600dpi.png",
+      "ocr_json": "page_001_region_09_ocr.json",
+      "visualized": "page_001_region_09_visualized.png",
+      "text_blocks": 3,
+      "avg_confidence": 0.6856949497430579
+    }
+  ],
+  "total_refined_regions": 9,
+  "statistics": {
+    "total_text_blocks": 44,
+    "average_confidence": 0.6875345546912319,
+    "low_confidence_blocks": 19
+  },
+  "stage3_vlm": {
+    "vlm_json": "page_001_vlm.json"
+  }
+}

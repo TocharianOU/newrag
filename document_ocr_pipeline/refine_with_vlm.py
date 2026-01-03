@@ -32,22 +32,41 @@ class VLMRefiner:
         with open(image_path, 'rb') as f:
             return base64.b64encode(f.read()).decode('utf-8')
     
-    def build_prompt(self, ocr_data: Dict[str, Any], page_number: int = 1) -> str:
+    def build_prompt(self, ocr_data: Dict[str, Any], page_number: int = 1, region_ocr_data: List[Dict[str, Any]] = None) -> str:
         """构建提示词 - 针对每一页的理解和提取"""
         full_text = ocr_data.get('full_text', '')
         text_blocks_count = ocr_data.get('text_blocks_count', 0)
         avg_confidence = ocr_data.get('average_confidence', 0) * 100
         
+        # 构建区域OCR信息（如果有）
+        region_info = ""
+        if region_ocr_data:
+            region_info = "\n\n**Enhanced OCR from High-Resolution Regions (600 DPI):**\n"
+            region_info += f"We also performed zoom-in OCR on {len(region_ocr_data)} low-confidence regions at 600 DPI.\n"
+            region_info += "These regions had unclear text in the global 300 DPI scan, so we re-scanned them at higher resolution:\n\n"
+            
+            for i, region in enumerate(region_ocr_data, 1):
+                region_text = region.get('full_text', '').strip()
+                region_conf = region.get('average_confidence', 0) * 100
+                region_bbox = region.get('bbox_300dpi', [0, 0, 0, 0])
+                
+                if region_text:
+                    region_info += f"Region {i} (bbox: {region_bbox}):\n"
+                    region_info += f"  Confidence: {region_conf:.1f}%\n"
+                    region_info += f"  Text: {region_text[:300]}{'...' if len(region_text) > 300 else ''}\n\n"
+            
+            region_info += "Note: Use these high-resolution texts as REFERENCE only. Your primary analysis should be based on what YOU SEE in the image.\n"
+        
         prompt = f"""You are an expert document analyzer with vision understanding capabilities.
 
 **Task:** Analyze this document page (Page {page_number}) comprehensively - both WHAT YOU SEE in the image and WHAT THE TEXT SAYS.
 
-**OCR Extracted Text:**
+**OCR Extracted Text (300 DPI Global Scan):**
 {full_text}
 
 **OCR Statistics:**
 - Text blocks: {text_blocks_count}
-- Average confidence: {avg_confidence:.1f}%
+- Average confidence: {avg_confidence:.1f}%{region_info}
 
 **Your Analysis Must Include:**
 
@@ -116,7 +135,8 @@ Respond with ONLY the JSON, no additional text."""
         return prompt
     
     def refine_with_image(self, image_path: str, ocr_json_path: str, 
-                          model: str = None, page_number: int = 1) -> Dict[str, Any]:
+                          model: str = None, page_number: int = 1, 
+                          region_ocr_results: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         使用VLM模型和图片优化OCR结果
         
@@ -125,6 +145,7 @@ Respond with ONLY the JSON, no additional text."""
             ocr_json_path: OCR结果JSON路径
             model: 模型名称（None则使用LM Studio加载的模型）
             page_number: 页码（用于prompt）
+            region_ocr_results: 阶段3的高分辨率区域OCR结果列表
             
         Returns:
             精炼后的结构化数据
@@ -139,8 +160,10 @@ Respond with ONLY the JSON, no additional text."""
         print("🖼️  Encoding image...")
         image_base64 = self.encode_image_base64(image_path)
         
-        # 构建提示词
-        prompt = self.build_prompt(ocr_data, page_number)
+        # 构建提示词（包含区域OCR数据）
+        if region_ocr_results:
+            print(f"📍 Including {len(region_ocr_results)} high-resolution region OCR results")
+        prompt = self.build_prompt(ocr_data, page_number, region_ocr_results)
         
         # 准备消息（支持vision）
         messages = [
@@ -389,6 +412,8 @@ def main():
     parser.add_argument("-o", "--output", help="输出JSON路径（默认：xxx_vlm.json）")
     parser.add_argument("-p", "--page-number", type=int, default=1, 
                        help="页码（用于VLM理解，默认：1）")
+    parser.add_argument("-r", "--regions-json", 
+                       help="阶段3区域OCR结果JSON路径（可选）")
     parser.add_argument("--api-base", default=default_api_base,
                        help=f"LM Studio API地址（默认从config: {default_api_base}）")
     parser.add_argument("--model", default=default_model,
@@ -437,6 +462,17 @@ def main():
         with open(ocr_json_path, 'r', encoding='utf-8') as f:
             ocr_data = json.load(f)
         
+        # 读取区域OCR数据（如果提供）
+        region_ocr_results = None
+        if args.regions_json:
+            regions_path = Path(args.regions_json)
+            if regions_path.exists():
+                with open(regions_path, 'r', encoding='utf-8') as f:
+                    region_ocr_results = json.load(f)
+                print(f"✓ Loaded {len(region_ocr_results)} region OCR results")
+            else:
+                print(f"⚠ Warning: Regions JSON not found: {regions_path}")
+        
         # 精炼数据
         if args.text_only:
             refined_data = refiner.refine_text_only(ocr_data, args.model)
@@ -445,7 +481,8 @@ def main():
                 str(image_path), 
                 str(ocr_json_path),
                 args.model,
-                args.page_number
+                args.page_number,
+                region_ocr_results
             )
         
         print("\n✓ VLM analysis completed")

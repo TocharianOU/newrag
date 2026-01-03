@@ -1,0 +1,51 @@
+{
+  "file": "page_001_region_04_600dpi.png",
+  "image_size": {
+    "width": 1815,
+    "height": 1530
+  },
+  "status": "success",
+  "text_blocks_count": 3,
+  "layout_regions_count": 0,
+  "text_blocks": [
+    {
+      "text": "10c",
+      "bbox": [
+        1688.0,
+        0.0,
+        1792.0,
+        30.0
+      ],
+      "confidence": 0.03054475298664551,
+      "center_x": 1740.0,
+      "center_y": 15.0
+    },
+    {
+      "text": "詈",
+      "bbox": [
+        1541.0,
+        505.0,
+        1721.0,
+        713.0
+      ],
+      "confidence": 0.00047961497884731197,
+      "center_x": 1631.0,
+      "center_y": 609.0
+    },
+    {
+      "text": "可娈电压",
+      "bbox": [
+        1538.0,
+        1344.0,
+        1766.0,
+        1416.0
+      ],
+      "confidence": 0.761038064956665,
+      "center_x": 1652.0,
+      "center_y": 1380.0
+    }
+  ],
+  "layout_regions": null,
+  "full_text": "10c\n詈\n可娈电压",
+  "average_confidence": 0.2640208109740526
+}

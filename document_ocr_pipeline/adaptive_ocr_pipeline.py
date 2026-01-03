@@ -33,6 +33,11 @@ class AdaptiveOCRPipeline:
     
     def process_page(self, page, page_num, output_dir):
         """处理单个页面"""
+        import time
+        
+        # 记录各阶段耗时
+        stage_times = {}
+        
         output_path = Path(output_dir)
         output_path.mkdir(exist_ok=True)
         
@@ -43,6 +48,7 @@ class AdaptiveOCRPipeline:
         # ============ 阶段1：全局识别 (300 DPI) ============
         print(f"\n🔍 Stage 1: Global Recognition (300 DPI)")
         print("-" * 80)
+        stage1_start = time.time()
         
         # 1.1 转换为 300 DPI 图片
         print(f"[1.1] Converting to 300 DPI...")
@@ -77,9 +83,13 @@ class AdaptiveOCRPipeline:
         ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         print(f"      ✓ Saved: {vis_global_png.name}")
         
+        stage_times['stage1_global_ocr'] = time.time() - stage1_start
+        print(f"      ⏱️  Stage 1 耗时: {stage_times['stage1_global_ocr']:.2f}秒")
+        
         # ============ 阶段2：分析低置信度区域 ============
         print(f"\n🎯 Stage 2: Analyzing Low-Confidence Regions")
         print("-" * 80)
+        stage2_start = time.time()
         
         # 2.1 读取 OCR 结果
         with open(ocr_global_json, 'r', encoding='utf-8') as f:
@@ -93,13 +103,21 @@ class AdaptiveOCRPipeline:
         
         print(f"[2.1] Found {len(low_conf_blocks)} low-confidence regions (< {self.confidence_threshold})")
         
+        stage_times['stage2_analyze'] = time.time() - stage2_start
+        print(f"      ⏱️  Stage 2 耗时: {stage_times['stage2_analyze']:.2f}秒")
+        
         if len(low_conf_blocks) == 0:
             print(f"      ✓ No refinement needed - all text has high confidence!")
             
-            # 仍然需要 VLM 处理
-            print(f"\n🤖 Stage 3: VLM Refinement (AI Understanding)")
+            stage_times['stage3_refine_regions'] = 0.0  # 没有区域需要处理
+            
+            # 仍然需要 VLM 处理（没有区域OCR数据）
+            print(f"\n🤖 Stage 4: VLM Refinement (AI Understanding)")
             print("-" * 80)
-            print(f"[3.1] Analyzing with VLM (this may take 10-30 seconds)...")
+            print(f"[4.1] Analyzing with VLM (this may take 10-30 seconds)...")
+            print(f"      (No high-resolution regions to include)")
+            
+            stage4_start = time.time()
             
             script_dir = Path("document_ocr_pipeline")
             refine_script = script_dir / "refine_with_vlm.py"
@@ -114,10 +132,13 @@ class AdaptiveOCRPipeline:
                 "-p", str(page_num)
             ], check=True)
             
+            stage_times['stage4_vlm'] = time.time() - stage4_start
             print(f"      ✓ VLM analysis complete: {vlm_json_path.name}")
+            print(f"      ⏱️  Stage 4 耗时: {stage_times['stage4_vlm']:.2f}秒")
             
             return self._create_result_summary(page_num, output_path, has_regions=False,
-                                              ocr_data=ocr_data, vlm_json=str(vlm_json_path.name))
+                                              ocr_data=ocr_data, vlm_json=str(vlm_json_path.name),
+                                              stage_times=stage_times)
         
         # 2.3 动态切分策略 - 合并邻近的低置信度区域
         regions = self._merge_nearby_regions(low_conf_blocks, img_300_array.shape)
@@ -126,6 +147,7 @@ class AdaptiveOCRPipeline:
         # ============ 阶段3：局部放大识别 (600 DPI) ============
         print(f"\n🔬 Stage 3: Refine Low-Confidence Regions (600 DPI)")
         print("-" * 80)
+        stage3_start = time.time()
         
         # 3.1 转换为 600 DPI 图片（只用于切分）
         img_600 = page.to_image(resolution=600)
@@ -198,36 +220,76 @@ class AdaptiveOCRPipeline:
                 "avg_confidence": avg_conf
             })
         
+        stage_times['stage3_refine_regions'] = time.time() - stage3_start
+        print(f"\n      ⏱️  Stage 3 耗时: {stage_times['stage3_refine_regions']:.2f}秒 ({len(regions)} 个区域)")
+        
         # ============ 阶段4：VLM 精炼 ============
         print(f"\n🤖 Stage 4: VLM Refinement (AI Understanding)")
         print("-" * 80)
+        stage4_start = time.time()
         
-        # 4.1 调用 VLM 处理
-        print(f"[4.1] Analyzing with VLM (this may take 10-30 seconds)...")
+        # 4.1 准备区域OCR数据（收集阶段3的所有区域结果）
+        region_ocr_data = []
+        for region_result in region_results:
+            region_ocr_json_file = output_path / region_result['ocr_json']
+            if region_ocr_json_file.exists():
+                with open(region_ocr_json_file, 'r', encoding='utf-8') as f:
+                    region_ocr = json.load(f)
+                    # 添加bbox信息
+                    region_ocr['bbox_300dpi'] = region_result['bbox_300dpi']
+                    region_ocr_data.append(region_ocr)
+        
+        # 4.2 保存区域OCR数据到临时文件
+        regions_json_path = None
+        if region_ocr_data:
+            regions_json_path = output_path / f"page_{page_num:03d}_regions_ocr.json"
+            with open(regions_json_path, 'w', encoding='utf-8') as f:
+                json.dump(region_ocr_data, f, ensure_ascii=False, indent=2)
+            print(f"[4.1] Prepared {len(region_ocr_data)} region OCR results for VLM")
+        
+        # 4.3 调用 VLM 处理
+        print(f"[4.2] Analyzing with VLM (this may take 10-30 seconds)...")
         script_dir = Path("document_ocr_pipeline")
         refine_script = script_dir / "refine_with_vlm.py"
         vlm_json_path = output_path / f"page_{page_num:03d}_vlm.json"
         
-        subprocess.run([
+        vlm_cmd = [
             sys.executable,
             str(refine_script),
             str(img_300_path),
             str(ocr_global_json),
             "-o", str(vlm_json_path),
             "-p", str(page_num)
-        ], check=True)
+        ]
         
+        # 如果有区域OCR数据，添加到命令行
+        if regions_json_path:
+            vlm_cmd.extend(["-r", str(regions_json_path)])
+        
+        subprocess.run(vlm_cmd, check=True)
+        
+        stage_times['stage4_vlm'] = time.time() - stage4_start
         print(f"      ✓ VLM analysis complete: {vlm_json_path.name}")
+        print(f"      ⏱️  Stage 4 耗时: {stage_times['stage4_vlm']:.2f}秒")
         
         # ============ 生成汇总结果 ============
         print(f"\n📊 Generating Summary")
         print("-" * 80)
         
+        # 打印总时间统计
+        total_time = sum(stage_times.values())
+        print(f"\n⏱️  页面总耗时: {total_time:.2f}秒 ({total_time/60:.2f}分钟)")
+        print(f"   - Stage 1 (全局OCR 300 DPI): {stage_times['stage1_global_ocr']:.2f}秒 ({stage_times['stage1_global_ocr']/total_time*100:.1f}%)")
+        print(f"   - Stage 2 (分析低置信度区域): {stage_times['stage2_analyze']:.2f}秒 ({stage_times['stage2_analyze']/total_time*100:.1f}%)")
+        print(f"   - Stage 3 (局部放大OCR 600 DPI): {stage_times['stage3_refine_regions']:.2f}秒 ({stage_times['stage3_refine_regions']/total_time*100:.1f}%)")
+        print(f"   - Stage 4 (VLM 精炼): {stage_times['stage4_vlm']:.2f}秒 ({stage_times['stage4_vlm']/total_time*100:.1f}%)")
+        
         return self._create_result_summary(page_num, output_path, 
                                           has_regions=True, 
                                           region_results=region_results,
                                           ocr_data=ocr_data,
-                                          vlm_json=str(vlm_json_path.name))
+                                          vlm_json=str(vlm_json_path.name),
+                                          stage_times=stage_times)
     
     def _merge_nearby_regions(self, blocks, img_shape, merge_threshold=50):
         """合并邻近的低置信度区域"""
@@ -270,7 +332,7 @@ class AdaptiveOCRPipeline:
         return regions
     
     def _create_result_summary(self, page_num, output_path, has_regions=False, 
-                               region_results=None, ocr_data=None, vlm_json=None):
+                               region_results=None, ocr_data=None, vlm_json=None, stage_times=None):
         """创建页面处理结果摘要"""
         summary = {
             "page_number": page_num,
@@ -281,6 +343,16 @@ class AdaptiveOCRPipeline:
                 "visualized": f"page_{page_num:03d}_global_visualized.png",
             }
         }
+        
+        # 添加时间统计
+        if stage_times:
+            summary["performance"] = {
+                "stage1_global_ocr_seconds": stage_times.get('stage1_global_ocr', 0),
+                "stage2_analyze_seconds": stage_times.get('stage2_analyze', 0),
+                "stage3_refine_regions_seconds": stage_times.get('stage3_refine_regions', 0),
+                "stage4_vlm_seconds": stage_times.get('stage4_vlm', 0),
+                "total_seconds": sum(stage_times.values())
+            }
         
         if has_regions and region_results:
             summary["stage2_refined_regions"] = region_results
