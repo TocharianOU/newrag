@@ -947,8 +947,7 @@ class DatabaseManager:
                     status='pending'
                 )
                 session.add(doc_version)
-                session.commit()
-                session.refresh(doc_version)
+                session.flush()  # Get the ID without committing
                 
                 # Update master's latest_version_id
                 master = session.query(DocumentMaster).filter(
@@ -957,7 +956,10 @@ class DatabaseManager:
                 if master:
                     master.latest_version_id = doc_version.id
                     master.updated_at = datetime.utcnow()
-                    session.commit()
+                
+                # Now commit everything together
+                session.commit()
+                session.refresh(doc_version)
                 
                 # Expunge the object from session so it can be used after session closes
                 session.expunge(doc_version)
