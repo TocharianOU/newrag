@@ -623,25 +623,44 @@ class DatabaseManager:
         error_message: Optional[str] = None,
         pages_data: Optional[str] = None
     ):
-        """Update document processing status"""
+        """Update document processing status - auto-detects version control vs legacy"""
         with self._db_lock:
             session = self.get_session()
             try:
-                doc = session.query(Document).filter(Document.id == doc_id).first()
-                if doc:
-                    doc.status = status
+                # Try version control first
+                doc_version = session.query(DocumentVersion).filter(DocumentVersion.id == doc_id).first()
+                if doc_version:
+                    # Update version
+                    doc_version.status = status
                     if num_chunks is not None:
-                        doc.num_chunks = num_chunks
+                        doc_version.num_chunks = num_chunks
                     if es_document_ids:
-                        doc.es_document_ids = es_document_ids
+                        doc_version.es_document_ids = es_document_ids
                     if error_message:
-                        doc.error_message = error_message
+                        doc_version.error_message = error_message
                     if pages_data:
-                        doc.pages_data = pages_data
+                        doc_version.pages_data = pages_data
                     if status == 'completed':
-                        doc.processed_at = datetime.utcnow()
-                        doc.progress_percentage = 100
+                        doc_version.processed_at = datetime.utcnow()
+                        doc_version.progress_percentage = 100
                     session.commit()
+                else:
+                    # Fallback to legacy Document table
+                    doc = session.query(Document).filter(Document.id == doc_id).first()
+                    if doc:
+                        doc.status = status
+                        if num_chunks is not None:
+                            doc.num_chunks = num_chunks
+                        if es_document_ids:
+                            doc.es_document_ids = es_document_ids
+                        if error_message:
+                            doc.error_message = error_message
+                        if pages_data:
+                            doc.pages_data = pages_data
+                        if status == 'completed':
+                            doc.processed_at = datetime.utcnow()
+                            doc.progress_percentage = 100
+                        session.commit()
             finally:
                 session.close()
     
@@ -653,33 +672,53 @@ class DatabaseManager:
         processed_pages: Optional[int] = None,
         total_pages: Optional[int] = None
     ):
-        """Update document processing progress"""
+        """Update document processing progress - auto-detects version control vs legacy"""
         with self._db_lock:
             session = self.get_session()
             try:
-                doc = session.query(Document).filter(Document.id == doc_id).first()
-                if doc:
-                    doc.progress_percentage = min(100, max(0, progress_percentage))
-                    doc.progress_message = progress_message
+                # Try version control first
+                doc_version = session.query(DocumentVersion).filter(DocumentVersion.id == doc_id).first()
+                if doc_version:
+                    doc_version.progress_percentage = min(100, max(0, progress_percentage))
+                    doc_version.progress_message = progress_message
                     if processed_pages is not None:
-                        doc.processed_pages = processed_pages
+                        doc_version.processed_pages = processed_pages
                     if total_pages is not None:
-                        doc.total_pages = total_pages
+                        doc_version.total_pages = total_pages
                     session.commit()
+                else:
+                    # Fallback to legacy Document table
+                    doc = session.query(Document).filter(Document.id == doc_id).first()
+                    if doc:
+                        doc.progress_percentage = min(100, max(0, progress_percentage))
+                        doc.progress_message = progress_message
+                        if processed_pages is not None:
+                            doc.processed_pages = processed_pages
+                        if total_pages is not None:
+                            doc.total_pages = total_pages
+                        session.commit()
             finally:
                 session.close()
     
     def update_document_pages_data(self, doc_id: int, pages_data: list):
-        """Update document pages_data field and total_pages count"""
+        """Update document pages_data field and total_pages count - auto-detects version control vs legacy"""
         import json
         with self._db_lock:
             session = self.get_session()
             try:
-                doc = session.query(Document).filter(Document.id == doc_id).first()
-                if doc:
-                    doc.pages_data = json.dumps(pages_data)
-                    doc.total_pages = len(pages_data)  # 🔥 同时更新页数
+                # Try version control first
+                doc_version = session.query(DocumentVersion).filter(DocumentVersion.id == doc_id).first()
+                if doc_version:
+                    doc_version.pages_data = json.dumps(pages_data)
+                    doc_version.total_pages = len(pages_data)
                     session.commit()
+                else:
+                    # Fallback to legacy Document table
+                    doc = session.query(Document).filter(Document.id == doc_id).first()
+                    if doc:
+                        doc.pages_data = json.dumps(pages_data)
+                        doc.total_pages = len(pages_data)
+                        session.commit()
             finally:
                 session.close()
     
