@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { setTokens, getAccessToken } from '../utils/auth';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -12,7 +13,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     // If already logged in, redirect to home
-    const token = localStorage.getItem('access_token');
+    const token = getAccessToken();
     if (token) {
       navigate('/');
     }
@@ -41,9 +42,8 @@ export default function LoginPage() {
         throw new Error(data.detail || 'Authentication failed');
       }
 
-      // Store tokens
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('refresh_token', data.refresh_token);
+      // Store tokens using utility function
+      setTokens(data.access_token, data.refresh_token, data.expires_in || 3600);
 
       // Redirect to home
       navigate('/');

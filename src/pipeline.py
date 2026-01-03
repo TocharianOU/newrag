@@ -429,24 +429,47 @@ class ProcessingPipeline:
         Args:
             query: Search query
             k: Number of results
-            filters: Metadata filters
+            filters: Metadata filters (may include 'user_permissions' for permission filtering)
             use_hybrid: Use hybrid search (vector + BM25)
         
         Returns:
             List of search results
         """
         try:
+            # Extract user permission parameters from filters
+            user_id = None
+            org_id = None
+            is_superuser = False
+            remaining_filters = {}
+            
+            if filters:
+                if 'user_permissions' in filters:
+                    user_perms = filters['user_permissions']
+                    user_id = user_perms.get('user_id')
+                    org_id = user_perms.get('org_id')
+                    is_superuser = user_perms.get('is_superuser', False)
+                    # Don't pass user_permissions to ES as a metadata filter
+                    remaining_filters = {k: v for k, v in filters.items() if k != 'user_permissions'}
+                else:
+                    remaining_filters = filters
+            
             if use_hybrid:
                 results = self.vector_store.hybrid_search(
                     query=query,
                     k=k,
-                    filter_dict=filters
+                    filter_dict=remaining_filters,
+                    user_id=user_id,
+                    org_id=org_id,
+                    is_superuser=is_superuser
                 )
             else:
                 docs = self.vector_store.similarity_search(
                     query=query,
                     k=k,
-                    filter_dict=filters
+                    filter_dict=remaining_filters,
+                    user_id=user_id,
+                    org_id=org_id,
+                    is_superuser=is_superuser
                 )
                 results = [
                     {
@@ -457,7 +480,8 @@ class ProcessingPipeline:
                     for doc in docs
                 ]
             
-            logger.info("search_completed", query=query, num_results=len(results))
+            logger.info("search_completed", query=query, num_results=len(results), 
+                       user_id=user_id, org_id=org_id, is_superuser=is_superuser)
             
             return results
         

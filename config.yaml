@@ -264,7 +264,8 @@ security:
   auth:
     enabled: true  # 认证已启用
     type: jwt
-    allow_registration: true  # 是否允许用户注册（生产环境建议关闭）
+    allow_registration: false  # 是否允许用户注册（禁用公开注册，仅管理员可创建用户）
+    default_role: "viewer"  # 新用户默认角色 (viewer/editor/administrator)
 
 # MCP 服务配置
 # 注意：Platform 其他 MCP 服务端口分配：

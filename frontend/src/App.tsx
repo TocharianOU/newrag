@@ -8,6 +8,8 @@ import DocumentsPage from './pages/DocumentsPage';
 import StatsPage from './pages/StatsPage';
 import McpPage from './pages/McpPage';
 import LoginPage from './pages/LoginPage';
+import AdminUsersPage from './pages/AdminUsersPage';
+import AdminOrganizationsPage from './pages/AdminOrganizationsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,6 +38,8 @@ function App() {
                   <Route path="/documents" element={<DocumentsPage />} />
                   <Route path="/stats" element={<StatsPage />} />
                   <Route path="/mcp" element={<McpPage />} />
+                  <Route path="/admin/users" element={<AdminUsersPage />} />
+                  <Route path="/admin/organizations" element={<AdminOrganizationsPage />} />
                 </Routes>
               </Layout>
             </ProtectedRoute>

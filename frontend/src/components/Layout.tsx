@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Upload, BarChart3, FileText, Sparkles, Server, User, LogOut } from 'lucide-react';
+import { Search, Upload, BarChart3, FileText, Sparkles, Server, User, LogOut, Users, Building2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { getAccessToken, clearTokens } from '../utils/auth';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -14,7 +15,7 @@ export default function Layout({ children }: LayoutProps) {
 
   useEffect(() => {
     // Check if user is logged in
-    const token = localStorage.getItem('access_token');
+    const token = getAccessToken();
     if (!token) {
       navigate('/login');
       return;
@@ -37,15 +38,13 @@ export default function Layout({ children }: LayoutProps) {
         setLoading(false);
       })
       .catch(() => {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        clearTokens();
         navigate('/login');
       });
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    clearTokens();
     navigate('/login');
   };
 
@@ -63,6 +62,12 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/documents', label: '文档库', icon: FileText },
     { path: '/stats', label: '数据大屏', icon: BarChart3 },
     { path: '/mcp', label: 'MCP服务', icon: Server },
+  ];
+
+  // Admin menu items (only for superusers)
+  const adminNavItems = [
+    { path: '/admin/users', label: '用户管理', icon: Users },
+    { path: '/admin/organizations', label: '组织管理', icon: Building2 },
   ];
 
   return (
@@ -104,6 +109,33 @@ export default function Layout({ children }: LayoutProps) {
                     </Link>
                   );
                 })}
+                
+                {/* Admin Menu (only for superusers) */}
+                {user?.is_superuser && (
+                  <>
+                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1" />
+                    {adminNavItems.map(({ path, label, icon: Icon }) => {
+                      const isActive = location.pathname === path;
+                      return (
+                        <Link
+                          key={path}
+                          to={path}
+                          className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                            isActive
+                              ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+                          }`}
+                        >
+                          <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
+                          <span>{label}</span>
+                          {isActive && (
+                            <span className="absolute inset-x-0 -bottom-[13px] h-[2px] bg-red-500 rounded-t-full shadow-[0_-2px_8px_rgba(239,68,68,0.6)]" />
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </>
+                )}
               </nav>
 
               {/* User Menu */}

@@ -1,20 +1,53 @@
-import { useState, useRef } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { Upload, FileType, X, CheckCircle2, AlertCircle, FileText, Image as ImageIcon, FileCode, Sparkles } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Upload, FileType, X, CheckCircle2, AlertCircle, FileText, Image as ImageIcon, FileCode, Sparkles, Shield } from 'lucide-react';
 import { documentAPI } from '../api/documents';
+import { getAccessToken } from '../utils/auth';
 
 export default function HomePage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [ocrEngine, setOcrEngine] = useState('vision');
   const [isDragging, setIsDragging] = useState(false);
+  const [visibility, setVisibility] = useState<string>('organization');
+  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch current user info
+  const { data: userInfo } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      const token = getAccessToken();
+      if (!token) return null;
+      
+      const response = await fetch('/api/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) return null;
+      return response.json();
+    }
+  });
+
+  // Set default organization when user info is loaded
+  useEffect(() => {
+    if (userInfo?.org_id && !selectedOrgId) {
+      setSelectedOrgId(userInfo.org_id);
+    }
+  }, [userInfo, selectedOrgId]);
 
   const uploadMutation = useMutation({
     mutationFn: (files: File[]) => {
+      const metadata = {
+        ocr_engine: ocrEngine,
+        organization_id: selectedOrgId || undefined,
+        visibility: visibility
+      };
+      
       if (files.length === 1) {
-        return documentAPI.upload(files[0], { ocr_engine: ocrEngine });
+        return documentAPI.upload(files[0], metadata);
       }
-      return documentAPI.uploadBatch(files, { ocr_engine: ocrEngine });
+      return documentAPI.uploadBatch(files, metadata);
     },
     onSuccess: () => {
       setSelectedFiles([]);
@@ -173,6 +206,65 @@ export default function HomePage() {
                   <p className="text-xs text-slate-500 mt-2">
                     EasyOCR 速度最快；PaddleOCR 识别最精确；Apple Vision 对复杂布局适配最好。
                   </p>
+                </div>
+
+                {/* Permissions Settings */}
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Shield size={16} className="text-indigo-500" />
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      权限设置
+                    </label>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {/* Visibility Selection */}
+                    <div>
+                      <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2">
+                        文档可见范围
+                      </label>
+                      <select
+                        value={visibility}
+                        onChange={(e) => setVisibility(e.target.value)}
+                        className="input-field w-full appearance-none text-sm"
+                      >
+                        <option value="private">🔒 仅自己可见</option>
+                        <option value="organization">👥 组织内共享</option>
+                        {userInfo?.is_superuser && (
+                          <option value="public">🌐 公开可见</option>
+                        )}
+                      </select>
+                    </div>
+
+                    {/* Organization Selection (if applicable) */}
+                    {userInfo && (userInfo.is_superuser || (userInfo.organizations && userInfo.organizations.length > 1)) && (
+                      <div>
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2">
+                          所属组织
+                        </label>
+                        <select
+                          value={selectedOrgId || ''}
+                          onChange={(e) => setSelectedOrgId(Number(e.target.value))}
+                          className="input-field w-full appearance-none text-sm"
+                        >
+                          {userInfo.organizations?.map((org: any) => (
+                            <option key={org.id} value={org.id}>
+                              {org.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Permission Info */}
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        {visibility === 'private' && '只有您可以查看和搜索此文档'}
+                        {visibility === 'organization' && '您组织内的所有成员可以查看'}
+                        {visibility === 'public' && '所有用户都可以查看和搜索'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

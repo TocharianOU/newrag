@@ -76,7 +76,7 @@ class VectorStore:
         Permission logic (same as DatabaseManager):
         - Superuser: no filter (sees everything)
         - Regular user: can see:
-          1. Public documents (visibility=public)
+          1. Public documents (visibility=public OR visibility field missing - legacy docs)
           2. Organization documents (visibility=org AND org_id matches)
           3. Documents they own (owner_id matches)
           4. Documents explicitly shared with them (user_id in shared_with_users)
@@ -91,6 +91,8 @@ class VectorStore:
         # Build OR conditions for permissions
         should_clauses = [
             {"term": {"metadata.visibility": "public"}},  # Public documents
+            # Legacy documents without visibility field (treat as public)
+            {"bool": {"must_not": {"exists": {"field": "metadata.visibility"}}}},
         ]
         
         if user_id is not None:
@@ -111,9 +113,17 @@ class VectorStore:
                 }
             })
         
-        # If no user_id and not superuser, only show public documents
+        # If no user_id and not superuser, only show public documents + legacy docs
         if user_id is None:
-            return [{"term": {"metadata.visibility": "public"}}]
+            return [{
+                "bool": {
+                    "should": [
+                        {"term": {"metadata.visibility": "public"}},
+                        {"bool": {"must_not": {"exists": {"field": "metadata.visibility"}}}}
+                    ],
+                    "minimum_should_match": 1
+                }
+            }]
         
         # Return as a single bool should clause with minimum_should_match=1
         return [{

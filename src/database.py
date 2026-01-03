@@ -129,6 +129,7 @@ class McpToken(Base):
     token_id = Column(String(100), unique=True, nullable=False, index=True)  # UUID
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     name = Column(String(200), nullable=False)  # e.g., "Cursor Desktop"
+    token = Column(Text)  # Stored full token string for display
     
     expires_at = Column(DateTime, nullable=False)
     is_active = Column(Boolean, default=True)
@@ -145,6 +146,7 @@ class McpToken(Base):
             'id': self.id,
             'token_id': self.token_id,
             'name': self.name,
+            'token': self.token,  # Include token in dict
             'expires_at': self.expires_at.isoformat() if self.expires_at else None,
             'is_active': self.is_active,
             'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None,
@@ -574,17 +576,56 @@ class DatabaseManager:
     
     def delete_document(self, doc_id: int) -> bool:
         """Delete document by ID"""
+        import structlog
+        logger = structlog.get_logger(__name__)
+        
         with self._db_lock:
             session = self.get_session()
+            session_closed = False
             try:
+                logger.info("delete_document_start", doc_id=doc_id)
                 doc = session.query(Document).filter(Document.id == doc_id).first()
-                if doc:
-                    session.delete(doc)
-                    session.commit()
-                    return True
+                if not doc:
+                    logger.warning("document_not_found_for_deletion", doc_id=doc_id)
+                    return False
+                
+                logger.info("document_found_deleting", doc_id=doc_id, filename=doc.filename)
+                session.delete(doc)
+                logger.info("before_commit", doc_id=doc_id)
+                session.commit()
+                logger.info("after_commit_success", doc_id=doc_id)
+                
+                # Close current session before verification
+                session.close()
+                session_closed = True
+                
+                # Verify deletion with a fresh session
+                verify_session = self.get_session()
+                try:
+                    verify_doc = verify_session.query(Document).filter(Document.id == doc_id).first()
+                    if verify_doc:
+                        logger.error("deletion_verification_failed", doc_id=doc_id, message="Document still exists after commit!")
+                        return False
+                    else:
+                        logger.info("deletion_verified", doc_id=doc_id)
+                        return True
+                finally:
+                    verify_session.close()
+                    
+            except Exception as e:
+                logger.error("delete_document_exception", doc_id=doc_id, error=str(e))
+                try:
+                    session.rollback()
+                except:
+                    pass
                 return False
             finally:
-                session.close()
+                # Only close if not already closed
+                if not session_closed:
+                    try:
+                        session.close()
+                    except:
+                        pass
     
     def delete_all_documents(self):
         """Delete all documents"""
@@ -852,6 +893,211 @@ class AuthManager:
             return [role.code for role in user.roles]
         finally:
             session.close()
+    
+    # Admin-level organization management methods
+    def list_organizations(self) -> List[Organization]:
+        """List all organizations"""
+        session = self.get_session()
+        try:
+            return session.query(Organization).order_by(Organization.name).all()
+        finally:
+            session.close()
+    
+    def update_organization(self, org_id: int, name: str, description: Optional[str] = None) -> Optional[Organization]:
+        """Update organization"""
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                org = session.query(Organization).filter(Organization.id == org_id).first()
+                if org:
+                    org.name = name
+                    if description is not None:
+                        org.description = description
+                    session.commit()
+                    session.refresh(org)
+                return org
+            finally:
+                session.close()
+    
+    def delete_organization(self, org_id: int) -> bool:
+        """
+        Delete organization (checks for users and documents first)
+        Returns True if deleted, False if organization has users/documents
+        """
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                org = session.query(Organization).filter(Organization.id == org_id).first()
+                if not org:
+                    return False
+                
+                # Check for users
+                user_count = session.query(User).filter(User.org_id == org_id).count()
+                if user_count > 0:
+                    return False
+                
+                # Check for documents
+                doc_count = session.query(Document).filter(Document.org_id == org_id).count()
+                if doc_count > 0:
+                    return False
+                
+                # Safe to delete
+                session.delete(org)
+                session.commit()
+                return True
+            finally:
+                session.close()
+    
+    def get_organization_members(self, org_id: int) -> List[User]:
+        """Get all users in an organization"""
+        session = self.get_session()
+        try:
+            return session.query(User).options(joinedload(User.roles)).filter(User.org_id == org_id).order_by(User.username).all()
+        finally:
+            session.close()
+    
+    # Admin-level user management methods
+    def list_users_paginated(
+        self,
+        page: int = 1,
+        per_page: int = 50,
+        search: Optional[str] = None,
+        org_id: Optional[int] = None,
+        role_code: Optional[str] = None,
+        is_active: Optional[bool] = None
+    ) -> tuple[List[User], int]:
+        """
+        List users with pagination and filters
+        Returns (users, total_count)
+        """
+        session = self.get_session()
+        try:
+            query = session.query(User).options(joinedload(User.roles))
+            
+            # Apply filters
+            if search:
+                query = query.filter(
+                    (User.username.like(f'%{search}%')) | 
+                    (User.email.like(f'%{search}%'))
+                )
+            
+            if org_id is not None:
+                query = query.filter(User.org_id == org_id)
+            
+            if is_active is not None:
+                query = query.filter(User.is_active == is_active)
+            
+            if role_code:
+                role = session.query(Role).filter(Role.code == role_code).first()
+                if role:
+                    query = query.filter(User.roles.contains(role))
+            
+            # Get total count
+            total = query.count()
+            
+            # Apply pagination
+            offset = (page - 1) * per_page
+            users = query.order_by(User.id.desc()).offset(offset).limit(per_page).all()
+            
+            # Force load roles
+            for user in users:
+                _ = user.roles
+            
+            return users, total
+        finally:
+            session.close()
+    
+    def create_user_by_admin(
+        self,
+        username: str,
+        email: str,
+        password_hash: str,
+        org_id: int,
+        role_codes: List[str],
+        is_active: bool = True,
+        is_superuser: bool = False
+    ) -> User:
+        """Create user by admin (with role assignment)"""
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                # Create user
+                user = User(
+                    username=username,
+                    email=email,
+                    password_hash=password_hash,
+                    org_id=org_id,
+                    is_active=is_active,
+                    is_superuser=is_superuser
+                )
+                session.add(user)
+                session.flush()  # Get user ID
+                
+                # Assign roles
+                for role_code in role_codes:
+                    role = session.query(Role).filter(Role.code == role_code).first()
+                    if role:
+                        user.roles.append(role)
+                
+                session.commit()
+                session.refresh(user)
+                _ = user.roles  # Force load roles
+                return user
+            finally:
+                session.close()
+    
+    def update_user_by_admin(
+        self,
+        user_id: int,
+        email: Optional[str] = None,
+        org_id: Optional[int] = None,
+        role_codes: Optional[List[str]] = None,
+        is_active: Optional[bool] = None,
+        is_superuser: Optional[bool] = None,
+        password_hash: Optional[str] = None
+    ) -> Optional[User]:
+        """Update user by admin"""
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                user = session.query(User).filter(User.id == user_id).first()
+                if not user:
+                    return None
+                
+                # Update fields
+                if email is not None:
+                    user.email = email
+                if org_id is not None:
+                    user.org_id = org_id
+                if is_active is not None:
+                    user.is_active = is_active
+                if is_superuser is not None:
+                    user.is_superuser = is_superuser
+                if password_hash is not None:
+                    user.password_hash = password_hash
+                
+                # Update roles if provided
+                if role_codes is not None:
+                    user.roles.clear()
+                    for role_code in role_codes:
+                        role = session.query(Role).filter(Role.code == role_code).first()
+                        if role:
+                            user.roles.append(role)
+                
+                session.commit()
+                session.refresh(user)
+                _ = user.roles  # Force load roles
+                return user
+            finally:
+                session.close()
+    
+    def list_all_roles(self) -> List[Role]:
+        """List all roles"""
+        session = self.get_session()
+        try:
+            return session.query(Role).order_by(Role.name).all()
+        finally:
+            session.close()
 
 
 class TokenManager:
@@ -873,30 +1119,40 @@ class TokenManager:
         token_id: str,
         user_id: int,
         name: str,
-        expires_at: datetime
+        expires_at: datetime,
+        token: str = None  # New parameter
     ) -> McpToken:
         """Create new MCP token"""
         with self._db_lock:
             session = self.get_session()
             try:
-                token = McpToken(
+                token_obj = McpToken(
                     token_id=token_id,
                     user_id=user_id,
                     name=name,
-                    expires_at=expires_at
+                    expires_at=expires_at,
+                    token=token  # Store token
                 )
-                session.add(token)
+                session.add(token_obj)
                 session.commit()
-                session.refresh(token)
-                return token
+                session.refresh(token_obj)
+                return token_obj
             finally:
                 session.close()
     
     def get_mcp_token_by_token_id(self, token_id: str) -> Optional[McpToken]:
-        """Get MCP token by token_id"""
+        """Get MCP token by token_id (UUID)"""
         session = self.get_session()
         try:
             return session.query(McpToken).filter(McpToken.token_id == token_id).first()
+        finally:
+            session.close()
+    
+    def get_mcp_token_by_id(self, id: int) -> Optional[McpToken]:
+        """Get MCP token by primary key ID"""
+        session = self.get_session()
+        try:
+            return session.query(McpToken).filter(McpToken.id == id).first()
         finally:
             session.close()
     
@@ -923,11 +1179,25 @@ class TokenManager:
                 session.close()
     
     def revoke_mcp_token(self, token_id: str) -> bool:
-        """Revoke MCP token"""
+        """Revoke MCP token by token_id (UUID)"""
         with self._db_lock:
             session = self.get_session()
             try:
                 token = session.query(McpToken).filter(McpToken.token_id == token_id).first()
+                if token:
+                    token.is_active = False
+                    session.commit()
+                    return True
+                return False
+            finally:
+                session.close()
+    
+    def revoke_mcp_token_by_id(self, id: int) -> bool:
+        """Revoke MCP token by primary key ID"""
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                token = session.query(McpToken).filter(McpToken.id == id).first()
                 if token:
                     token.is_active = False
                     session.commit()
@@ -942,6 +1212,20 @@ class TokenManager:
             session = self.get_session()
             try:
                 token = session.query(McpToken).filter(McpToken.token_id == token_id).first()
+                if token:
+                    session.delete(token)
+                    session.commit()
+                    return True
+                return False
+            finally:
+                session.close()
+
+    def delete_mcp_token_by_id(self, id: int) -> bool:
+        """Delete MCP token by primary key ID"""
+        with self._db_lock:
+            session = self.get_session()
+            try:
+                token = session.query(McpToken).filter(McpToken.id == id).first()
                 if token:
                     session.delete(token)
                     session.commit()

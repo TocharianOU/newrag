@@ -286,7 +286,10 @@ async def cleanup_document_minio(doc_id: int):
 
 
 @router.delete("/documents/{doc_id}")
-async def delete_document(doc_id: int):
+async def delete_document(
+    doc_id: int,
+    current_user: User = Depends(get_current_user)
+):
     """
     Delete a specific document completely from:
     - SQLite database
@@ -295,12 +298,29 @@ async def delete_document(doc_id: int):
     - Local processed files
     - Original uploaded files
     - Child documents (if this is a ZIP parent)
+    
+    Requires authentication. Users can only delete their own documents unless they are superuser.
     """
     try:
-        logger.info(f"Attempting to delete document {doc_id}")
+        logger.info(f"Attempting to delete document {doc_id}", user_id=current_user.id)
         
-        # 1. Try to find in DB first
-        doc = db.get_document(doc_id)
+        # 1. Try to find in DB first (bypass permission filter to get the actual document)
+        # We'll check permissions separately
+        session = db.get_session()
+        try:
+            from src.database import Document
+            doc = session.query(Document).filter(Document.id == doc_id).first()
+        finally:
+            session.close()
+        
+        # Check permissions - users can only delete their own documents unless superuser
+        if doc and not current_user.is_superuser:
+            # Allow deletion of legacy documents (no owner_id) OR owned documents
+            if doc.owner_id is not None and doc.owner_id != current_user.id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="You can only delete your own documents"
+                )
         
         # If not found in DB, we might still need to clean up ES and other storages
         # But if found, we use its info
@@ -555,6 +575,9 @@ async def delete_all_documents():
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    organization_id: Optional[int] = Form(None),
+    visibility: Optional[str] = Form('organization'),
     category: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
     author: Optional[str] = Form(None),
@@ -563,11 +586,35 @@ async def upload_file(
 ):
     """
     Upload and process single file
+    Requires authentication.
     """
     doc_id = None
     file_path = None
     
     try:
+        # Determine organization ID
+        if not organization_id:
+            organization_id = current_user.org_id
+        
+        # Validate user can upload to this organization
+        if not current_user.is_superuser and organization_id != current_user.org_id:
+            raise HTTPException(
+                status_code=403, 
+                detail="You can only upload documents to your own organization"
+            )
+        
+        # Validate visibility setting
+        valid_visibility = ['private', 'organization', 'public']
+        if visibility not in valid_visibility:
+            visibility = 'organization'
+        
+        # Only superusers can create public documents
+        if visibility == 'public' and not current_user.is_superuser:
+            raise HTTPException(
+                status_code=403,
+                detail="Only administrators can create public documents"
+            )
+        
         # Validate file
         if not file.filename:
             raise HTTPException(status_code=400, detail="No file provided")
@@ -589,7 +636,7 @@ async def upload_file(
         
         file_size = file_path.stat().st_size
         
-        logger.info("file_uploaded", filename=file.filename, size=file_size)
+        logger.info("file_uploaded", filename=file.filename, size=file_size, user_id=current_user.id, org_id=organization_id)
         
         # Calculate checksum
         import hashlib
@@ -607,7 +654,7 @@ async def upload_file(
                 "document": existing.to_dict()
             })
         
-        # Create database record
+        # Create database record with user and organization info
         doc = db.create_document(
             filename=file.filename,
             file_path=str(file_path),
@@ -618,7 +665,10 @@ async def upload_file(
             tags=tags.split(',') if tags else None,
             author=author,
             description=description,
-            ocr_engine=ocr_engine
+            ocr_engine=ocr_engine,
+            owner_id=current_user.id,
+            org_id=organization_id,
+            visibility=visibility
         )
         doc_id = doc.id
         logger.info("document_created", doc_id=doc_id, file_type=file_ext)
@@ -676,6 +726,9 @@ async def upload_file(
 @router.post("/upload_batch")
 async def upload_batch(
     files: List[UploadFile] = File(...),
+    current_user: User = Depends(get_current_user),
+    organization_id: Optional[int] = Form(None),
+    visibility: Optional[str] = Form('organization'),
     category: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
     author: Optional[str] = Form(None),
@@ -684,10 +737,34 @@ async def upload_batch(
 ):
     """
     Upload and process multiple files asynchronously
+    Requires authentication.
     """
     try:
+        # Determine organization ID
+        if not organization_id:
+            organization_id = current_user.org_id
+        
+        # Validate user can upload to this organization
+        if not current_user.is_superuser and organization_id != current_user.org_id:
+            raise HTTPException(
+                status_code=403, 
+                detail="You can only upload documents to your own organization"
+            )
+        
+        # Validate visibility setting
+        valid_visibility = ['private', 'organization', 'public']
+        if visibility not in valid_visibility:
+            visibility = 'organization'
+        
+        # Only superusers can create public documents
+        if visibility == 'public' and not current_user.is_superuser:
+            raise HTTPException(
+                status_code=403,
+                detail="Only administrators can create public documents"
+            )
+        
         results = []
-        logger.info("batch_upload_started", num_files=len(files))
+        logger.info("batch_upload_started", num_files=len(files), user_id=current_user.id, org_id=organization_id)
         
         for file in files:
             file_path = None
@@ -732,7 +809,7 @@ async def upload_batch(
                     })
                     continue
                 
-                # 5. Create DB Record
+                # 5. Create DB Record with user and organization info
                 doc = db.create_document(
                     filename=file.filename,
                     file_path=str(file_path),
@@ -743,7 +820,10 @@ async def upload_batch(
                     tags=tags.split(',') if tags else None,
                     author=author,
                     description=description,
-                    ocr_engine=ocr_engine
+                    ocr_engine=ocr_engine,
+                    owner_id=current_user.id,
+                    org_id=organization_id,
+                    visibility=visibility
                 )
         
                 # Update status to processing
@@ -859,4 +939,190 @@ async def upload_zip(
 # - resume_task()
 # - cancel_task()
 # - cleanup_tasks()
+# - get_document_permissions()
+# - update_document_permissions()
+
+
+# ============================================================
+# Document Permission Management
+# ============================================================
+
+from pydantic import BaseModel
+from src.database import AuthManager
+
+
+class DocumentPermissionRequest(BaseModel):
+    """Document permission update request"""
+    visibility: str  # "public" | "organization" | "private"
+    shared_with_users: Optional[List[int]] = []
+    shared_with_roles: Optional[List[str]] = []
+
+
+@router.get("/documents/{doc_id}/permissions")
+async def get_document_permissions(
+    doc_id: int,
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """
+    Get document permission details
+    
+    Returns document owner, visibility, and shared users/roles.
+    """
+    # Get document (with permission check)
+    doc = db.get_document(
+        doc_id,
+        user_id=current_user.id if current_user else None,
+        org_id=current_user.org_id if current_user else None,
+        is_superuser=current_user.is_superuser if current_user else False
+    )
+    
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found or access denied")
+    
+    # Initialize auth manager
+    auth_manager = AuthManager(db.engine)
+    
+    # Get owner info
+    owner = None
+    if doc.owner_id:
+        owner_user = auth_manager.get_user_by_id(doc.owner_id)
+        if owner_user:
+            owner = {
+                'id': owner_user.id,
+                'username': owner_user.username,
+                'email': owner_user.email
+            }
+    
+    # Get organization info
+    organization = None
+    if doc.org_id:
+        org = auth_manager.get_organization(doc.org_id)
+        if org:
+            organization = {
+                'id': org.id,
+                'name': org.name
+            }
+    
+    # Get shared users
+    shared_users = []
+    if doc.shared_with_users:
+        import json
+        user_ids = json.loads(doc.shared_with_users) if isinstance(doc.shared_with_users, str) else doc.shared_with_users
+        for user_id in user_ids:
+            user = auth_manager.get_user_by_id(user_id)
+            if user:
+                shared_users.append({
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email
+                })
+    
+    # Get shared roles
+    shared_roles = []
+    if doc.shared_with_roles:
+        import json
+        role_codes = json.loads(doc.shared_with_roles) if isinstance(doc.shared_with_roles, str) else doc.shared_with_roles
+        for role_code in role_codes:
+            role = auth_manager.get_role_by_code(role_code)
+            if role:
+                shared_roles.append({
+                    'code': role.code,
+                    'name': role.name
+                })
+    
+    return {
+        'id': doc.id,
+        'filename': doc.filename,
+        'visibility': doc.visibility or 'private',
+        'owner': owner,
+        'organization': organization,
+        'shared_users': shared_users,
+        'shared_roles': shared_roles
+    }
+
+
+@router.put("/documents/{doc_id}/permissions")
+async def update_document_permissions(
+    doc_id: int,
+    request: DocumentPermissionRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update document permissions
+    
+    Only document owner or superuser can update permissions.
+    Shared users must be in the same organization.
+    """
+    import json
+    from sqlalchemy.orm import Session
+    
+    # Get document
+    doc = db.get_document(
+        doc_id,
+        user_id=current_user.id,
+        org_id=current_user.org_id,
+        is_superuser=current_user.is_superuser
+    )
+    
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found or access denied")
+    
+    # Check if user is owner or superuser
+    if doc.owner_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="Only document owner or administrator can update permissions"
+        )
+    
+    # Validate visibility
+    if request.visibility not in ['public', 'organization', 'private']:
+        raise HTTPException(status_code=400, detail="Invalid visibility value")
+    
+    # Initialize auth manager
+    auth_manager = AuthManager(db.engine)
+    
+    # Validate shared users (must be in same organization)
+    if request.shared_with_users:
+        for user_id in request.shared_with_users:
+            user = auth_manager.get_user_by_id(user_id)
+            if not user:
+                raise HTTPException(status_code=400, detail=f"User {user_id} not found")
+            if doc.org_id and user.org_id != doc.org_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot share with user from different organization"
+                )
+    
+    # Validate shared roles
+    if request.shared_with_roles:
+        for role_code in request.shared_with_roles:
+            role = auth_manager.get_role_by_code(role_code)
+            if not role:
+                raise HTTPException(status_code=400, detail=f"Role {role_code} not found")
+    
+    # Update document permissions
+    session: Session = db.get_session()
+    try:
+        from src.database import Document
+        doc_obj = session.query(Document).filter_by(id=doc_id).first()
+        
+        if not doc_obj:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        doc_obj.visibility = request.visibility
+        doc_obj.shared_with_users = json.dumps(request.shared_with_users) if request.shared_with_users else None
+        doc_obj.shared_with_roles = json.dumps(request.shared_with_roles) if request.shared_with_roles else None
+        
+        session.commit()
+        
+        return {"message": "Permissions updated successfully"}
+    except HTTPException:
+        session.rollback()
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error("failed_to_update_permissions", doc_id=doc_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
 

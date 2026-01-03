@@ -21,7 +21,10 @@ JWT_SECRET = os.getenv('JWT_SECRET') or security_config.get('jwt_secret', 'defau
 JWT_ALGORITHM = os.getenv('JWT_ALGORITHM') or security_config.get('jwt_algorithm', 'HS256')
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRE_MINUTES') or security_config.get('jwt_access_token_expire_minutes', 60))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv('JWT_REFRESH_TOKEN_EXPIRE_DAYS') or security_config.get('jwt_refresh_token_expire_days', 30))
-ALLOW_REGISTRATION = os.getenv('ALLOW_REGISTRATION', 'true').lower() == 'true' or security_config.get('allow_registration', True)
+# 允许注册：优先使用环境变量，否则使用 config.yaml 配置
+ALLOW_REGISTRATION = os.getenv('ALLOW_REGISTRATION', str(security_config.get('auth', {}).get('allow_registration', False))).lower() == 'true'
+# 默认角色：用于管理员创建用户时
+DEFAULT_ROLE = os.getenv('DEFAULT_ROLE') or security_config.get('auth', {}).get('default_role', 'viewer')
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 http_bearer = HTTPBearer(auto_error=False)
@@ -68,6 +71,7 @@ class UserResponse(BaseModel):
     is_superuser: bool
     roles: List[dict]
     permissions: List[str]
+    organizations: List[dict] = []
 
 
 class McpTokenRequest(BaseModel):
@@ -86,6 +90,7 @@ class McpTokenResponse(BaseModel):
     created_at: str
     expires_at: Optional[str]
     last_used_at: Optional[str]
+    is_active: bool = True
 
 
 # ============================================================================
@@ -121,19 +126,23 @@ def create_refresh_token(user_id: int, username: str) -> tuple[str, datetime]:
     return token, expires_at
 
 
-def create_mcp_token(user_id: int, username: str, is_superuser: bool = False, expires_days: int = 365) -> tuple[str, datetime]:
+import uuid
+
+def create_mcp_token(user_id: int, username: str, is_superuser: bool = False, expires_days: int = 365) -> tuple[str, str, datetime]:
     """Create long-lived MCP token"""
+    token_id = str(uuid.uuid4())
     expires_at = datetime.utcnow() + timedelta(days=expires_days)
     payload = {
         "sub": str(user_id),
         "username": username,
         "is_superuser": is_superuser,
         "type": "mcp",
+        "jti": token_id,
         "exp": expires_at,
         "iat": datetime.utcnow()
     }
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    return token, expires_at
+    return token, token_id, expires_at
 
 
 def verify_password(password: str, password_hash: str) -> bool:
@@ -384,6 +393,24 @@ async def get_current_user_info(
     # Get permissions securely
     permissions = auth_manager.get_user_permissions(current_user.id)
     
+    # Get user's organizations
+    organizations = []
+    if current_user.is_superuser:
+        # Superusers can see all organizations
+        all_orgs = auth_manager.list_organizations()
+        organizations = [{"id": org.id, "name": org.name, "description": org.description} for org in all_orgs]
+    else:
+        # Regular users see their own organization
+        if current_user.org_id:
+            session = db_manager.get_session()
+            try:
+                from src.database import Organization
+                org = session.query(Organization).filter(Organization.id == current_user.org_id).first()
+                if org:
+                    organizations = [{"id": org.id, "name": org.name, "description": org.description}]
+            finally:
+                session.close()
+    
     return UserResponse(
         id=current_user.id,
         username=current_user.username,
@@ -392,7 +419,8 @@ async def get_current_user_info(
         is_active=current_user.is_active,
         is_superuser=current_user.is_superuser,
         roles=[{"id": role.id, "code": role.code, "name": role.name} for role in current_user.roles],
-        permissions=permissions
+        permissions=permissions,
+        organizations=organizations
     )
 
 
@@ -400,7 +428,7 @@ async def get_current_user_info(
 # MCP Token Management Routes
 # ============================================================================
 
-@router.post("/mcp-token", response_model=McpTokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/mcp-tokens", response_model=McpTokenResponse, status_code=status.HTTP_201_CREATED)
 async def create_mcp_token_endpoint(
     request: McpTokenRequest,
     current_user: User = Depends(get_current_user),
@@ -416,7 +444,7 @@ async def create_mcp_token_endpoint(
     
     # Generate MCP token
     expires_days = request.expires_days or 365
-    token, expires_at = create_mcp_token(
+    token, token_id, expires_at = create_mcp_token(
         current_user.id,
         current_user.username,
         current_user.is_superuser,
@@ -424,22 +452,24 @@ async def create_mcp_token_endpoint(
     )
     
     # Store in database
+    # Note: TokenManager.create_mcp_token updated to accept full token string
     mcp_token = token_manager.create_mcp_token(
+        token_id=token_id,
         user_id=current_user.id,
         name=request.name,
-        token=token,
-        description=request.description,
-        expires_at=expires_at
+        expires_at=expires_at,
+        token=token
     )
     
     return McpTokenResponse(
         id=mcp_token.id,
         name=mcp_token.name,
         token=token,  # Return full token only on creation
-        description=mcp_token.description,
+        description=request.description, # Pass back description from request as it's not in DB yet or handle DB update
         created_at=mcp_token.created_at.isoformat(),
         expires_at=mcp_token.expires_at.isoformat() if mcp_token.expires_at else None,
-        last_used_at=mcp_token.last_used_at.isoformat() if mcp_token.last_used_at else None
+        last_used_at=mcp_token.last_used_at.isoformat() if mcp_token.last_used_at else None,
+        is_active=mcp_token.is_active
     )
 
 
@@ -455,32 +485,33 @@ async def list_mcp_tokens(
     """
     db_manager = get_db_manager()
     token_manager = TokenManager(db_manager.engine)
-    tokens = token_manager.get_user_mcp_tokens(current_user.id)
+    tokens = token_manager.list_user_mcp_tokens(current_user.id)
     
     return [
         {
             "id": token.id,
             "name": token.name,
-            "description": token.description,
+            "token": token.token, # Return stored token
+            "description": None, # McpToken model doesn't have description
             "created_at": token.created_at.isoformat(),
             "expires_at": token.expires_at.isoformat() if token.expires_at else None,
             "last_used_at": token.last_used_at.isoformat() if token.last_used_at else None,
-            "is_revoked": token.is_revoked
+            "is_active": token.is_active
         }
         for token in tokens
     ]
 
 
-@router.delete("/mcp-token/{token_id}")
-async def revoke_mcp_token(
+@router.delete("/mcp-tokens/{token_id}")
+async def delete_mcp_token(
     token_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(db_session)
 ):
     """
-    Revoke an MCP token
+    Delete an MCP token
     
-    Marks the token as revoked, preventing further use.
+    Permanently deletes the token.
     """
     db_manager = get_db_manager()
     token_manager = TokenManager(db_manager.engine)
@@ -497,13 +528,13 @@ async def revoke_mcp_token(
     if mcp_token.user_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to revoke this token"
+            detail="Not authorized to delete this token"
         )
     
-    # Revoke token
-    token_manager.revoke_mcp_token(token_id)
+    # Delete token
+    token_manager.delete_mcp_token_by_id(token_id)
     
-    return {"message": "Token revoked successfully"}
+    return {"message": "Token deleted successfully"}
 
 
 # ============================================================================

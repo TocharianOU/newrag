@@ -14,7 +14,7 @@ from typing import List, Optional
 from datetime import datetime
 
 import structlog
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,8 +31,11 @@ from src.task_manager import task_manager, TaskStatus, TaskStage
 # Import routers from separate modules
 from web.routes import document_router, cleanup_router
 from web.routes.auth_routes import router as auth_router
+from web.routes.admin_routes import router as admin_router
 from web.handlers import extract_matched_bboxes_from_file
 from web.middleware.auth import AuthMiddleware
+from web.dependencies.auth_deps import get_optional_user
+from src.database import User
 
 # Initialize logging with configuration from config.yaml
 setup_logging(log_config=config.logging_config)
@@ -75,6 +78,7 @@ db = DatabaseManager()
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(document_router)
 app.include_router(cleanup_router)
 
@@ -147,15 +151,48 @@ async def index(request: Request):
 
 
 @app.post("/search", response_model=SearchResponse)
-async def search(request: SearchRequest):
+async def search(
+    request: SearchRequest,
+    current_user: Optional[User] = Depends(get_optional_user)
+):
     """
-    Search knowledge base
+    Search knowledge base with permission filtering
     """
     try:
+        # Build permission filters based on current user
+        permission_filters = {}
+        
+        if current_user:
+            if not current_user.is_superuser:
+                # Non-superusers can only search:
+                # 1. Documents they own
+                # 2. Documents visible to their organization
+                # 3. Public documents
+                # Note: Elasticsearch filtering will be handled by adding these to the query
+                permission_filters['user_permissions'] = {
+                    'user_id': current_user.id,
+                    'org_id': current_user.org_id,
+                    'is_superuser': False
+                }
+            # Superusers can see everything (no additional filters)
+        else:
+            # Unauthenticated users can only see public documents
+            permission_filters['visibility'] = 'public'
+        
+        # Merge user-provided filters with permission filters
+        combined_filters = {**(request.filters or {}), **permission_filters}
+        
+        logger.info(
+            "search_request", 
+            query=request.query, 
+            user_id=current_user.id if current_user else None,
+            has_permission_filter=bool(permission_filters)
+        )
+        
         results = pipeline.search(
             query=request.query,
             k=request.k,
-            filters=request.filters,
+            filters=combined_filters,
             use_hybrid=request.use_hybrid
         )
         
@@ -228,9 +265,13 @@ async def get_stats():
     Get knowledge base statistics
     """
     try:
-        # Get ES stats
-        es_stats = pipeline.vector_store.get_stats()
-        
+        # Get ES stats (fail gracefully if ES is down)
+        try:
+            es_stats = pipeline.vector_store.get_stats()
+        except Exception as e:
+            logger.warning("es_stats_unavailable", error=str(e))
+            es_stats = {'document_count': 0, 'file_types': []}
+
         # Get database stats
         db_stats = db.get_stats()
         
@@ -239,31 +280,34 @@ async def get_stats():
         minio_stats = minio_storage.get_storage_stats()
         
         # Get ES index info
-        es_client = pipeline.vector_store.es_client
         index_name = pipeline.vector_store.index_name
-        
-        # Check if index exists
+        index_info = {
+            'name': index_name,
+            'exists': False,
+            'status': 'unknown',
+            'document_count': 0
+        }
+
         try:
+            es_client = pipeline.vector_store.es_client
+            # Check if index exists
             index_exists_response = es_client.indices.exists(index=index_name)
             # Handle both old and new ES client API responses
             if hasattr(index_exists_response, 'body'):
                 index_exists = bool(index_exists_response.body)
             else:
                 index_exists = bool(index_exists_response)
-        except Exception:
-            index_exists = False
-        
-        index_info = {
-            'name': index_name,
-            'exists': index_exists
-        }
-        
-        if index_exists:
-            index_info['status'] = 'green'  # Simplified, you can get real status from cluster health
-            index_info['document_count'] = es_stats.get('document_count', 0)
-        else:
-            index_info['status'] = 'not_created'
-            index_info['document_count'] = 0
+            
+            index_info['exists'] = index_exists
+            if index_exists:
+                index_info['status'] = 'green'
+                index_info['document_count'] = es_stats.get('document_count', 0)
+            else:
+                index_info['status'] = 'not_created'
+                
+        except Exception as e:
+            logger.warning("es_index_check_failed", error=str(e))
+            index_info['status'] = 'unreachable'
         
         # Build response with new stats structure
         combined_stats = {

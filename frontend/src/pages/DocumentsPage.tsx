@@ -1,18 +1,51 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, FileText, Calendar, Loader2, RefreshCw, Cloud, CheckSquare, Square } from 'lucide-react';
+import { Trash2, FileText, Calendar, Loader2, RefreshCw, Cloud, CheckSquare, Square, Shield } from 'lucide-react';
 import { documentAPI } from '../api/documents';
+import DocumentPermissionModal from '../components/DocumentPermissionModal';
+import { getAccessToken } from '../utils/auth';
 
 export default function DocumentsPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
   const [selectedDocs, setSelectedDocs] = useState<Set<number>>(new Set());
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [selectedDocForPermission, setSelectedDocForPermission] = useState<{ id: number; name: string } | null>(null);
+
+  // Fetch current user info
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      const token = getAccessToken();
+      if (!token) return null;
+      
+      const response = await fetch('/api/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) return null;
+      return response.json();
+    }
+  });
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['documents', page, pageSize],
     queryFn: () => documentAPI.list({ limit: pageSize, offset: (page - 1) * pageSize }),
   });
+
+  // Check if current user can delete a document
+  const canDeleteDocument = (doc: any) => {
+    if (!currentUser) return false;
+    // Superuser can delete anything
+    if (currentUser.is_superuser) return true;
+    // Owner can delete their documents
+    if (doc.owner_id === currentUser.id) return true;
+    // Legacy documents (no owner) can be deleted by anyone
+    if (doc.owner_id === null || doc.owner_id === undefined) return true;
+    return false;
+  };
 
   // 完整删除
   const deleteMutation = useMutation({
@@ -76,6 +109,15 @@ export default function DocumentsPage() {
       newSet.add(id);
     }
     setSelectedDocs(newSet);
+  };
+
+  const handleSetPermissions = (docId: number, filename: string) => {
+    setSelectedDocForPermission({ id: docId, name: filename });
+    setShowPermissionModal(true);
+  };
+
+  const handlePermissionSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ['documents'] });
   };
 
   if (isLoading) {
@@ -217,13 +259,24 @@ export default function DocumentsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => handleDelete(doc.id, doc.filename)}
-                        className="p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20 rounded-lg transition-colors"
-                        title="完整删除"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      {canDeleteDocument(doc) && (
+                        <>
+                          <button
+                            onClick={() => handleSetPermissions(doc.id, doc.filename)}
+                            className="p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                            title="权限设置"
+                          >
+                            <Shield size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(doc.id, doc.filename)}
+                            className="p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20 rounded-lg transition-colors"
+                            title="完整删除"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -261,6 +314,20 @@ export default function DocumentsPage() {
                 下一页
             </button>
         </div>
+      )}
+      
+      {/* Permission Modal */}
+      {showPermissionModal && selectedDocForPermission && (
+        <DocumentPermissionModal
+          documentId={selectedDocForPermission.id}
+          documentName={selectedDocForPermission.name}
+          isOpen={showPermissionModal}
+          onClose={() => {
+            setShowPermissionModal(false);
+            setSelectedDocForPermission(null);
+          }}
+          onSuccess={handlePermissionSuccess}
+        />
       )}
     </div>
   );

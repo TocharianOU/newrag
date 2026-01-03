@@ -10,15 +10,38 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client, estypes, ClientOptions } from "@elastic/elasticsearch";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { randomUUID } from "crypto";
 import fs from "fs";
 import yaml from "js-yaml";
 import path from "path";
 import { fileURLToPath } from "url";
+import jwt from "jsonwebtoken";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// JWT Configuration (should match backend config)
+const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-key-please-change-this-in-production";
+const JWT_ALGORITHM = "HS256";
+
+// User context extracted from JWT
+interface UserContext {
+  id: number;
+  username: string;
+  org_id: number | null;
+  is_superuser: boolean;
+  roles: string[];
+}
+
+// Extend Express Request to include user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: UserContext;
+    }
+  }
+}
 
 // Configuration schema with auth options
 const ConfigSchema = z
@@ -136,6 +159,107 @@ function loadRagConfig(): RagConfig | null {
   }
 }
 
+// JWT验证中间件
+function jwtAuthMiddleware(req: Request, res: Response, next: NextFunction) {
+  // 从 Authorization header 提取 token
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({
+      jsonrpc: "2.0",
+      error: {
+        code: -32001,
+        message: "Authentication required. Please provide a valid JWT token.",
+      },
+      id: null,
+    });
+  }
+
+  const token = authHeader.substring(7); // 移除 "Bearer "
+
+  try {
+    // 验证 JWT
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      algorithms: [JWT_ALGORITHM as jwt.Algorithm],
+    }) as any;
+
+    // 提取用户信息
+    req.user = {
+      id: parseInt(decoded.sub),
+      username: decoded.username,
+      org_id: decoded.org_id || null,
+      is_superuser: decoded.is_superuser || false,
+      roles: decoded.roles || [],
+    };
+
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      jsonrpc: "2.0",
+      error: {
+        code: -32001,
+        message: `Invalid or expired token: ${error instanceof Error ? error.message : String(error)}`,
+      },
+      id: null,
+    });
+  }
+}
+
+// 构建权限过滤查询
+function buildPermissionFilter(user?: UserContext): any {
+  if (!user) {
+    // 无用户上下文，只返回公开文档
+    return {
+      term: { "metadata.visibility": "public" },
+    };
+  }
+
+  // Superuser 可以看所有文档
+  if (user.is_superuser) {
+    return { match_all: {} };
+  }
+
+  const permissionFilters: any[] = [
+    // 用户拥有的文档
+    { term: { "metadata.owner_id": user.id } },
+    // 公开文档
+    { term: { "metadata.visibility": "public" } },
+  ];
+
+  // 分享给该用户的文档
+  permissionFilters.push({
+    term: { "metadata.shared_with_users": user.id },
+  });
+
+  // 组织级别的文档
+  if (user.org_id) {
+    permissionFilters.push({
+      bool: {
+        must: [
+          { term: { "metadata.org_id": user.org_id } },
+          { term: { "metadata.visibility": "org" } },
+        ],
+      },
+    });
+  }
+
+  // 根据角色共享的文档
+  if (user.roles && user.roles.length > 0) {
+    for (const role of user.roles) {
+      permissionFilters.push({
+        term: { "metadata.shared_with_roles": role },
+      });
+    }
+  }
+
+  return {
+    bool: {
+      should: permissionFilters,
+      minimum_should_match: 1,
+    },
+  };
+}
+
 // 调用embedding API生成向量
 async function generateEmbedding(
   text: string,
@@ -178,7 +302,8 @@ async function generateEmbedding(
 
 export async function createElasticsearchMcpServer(
   config: ElasticsearchConfig,
-  ragConfig: RagConfig | null
+  ragConfig: RagConfig | null,
+  user?: UserContext
 ) {
   const validatedConfig = ConfigSchema.parse(config);
   const { url, apiKey, username, password, caCert } = validatedConfig;
@@ -280,11 +405,18 @@ export async function createElasticsearchMcpServer(
         const bm25Weight =
           ragConfig?.elasticsearch?.hybrid_search?.bm25_weight || 0.3;
 
+        // 构建权限过滤
+        const permissionFilter = buildPermissionFilter(user);
+
         // 构建混合搜索查询（与web项目保持一致）
         const searchBody: any = {
           size,
           query: {
             bool: {
+              must: [
+                // 权限过滤
+                permissionFilter,
+              ],
               should: [
                 // 向量搜索部分
                 {
@@ -732,7 +864,7 @@ async function main() {
         });
       });
 
-      app.post("/mcp", async (req, res) => {
+      app.post("/mcp", jwtAuthMiddleware, async (req, res) => {
         const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
         try {
@@ -745,7 +877,7 @@ async function main() {
               sessionIdGenerator: () => randomUUID(),
               onsessioninitialized: async (newSessionId: string) => {
                 transports.set(newSessionId, transport);
-                process.stderr.write(`✓ New MCP session: ${newSessionId}\n`);
+                process.stderr.write(`✓ New MCP session: ${newSessionId} (User: ${req.user?.username})\n`);
               },
               onsessionclosed: async (closedSessionId: string) => {
                 transports.delete(closedSessionId);
@@ -753,7 +885,8 @@ async function main() {
               },
             });
 
-            const server = await createElasticsearchMcpServer(config, ragConfig);
+            // 创建 MCP server 时传入用户上下文
+            const server = await createElasticsearchMcpServer(config, ragConfig, req.user);
             await server.connect(transport);
           }
 
@@ -773,7 +906,7 @@ async function main() {
         }
       });
 
-      app.get("/mcp", async (req, res) => {
+      app.get("/mcp", jwtAuthMiddleware, async (req, res) => {
         const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
         if (!sessionId || !transports.has(sessionId)) {
@@ -822,11 +955,13 @@ async function main() {
         process.exit(0);
       });
     } else {
-      // Stdio模式 (默认)
+      // Stdio模式 (默认) - 本地调试模式，无需JWT认证
       process.stderr.write(`🚀 Starting NewRAG Search MCP Server (Stdio mode)\n`);
+      process.stderr.write(`⚠ Note: Stdio mode bypasses JWT authentication\n`);
 
       const transport = new StdioServerTransport();
-      const server = await createElasticsearchMcpServer(config, ragConfig);
+      // Stdio 模式不传入用户上下文，将显示所有公开文档
+      const server = await createElasticsearchMcpServer(config, ragConfig, undefined);
 
       await server.connect(transport);
 

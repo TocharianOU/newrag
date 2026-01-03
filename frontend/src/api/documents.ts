@@ -45,13 +45,17 @@ export const documentAPI = {
     author?: string;
     description?: string;
     ocr_engine?: string;
+    organization_id?: number;
+    visibility?: string;
   }) => {
     const formData = new FormData();
     formData.append('file', file);
     
     if (metadata) {
       Object.entries(metadata).forEach(([key, value]) => {
-        if (value) formData.append(key, value);
+        if (value !== null && value !== undefined) {
+          formData.append(key, String(value));
+        }
       });
     }
 
@@ -68,13 +72,17 @@ export const documentAPI = {
     author?: string;
     description?: string;
     ocr_engine?: string;
+    organization_id?: number;
+    visibility?: string;
   }) => {
     const formData = new FormData();
     files.forEach(file => formData.append('files', file));
     
     if (metadata) {
       Object.entries(metadata).forEach(([key, value]) => {
-        if (value) formData.append(key, value);
+        if (value !== null && value !== undefined) {
+          formData.append(key, String(value));
+        }
       });
     }
 
