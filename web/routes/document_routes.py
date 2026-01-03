@@ -1562,3 +1562,245 @@ async def update_document_metadata(
         logger.error("update_metadata_failed", group_id=group_id, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.get("/documents/{doc_id}/permissions")
+async def get_document_permissions(
+    doc_id: int,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get document permissions detail.
+    Supports both legacy Document and new DocumentMaster/Version.
+    """
+    import json
+    try:
+        # Try to get as DocumentMaster first
+        master = None
+        document = None
+        
+        with db._db_lock:
+            session = db.get_session()
+            try:
+                from src.database import DocumentMaster, DocumentVersion, Document
+                
+                # Check if it's a version ID (for backward compatibility)
+                version = session.query(DocumentVersion).filter(DocumentVersion.id == doc_id).first()
+                if version:
+                    master = session.query(DocumentMaster).filter(
+                        DocumentMaster.id == version.document_master_id
+                    ).first()
+                else:
+                    # Try as DocumentMaster ID
+                    master = session.query(DocumentMaster).filter(DocumentMaster.id == doc_id).first()
+                
+                # Fallback to legacy Document
+                if not master:
+                    document = session.query(Document).filter(Document.id == doc_id).first()
+                
+                if not master and not document:
+                    raise HTTPException(status_code=404, detail="Document not found")
+                
+                # Build response
+                if master:
+                    # Parse shared users/roles
+                    shared_users_ids = json.loads(master.shared_with_users) if master.shared_with_users else []
+                    shared_roles_codes = json.loads(master.shared_with_roles) if master.shared_with_roles else []
+                    
+                    # Get shared users details
+                    from src.database import User as DBUser
+                    shared_users = []
+                    if shared_users_ids:
+                        users = session.query(DBUser).filter(DBUser.id.in_(shared_users_ids)).all()
+                        shared_users = [
+                            {
+                                "id": u.id,
+                                "username": u.username,
+                                "email": u.email
+                            } for u in users
+                        ]
+                    
+                    # Get shared roles details
+                    from src.database import Role
+                    shared_roles = []
+                    if shared_roles_codes:
+                        roles = session.query(Role).filter(Role.code.in_(shared_roles_codes)).all()
+                        shared_roles = [
+                            {
+                                "code": r.code,
+                                "name": r.name
+                            } for r in roles
+                        ]
+                    
+                    # Get owner info
+                    owner_info = None
+                    if master.owner:
+                        owner_info = {
+                            "id": master.owner.id,
+                            "username": master.owner.username,
+                            "email": master.owner.email
+                        }
+                    
+                    # Get org info
+                    org_info = None
+                    if master.organization:
+                        org_info = {
+                            "id": master.organization.id,
+                            "name": master.organization.name
+                        }
+                    
+                    return JSONResponse(content={
+                        "id": master.id,
+                        "filename": master.filename_base,
+                        "visibility": master.visibility,
+                        "owner": owner_info,
+                        "organization": org_info,
+                        "shared_users": shared_users,
+                        "shared_roles": shared_roles
+                    })
+                else:
+                    # Legacy document
+                    shared_users_ids = json.loads(document.shared_with_users) if document.shared_with_users else []
+                    shared_roles_codes = json.loads(document.shared_with_roles) if document.shared_with_roles else []
+                    
+                    from src.database import User as DBUser
+                    shared_users = []
+                    if shared_users_ids:
+                        users = session.query(DBUser).filter(DBUser.id.in_(shared_users_ids)).all()
+                        shared_users = [
+                            {
+                                "id": u.id,
+                                "username": u.username,
+                                "email": u.email
+                            } for u in users
+                        ]
+                    
+                    from src.database import Role
+                    shared_roles = []
+                    if shared_roles_codes:
+                        roles = session.query(Role).filter(Role.code.in_(shared_roles_codes)).all()
+                        shared_roles = [
+                            {
+                                "code": r.code,
+                                "name": r.name
+                            } for r in roles
+                        ]
+                    
+                    owner_info = None
+                    if document.owner:
+                        owner_info = {
+                            "id": document.owner.id,
+                            "username": document.owner.username,
+                            "email": document.owner.email
+                        }
+                    
+                    org_info = None
+                    if document.organization:
+                        org_info = {
+                            "id": document.organization.id,
+                            "name": document.organization.name
+                        }
+                    
+                    return JSONResponse(content={
+                        "id": document.id,
+                        "filename": document.filename,
+                        "visibility": document.visibility,
+                        "owner": owner_info,
+                        "organization": org_info,
+                        "shared_users": shared_users,
+                        "shared_roles": shared_roles
+                    })
+                    
+            finally:
+                session.close()
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_permissions_failed", doc_id=doc_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/documents/{doc_id}/permissions")
+async def update_document_permissions(
+    doc_id: int,
+    visibility: str = Form(...),
+    shared_with_users: Optional[str] = Form("[]"),
+    shared_with_roles: Optional[str] = Form("[]"),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update document permissions.
+    Supports both legacy Document and new DocumentMaster/Version.
+    """
+    import json
+    try:
+        # Parse JSON arrays
+        shared_users_list = json.loads(shared_with_users) if shared_with_users else []
+        shared_roles_list = json.loads(shared_with_roles) if shared_with_roles else []
+        
+        # Validate visibility
+        if visibility not in ['public', 'organization', 'private']:
+            raise HTTPException(status_code=400, detail="Invalid visibility value")
+        
+        with db._db_lock:
+            session = db.get_session()
+            try:
+                from src.database import DocumentMaster, DocumentVersion, Document
+                
+                # Try to find as version first
+                version = session.query(DocumentVersion).filter(DocumentVersion.id == doc_id).first()
+                if version:
+                    master = session.query(DocumentMaster).filter(
+                        DocumentMaster.id == version.document_master_id
+                    ).first()
+                else:
+                    master = session.query(DocumentMaster).filter(DocumentMaster.id == doc_id).first()
+                
+                # Fallback to legacy Document
+                document = None
+                if not master:
+                    document = session.query(Document).filter(Document.id == doc_id).first()
+                
+                if not master and not document:
+                    raise HTTPException(status_code=404, detail="Document not found")
+                
+                # Check permission to update
+                target = master if master else document
+                if not current_user.is_superuser and target.owner_id != current_user.id:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Only document owner can update permissions"
+                    )
+                
+                # Update permissions
+                target.visibility = visibility
+                target.shared_with_users = json.dumps(shared_users_list)
+                target.shared_with_roles = json.dumps(shared_roles_list)
+                target.updated_at = datetime.utcnow()
+                
+                session.commit()
+                
+                logger.info("permissions_updated",
+                           doc_id=doc_id,
+                           type="master" if master else "document",
+                           user_id=current_user.id)
+                
+                return JSONResponse(content={
+                    "message": "Permissions updated successfully"
+                })
+                
+            except HTTPException:
+                session.rollback()
+                raise
+            except Exception as e:
+                session.rollback()
+                raise e
+            finally:
+                session.close()
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("update_permissions_failed", doc_id=doc_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
