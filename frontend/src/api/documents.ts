@@ -53,7 +53,7 @@ export interface DocumentListResponse {
 
 export const documentAPI = {
   // 获取文档列表
-  list: async (params?: { limit?: number; offset?: number; status?: string }) => {
+  list: async (params?: { limit?: number; offset?: number; status?: string; organization_id?: number }) => {
     const response = await apiClient.get<DocumentListResponse>('/documents', { params });
     return response.data;
   },
@@ -182,6 +182,12 @@ export const documentAPI = {
   // 清理 MinIO 数据
   cleanupMinIO: async (docId: number) => {
     const response = await apiClient.post(`/documents/${docId}/cleanup-minio`);
+    return response.data;
+  },
+
+  // 获取可用机构列表（用于过滤）
+  getOrganizations: async () => {
+    const response = await apiClient.get<Array<{ id: number; name: string; description: string }>>('/auth/organizations');
     return response.data;
   },
 };

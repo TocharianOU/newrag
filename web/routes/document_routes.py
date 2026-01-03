@@ -41,6 +41,7 @@ async def list_documents(
     limit: int = 50, 
     offset: int = 0, 
     status: Optional[str] = None, 
+    organization_id: Optional[int] = None,
     include_archives: bool = False,
     current_user: Optional[User] = Depends(get_current_user)
 ):
@@ -56,13 +57,23 @@ async def list_documents(
         
         # Apply permission filtering based on current user
         user_id = current_user.id if current_user else None
-        org_id = current_user.org_id if current_user else None
         is_superuser = current_user.is_superuser if current_user else False
+        
+        # Determine target organization ID for filtering
+        target_org_id = None
+        
+        if current_user:
+            if is_superuser:
+                # Superuser can filter by specific org, or see all (if organization_id is None)
+                target_org_id = organization_id
+            else:
+                # Regular users can only see their own organization
+                target_org_id = current_user.org_id
         
         # Try version control method first
         try:
             docs_combined = db.list_document_masters(
-                org_id=org_id,
+                org_id=target_org_id,
                 user_id=user_id,
                 limit=limit,
                 offset=offset,
@@ -91,7 +102,7 @@ async def list_documents(
                 status=status, 
                 exclude_file_types=exclude_types,
                 user_id=user_id,
-                org_id=org_id,
+                org_id=target_org_id,
                 is_superuser=is_superuser
             )
             return JSONResponse(content={

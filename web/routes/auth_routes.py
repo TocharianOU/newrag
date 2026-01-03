@@ -554,3 +554,35 @@ async def health_check():
         "registration_enabled": ALLOW_REGISTRATION
     }
 
+
+@router.get("/organizations")
+async def list_available_organizations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(db_session)
+):
+    """
+    List available organizations for current user.
+    Admin sees all, regular user sees their own.
+    """
+    db_manager = get_db_manager()
+    auth_manager = AuthManager(db_manager.engine)
+    
+    if current_user.is_superuser:
+        # Admin sees all organizations
+        orgs = auth_manager.list_organizations()
+    else:
+        # Regular user sees only their own organization
+        if current_user.org_id:
+            org = auth_manager.get_organization(current_user.org_id)
+            orgs = [org] if org else []
+        else:
+            orgs = []
+            
+    return [
+        {
+            'id': org.id,
+            'name': org.name,
+            'description': org.description
+        }
+        for org in orgs
+    ]
