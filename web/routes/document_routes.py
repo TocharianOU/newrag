@@ -331,30 +331,61 @@ async def delete_document(
     try:
         logger.info(f"Attempting to delete document {doc_id}", user_id=current_user.id)
         
-        # 1. Try to find in DB first (bypass permission filter to get the actual document)
-        # We'll check permissions separately
+        # 1. Try to find in DB - check both old Document and new DocumentVersion
         session = db.get_session()
+        doc = None
+        doc_version = None
+        doc_master = None
+        
         try:
-            from src.database import Document
-            doc = session.query(Document).filter(Document.id == doc_id).first()
+            from src.database import Document, DocumentVersion, DocumentMaster
+            
+            # First try new version control tables
+            doc_version = session.query(DocumentVersion).filter(DocumentVersion.id == doc_id).first()
+            if doc_version:
+                doc_master = session.query(DocumentMaster).filter(
+                    DocumentMaster.id == doc_version.document_master_id
+                ).first()
+            
+            # If not found, try old Document table (for backward compatibility)
+            if not doc_version:
+                doc = session.query(Document).filter(Document.id == doc_id).first()
         finally:
             session.close()
         
-        # Check permissions - users can only delete their own documents unless superuser
-        if doc and not current_user.is_superuser:
-            # Allow deletion of legacy documents (no owner_id) OR owned documents
-            if doc.owner_id is not None and doc.owner_id != current_user.id:
-                raise HTTPException(
-                    status_code=403,
-                    detail="You can only delete your own documents"
-                )
+        # Check permissions
+        if not current_user.is_superuser:
+            if doc_master:
+                # New version control: check master's owner
+                if doc_master.owner_id and doc_master.owner_id != current_user.id:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You can only delete your own documents"
+                    )
+            elif doc:
+                # Old document: check doc's owner
+                if doc.owner_id is not None and doc.owner_id != current_user.id:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You can only delete your own documents"
+                    )
         
-        # If not found in DB, we might still need to clean up ES and other storages
-        # But if found, we use its info
-        
-        checksum = doc.checksum if doc else None
-        filename = doc.filename if doc else None
-        file_path = doc.file_path if doc else None
+        # Extract info for deletion
+        if doc_version and doc_master:
+            # New version control - delete entire document master and all versions
+            checksum = doc_version.checksum
+            filename = doc_master.filename_base
+            file_path = doc_version.file_path
+        elif doc:
+            # Old document
+            checksum = doc.checksum
+            filename = doc.filename
+            file_path = doc.file_path
+        else:
+            # Not found - still try to clean up by ID
+            checksum = None
+            filename = None
+            file_path = None
         
         deletion_result = {
             "doc_id": doc_id,
@@ -366,9 +397,8 @@ async def delete_document(
             "child_docs_deleted": 0
         }
         
-        # If found in DB, cancel tasks and handle children
-        if doc:
-            # Cancel any running task for this document
+        # Cancel any running task for this document
+        if doc or doc_version:
             task_manager.cancel_task(doc_id)
         
         # 1.5. If this is a ZIP parent, collect child task IDs and delete them first
@@ -438,59 +468,108 @@ async def delete_document(
             except Exception as child_error:
                 logger.error("child_deletion_failed", error=str(child_error), child_id=child_id)
         
-        # 2. Delete parent document from Elasticsearch by document_id
-        # Even if doc is not in DB, we try to delete from ES using the ID provided
+        # 2. Delete from Elasticsearch
         try:
-            # Try primary deletion by document_id, fallback to checksum for legacy data
-            es_deleted = pipeline.vector_store.delete_by_metadata(
-                {"document_id": str(doc_id)},
-                fallback_filters={"checksum": checksum} if checksum else None
-            )
-            deletion_result["es_deleted"] += es_deleted
-            logger.info("es_deleted", doc_id=doc_id, count=es_deleted)
+            if doc_master:
+                # Delete all versions from ES
+                all_versions = db.get_version_history(doc_master.id)
+                for v in all_versions:
+                    try:
+                        es_deleted = pipeline.vector_store.delete_by_metadata(
+                            {"document_id": str(v.id)}
+                        )
+                        deletion_result["es_deleted"] += es_deleted
+                    except Exception as e:
+                        logger.warning("version_es_deletion_failed", version_id=v.id, error=str(e))
+                logger.info("all_versions_es_deleted", master_id=doc_master.id, 
+                          total_deleted=deletion_result["es_deleted"])
+            else:
+                # Delete old document from ES
+                es_deleted = pipeline.vector_store.delete_by_metadata(
+                    {"document_id": str(doc_id)},
+                    fallback_filters={"checksum": checksum} if checksum else None
+                )
+                deletion_result["es_deleted"] += es_deleted
+                logger.info("es_deleted", doc_id=doc_id, count=es_deleted)
         except Exception as es_error:
             logger.warning("es_deletion_failed", error=str(es_error), doc_id=doc_id)
         
         # 3. Delete from MinIO
         try:
             from src.minio_storage import minio_storage
-            if minio_storage.enabled and filename and checksum:
-                # 构建 MinIO prefix: {filename_base}_{doc_id}_{checksum[:8]}
-                filename_base = Path(filename).stem.replace(' ', '_').replace('/', '_')
-                minio_prefix = f"{filename_base}_{doc_id}_{checksum[:8]}"
-                
-                minio_deleted = minio_storage.delete_directory(minio_prefix)
-                deletion_result["minio_deleted"] = minio_deleted
-                logger.info("minio_deleted", doc_id=doc_id, prefix=minio_prefix, count=minio_deleted)
+            if minio_storage.enabled:
+                if doc_master:
+                    # Delete all versions from MinIO
+                    all_versions = db.get_version_history(doc_master.id)
+                    filename_base = Path(doc_master.filename_base).stem.replace(' ', '_').replace('/', '_')
+                    for v in all_versions:
+                        if v.checksum:
+                            minio_prefix = f"{filename_base}_{v.id}_{v.checksum[:8]}"
+                            minio_deleted = minio_storage.delete_directory(minio_prefix)
+                            deletion_result["minio_deleted"] += minio_deleted
+                elif filename and checksum:
+                    # Delete old document from MinIO
+                    filename_base = Path(filename).stem.replace(' ', '_').replace('/', '_')
+                    minio_prefix = f"{filename_base}_{doc_id}_{checksum[:8]}"
+                    minio_deleted = minio_storage.delete_directory(minio_prefix)
+                    deletion_result["minio_deleted"] = minio_deleted
+                    logger.info("minio_deleted", doc_id=doc_id, prefix=minio_prefix, count=minio_deleted)
         except Exception as minio_error:
             logger.warning("minio_deletion_failed", error=str(minio_error), doc_id=doc_id)
         
         # 4. Delete local processed files
-        if checksum:
-            try:
-                processed_folder = Path('web/static/processed_docs')
+        try:
+            processed_folder = Path('web/static/processed_docs')
+            if doc_master:
+                # Delete all versions' local files
+                all_versions = db.get_version_history(doc_master.id)
+                for v in all_versions:
+                    if v.checksum:
+                        version_folder = processed_folder / f"{v.id}_{v.checksum[:8]}"
+                        if version_folder.exists():
+                            import shutil
+                            shutil.rmtree(version_folder)
+                            deletion_result["local_files_deleted"] = True
+            elif checksum:
+                # Delete old document's local files
                 doc_folder = processed_folder / f"{doc_id}_{checksum[:8]}"
                 if doc_folder.exists():
                     import shutil
                     shutil.rmtree(doc_folder)
                     deletion_result["local_files_deleted"] = True
                     logger.info("local_files_deleted", doc_id=doc_id, path=str(doc_folder))
-            except Exception as local_error:
-                logger.warning("local_deletion_failed", error=str(local_error), doc_id=doc_id)
+        except Exception as local_error:
+            logger.warning("local_deletion_failed", error=str(local_error), doc_id=doc_id)
         
-        # 5. Delete original uploaded file
-        if file_path:
-            try:
-                if Path(file_path).exists():
-                    Path(file_path).unlink()
-                    deletion_result["original_file_deleted"] = True
-                    logger.info("original_file_deleted", doc_id=doc_id, path=file_path)
-            except Exception as file_error:
-                logger.warning("original_file_deletion_failed", error=str(file_error), doc_id=doc_id)
+        # 5. Delete original uploaded file(s)
+        try:
+            if doc_master:
+                # Delete all versions' original files
+                all_versions = db.get_version_history(doc_master.id)
+                for v in all_versions:
+                    if v.file_path and Path(v.file_path).exists():
+                        Path(v.file_path).unlink()
+                        deletion_result["original_file_deleted"] = True
+            elif file_path and Path(file_path).exists():
+                # Delete old document's original file
+                Path(file_path).unlink()
+                deletion_result["original_file_deleted"] = True
+                logger.info("original_file_deleted", doc_id=doc_id, path=file_path)
+        except Exception as file_error:
+            logger.warning("original_file_deletion_failed", error=str(file_error), doc_id=doc_id)
         
         # 6. Delete from SQLite
-        # Even if it wasn't found initially (race condition?), try delete one last time
-        if doc:
+        if doc_master:
+            # Delete entire document master and all versions
+            success = db.delete_document_master(doc_master.id)
+            if not success:
+                logger.warning("db_delete_master_failed", master_id=doc_master.id)
+            else:
+                logger.info("document_master_and_versions_deleted", 
+                          master_id=doc_master.id, 
+                          group_id=doc_master.document_group_id)
+        elif doc:
+            # Delete old document
             success = db.delete_document(doc_id)
             if not success:
                 logger.warning("db_delete_failed_or_already_gone", doc_id=doc_id)
