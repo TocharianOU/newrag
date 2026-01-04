@@ -88,16 +88,10 @@ export default function HomePage() {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Header Section */}
-      <div className="text-center space-y-4 py-8">
+      <div className="text-center py-8">
         <h2 className="text-4xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">
-          上传您的文档
+          上传文档
         </h2>
-        <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          <span className="text-sm opacity-80">
-            系统采用 <b>"仿生视觉" (OCR) + "认知重组" (VLM)</b> 的混合架构，<br/>
-            像人类一样精准理解文档的文本、视觉与空间结构。
-          </span>
-        </p>
       </div>
 
       <div className="grid gap-8 md:grid-cols-[2fr,1fr]">
@@ -135,13 +129,10 @@ export default function HomePage() {
               </div>
               <div>
                 <p className="text-xl font-semibold text-slate-700 dark:text-slate-200">
-                  点击或拖拽文件到此处
+                  点击或拖拽文件
                 </p>
-                <p className="text-sm text-slate-500 mt-1">
-                  单次最大支持 500MB，支持单个文件或 ZIP 压缩包
-                </p>
-                <p className="text-xs text-slate-400 mt-2 max-w-md mx-auto leading-relaxed">
-                  支持格式：PDF, DOCX, PPTX, XLSX, ODT, ODS, ODP, JPG, PNG, TXT, MD, ZIP
+                <p className="text-xs text-slate-400 mt-2">
+                  PDF · DOCX · PPTX · XLSX · JPG · PNG · ZIP
                 </p>
               </div>
             </div>
@@ -188,7 +179,7 @@ export default function HomePage() {
             <div>
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
                 <Sparkles size={18} className="text-indigo-500" />
-                处理设置
+                设置
               </h3>
               
               <div className="space-y-4">
@@ -201,13 +192,10 @@ export default function HomePage() {
                     onChange={(e) => setOcrEngine(e.target.value)}
                     className="input-field w-full appearance-none"
                   >
-                    <option value="vision">Apple Vision - 最适配 (推荐)</option>
-                    <option value="paddle">PaddleOCR - 最精确</option>
-                    <option value="easy">EasyOCR - 最快</option>
+                    <option value="vision">Apple Vision (推荐)</option>
+                    <option value="paddle">PaddleOCR</option>
+                    <option value="easy">EasyOCR</option>
                   </select>
-                  <p className="text-xs text-slate-500 mt-2">
-                    EasyOCR 速度最快；PaddleOCR 识别最精确；Apple Vision 对复杂布局适配最好。
-                  </p>
                 </div>
 
                 <div>
@@ -219,12 +207,9 @@ export default function HomePage() {
                     onChange={(e) => setProcessingMode(e.target.value)}
                     className="input-field w-full appearance-none"
                   >
-                    <option value="fast">⚡ 快速模式 - OCR+VLM 一次处理 (推荐)</option>
-                    <option value="deep">🔬 深度模式 - 完整4阶段精细处理</option>
+                    <option value="fast">快速 (推荐)</option>
+                    <option value="deep">深度</option>
                   </select>
-                  <p className="text-xs text-slate-500 mt-2">
-                    快速模式：约40秒/页，适合大批量处理；深度模式：约125秒/页，最高精度。
-                  </p>
                 </div>
 
                 {/* Permissions Settings */}
@@ -232,35 +217,27 @@ export default function HomePage() {
                   <div className="flex items-center gap-2 mb-3">
                     <Shield size={16} className="text-indigo-500" />
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                      权限设置
+                      权限
                     </label>
                   </div>
                   
                   <div className="space-y-3">
-                    {/* Visibility Selection */}
                     <div>
-                      <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2">
-                        文档可见范围
-                      </label>
                       <select
                         value={visibility}
                         onChange={(e) => setVisibility(e.target.value)}
                         className="input-field w-full appearance-none text-sm"
                       >
-                        <option value="private">🔒 仅自己可见</option>
-                        <option value="organization">👥 组织内共享</option>
+                        <option value="private">仅自己</option>
+                        <option value="organization">组织内</option>
                         {userInfo?.is_superuser && (
-                          <option value="public">🌐 公开可见</option>
+                          <option value="public">公开</option>
                         )}
                       </select>
                     </div>
 
-                    {/* Organization Selection (if applicable) */}
                     {userInfo && (userInfo.is_superuser || (userInfo.organizations && userInfo.organizations.length > 1)) && (
                       <div>
-                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2">
-                          所属组织
-                        </label>
                         <select
                           value={selectedOrgId || ''}
                           onChange={(e) => setSelectedOrgId(Number(e.target.value))}
@@ -274,15 +251,6 @@ export default function HomePage() {
                         </select>
                       </div>
                     )}
-
-                    {/* Permission Info */}
-                    <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                      <p className="text-xs text-slate-600 dark:text-slate-400">
-                        {visibility === 'private' && '只有您可以查看和搜索此文档'}
-                        {visibility === 'organization' && '您组织内的所有成员可以查看'}
-                        {visibility === 'public' && '所有用户都可以查看和搜索'}
-                      </p>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -305,7 +273,7 @@ export default function HomePage() {
                 ) : (
                   <>
                     <Upload size={20} />
-                    <span>开始处理</span>
+                    <span>上传</span>
                   </>
                 )}
               </button>
@@ -313,22 +281,16 @@ export default function HomePage() {
 
             {/* Status Messages */}
             {uploadMutation.isSuccess && (
-              <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900 rounded-xl text-green-800 dark:text-green-200 animate-in slide-in-from-top-2">
-                <CheckCircle2 className="shrink-0 mt-0.5" size={18} />
-                <div className="text-sm">
-                  <p className="font-medium">上传成功！</p>
-                  <p className="opacity-80 mt-1">文档已进入处理队列，请前往文档库查看进度。</p>
-                </div>
+              <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900 rounded-lg text-green-800 dark:text-green-200">
+                <CheckCircle2 size={16} />
+                <p className="text-sm font-medium">上传成功</p>
               </div>
             )}
             
             {uploadMutation.isError && (
-              <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-xl text-red-800 dark:text-red-200 animate-in slide-in-from-top-2">
-                <AlertCircle className="shrink-0 mt-0.5" size={18} />
-                <div className="text-sm">
-                  <p className="font-medium">上传失败</p>
-                  <p className="opacity-80 mt-1">{String(uploadMutation.error)}</p>
-                </div>
+              <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-lg text-red-800 dark:text-red-200">
+                <AlertCircle size={16} />
+                <p className="text-sm font-medium">上传失败</p>
               </div>
             )}
           </div>
