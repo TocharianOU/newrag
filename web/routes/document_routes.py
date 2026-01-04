@@ -96,20 +96,20 @@ async def list_documents(
             # Fallback to old method for backward compatibility
             logger.warning("version_control_list_failed_fallback_to_legacy", 
                          error=str(version_err), user_id=user_id)
-            
-            docs = db.list_documents(
-                limit=limit, 
-                offset=offset, 
-                status=status, 
-                exclude_file_types=exclude_types,
-                user_id=user_id,
+        
+        docs = db.list_documents(
+            limit=limit, 
+            offset=offset, 
+            status=status, 
+            exclude_file_types=exclude_types,
+            user_id=user_id,
                 org_id=target_org_id,
-                is_superuser=is_superuser
-            )
-            return JSONResponse(content={
-                "documents": [doc.to_dict() for doc in docs],
-                "total": len(docs)
-            })
+            is_superuser=is_superuser
+        )
+        return JSONResponse(content={
+            "documents": [doc.to_dict() for doc in docs],
+            "total": len(docs)
+        })
     except Exception as e:
         logger.error("list_documents_failed", error=str(e), user_id=user_id if current_user else None)
         raise HTTPException(status_code=500, detail=str(e))
@@ -361,7 +361,7 @@ async def delete_document(
             
             # If not found, try old Document table (for backward compatibility)
             if not doc_version:
-                doc = session.query(Document).filter(Document.id == doc_id).first()
+            doc = session.query(Document).filter(Document.id == doc_id).first()
         finally:
             session.close()
         
@@ -376,11 +376,11 @@ async def delete_document(
                     )
             elif doc:
                 # Old document: check doc's owner
-                if doc.owner_id is not None and doc.owner_id != current_user.id:
-                    raise HTTPException(
-                        status_code=403,
-                        detail="You can only delete your own documents"
-                    )
+            if doc.owner_id is not None and doc.owner_id != current_user.id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="You can only delete your own documents"
+                )
         
         # Extract info for deletion
         if doc_version and doc_master:
@@ -409,7 +409,7 @@ async def delete_document(
             "child_docs_deleted": 0
         }
         
-        # Cancel any running task for this document
+            # Cancel any running task for this document
         if doc or doc_version:
             task_manager.cancel_task(doc_id)
         
@@ -497,12 +497,12 @@ async def delete_document(
                           total_deleted=deletion_result["es_deleted"])
             else:
                 # Delete old document from ES
-                es_deleted = pipeline.vector_store.delete_by_metadata(
-                    {"document_id": str(doc_id)},
-                    fallback_filters={"checksum": checksum} if checksum else None
-                )
-                deletion_result["es_deleted"] += es_deleted
-                logger.info("es_deleted", doc_id=doc_id, count=es_deleted)
+            es_deleted = pipeline.vector_store.delete_by_metadata(
+                {"document_id": str(doc_id)},
+                fallback_filters={"checksum": checksum} if checksum else None
+            )
+            deletion_result["es_deleted"] += es_deleted
+            logger.info("es_deleted", doc_id=doc_id, count=es_deleted)
         except Exception as es_error:
             logger.warning("es_deletion_failed", error=str(es_error), doc_id=doc_id)
         
@@ -521,17 +521,17 @@ async def delete_document(
                             deletion_result["minio_deleted"] += minio_deleted
                 elif filename and checksum:
                     # Delete old document from MinIO
-                    filename_base = Path(filename).stem.replace(' ', '_').replace('/', '_')
-                    minio_prefix = f"{filename_base}_{doc_id}_{checksum[:8]}"
-                    minio_deleted = minio_storage.delete_directory(minio_prefix)
-                    deletion_result["minio_deleted"] = minio_deleted
-                    logger.info("minio_deleted", doc_id=doc_id, prefix=minio_prefix, count=minio_deleted)
+                filename_base = Path(filename).stem.replace(' ', '_').replace('/', '_')
+                minio_prefix = f"{filename_base}_{doc_id}_{checksum[:8]}"
+                minio_deleted = minio_storage.delete_directory(minio_prefix)
+                deletion_result["minio_deleted"] = minio_deleted
+                logger.info("minio_deleted", doc_id=doc_id, prefix=minio_prefix, count=minio_deleted)
         except Exception as minio_error:
             logger.warning("minio_deletion_failed", error=str(minio_error), doc_id=doc_id)
         
         # 4. Delete local processed files
-        try:
-            processed_folder = Path('web/static/processed_docs')
+            try:
+                processed_folder = Path('web/static/processed_docs')
             if doc_master:
                 # Delete all versions' local files
                 all_versions = db.get_version_history(doc_master.id)
@@ -550,8 +550,8 @@ async def delete_document(
                     shutil.rmtree(doc_folder)
                     deletion_result["local_files_deleted"] = True
                     logger.info("local_files_deleted", doc_id=doc_id, path=str(doc_folder))
-        except Exception as local_error:
-            logger.warning("local_deletion_failed", error=str(local_error), doc_id=doc_id)
+            except Exception as local_error:
+                logger.warning("local_deletion_failed", error=str(local_error), doc_id=doc_id)
         
         # 5. Delete original uploaded file(s)
         try:
@@ -564,11 +564,11 @@ async def delete_document(
                         deletion_result["original_file_deleted"] = True
             elif file_path and Path(file_path).exists():
                 # Delete old document's original file
-                Path(file_path).unlink()
-                deletion_result["original_file_deleted"] = True
-                logger.info("original_file_deleted", doc_id=doc_id, path=file_path)
-        except Exception as file_error:
-            logger.warning("original_file_deletion_failed", error=str(file_error), doc_id=doc_id)
+                    Path(file_path).unlink()
+                    deletion_result["original_file_deleted"] = True
+                    logger.info("original_file_deleted", doc_id=doc_id, path=file_path)
+            except Exception as file_error:
+                logger.warning("original_file_deletion_failed", error=str(file_error), doc_id=doc_id)
         
         # 6. Delete from SQLite
         if doc_master:
@@ -778,21 +778,21 @@ async def upload_file(
             
             if latest_version and checksum == latest_version.checksum:
                 # Exact same file content
-                if file_path.exists():
-                    os.remove(file_path)
-                return JSONResponse(content={
-                    "status": "duplicate",
+            if file_path.exists():
+                os.remove(file_path)
+            return JSONResponse(content={
+                "status": "duplicate",
                     "message": "文件内容完全相同",
                     "version": latest_version.version,
                     "document": latest_version.to_combined_dict(existing_master)
-                })
-            
+            })
+        
             # Different content - create new version
             is_new_version = True
             version_number = latest_version.version + 1 if latest_version else 1
             
             logger.info("creating_new_version", 
-                       filename=file.filename, 
+            filename=file.filename,
                        version=version_number,
                        master_id=existing_master.id)
             
@@ -800,10 +800,10 @@ async def upload_file(
             doc_version = db.create_document_version(
                 document_master_id=existing_master.id,
                 version=version_number,
-                file_path=str(file_path),
-                file_type=file_ext,
-                file_size=file_size,
-                checksum=checksum,
+            file_path=str(file_path),
+            file_type=file_ext,
+            file_size=file_size,
+            checksum=checksum,
                 ocr_engine=ocr_engine,
                 uploaded_by_id=current_user.id,
                 version_note=f"Version {version_number}"
@@ -823,9 +823,9 @@ async def upload_file(
                 owner_id=current_user.id,
                 org_id=organization_id,
                 visibility=visibility,
-                category=category,
-                tags=tags.split(',') if tags else None,
-                author=author,
+            category=category,
+            tags=tags.split(',') if tags else None,
+            author=author,
                 description=description
             )
             
@@ -841,10 +841,10 @@ async def upload_file(
                 file_type=file_ext,
                 file_size=file_size,
                 checksum=checksum,
-                ocr_engine=ocr_engine,
+            ocr_engine=ocr_engine,
                 uploaded_by_id=current_user.id,
                 version_note="Initial version"
-            )
+        )
             doc_id = doc_version.id
             existing_master = master
             logger.info("initial_version_created", doc_id=doc_id)
@@ -907,7 +907,7 @@ async def upload_file(
             except:
                 # Fallback to old method for backward compatibility
                 try:
-                    db.update_document_status(doc_id, 'failed', error_message=str(e))
+            db.update_document_status(doc_id, 'failed', error_message=str(e))
                 except:
                     pass
         
@@ -1436,7 +1436,7 @@ async def get_document_permissions(
                 # Fallback to legacy Document
                 if not master:
                     document = session.query(Document).filter(Document.id == doc_id).first()
-                
+    
                 if not master and not document:
                     raise HTTPException(status_code=404, detail="Document not found")
                 
@@ -1470,16 +1470,16 @@ async def get_document_permissions(
                                 "name": r.name
                             } for r in roles
                         ]
-                    
-                    # Get owner info
+    
+    # Get owner info
                     owner_info = None
                     if master.owner:
                         owner_info = {
                             "id": master.owner.id,
                             "username": master.owner.username,
                             "email": master.owner.email
-                        }
-                    
+            }
+    
                     # Get org info
                     org_info = None
                     if master.organization:
@@ -1515,7 +1515,7 @@ async def get_document_permissions(
                         ]
                     
                     from src.database import Role
-                    shared_roles = []
+    shared_roles = []
                     if shared_roles_codes:
                         roles = session.query(Role).filter(Role.code.in_(shared_roles_codes)).all()
                         shared_roles = [
@@ -1539,7 +1539,7 @@ async def get_document_permissions(
                             "id": document.organization.id,
                             "name": document.organization.name
                         }
-                    
+    
                     return JSONResponse(content={
                         "id": document.id,
                         "filename": document.filename,
@@ -1577,11 +1577,11 @@ async def update_document_permissions(
         # Parse JSON arrays
         shared_users_list = json.loads(shared_with_users) if shared_with_users else []
         shared_roles_list = json.loads(shared_with_roles) if shared_with_roles else []
-        
-        # Validate visibility
+    
+    # Validate visibility
         if visibility not in ['public', 'organization', 'private']:
-            raise HTTPException(status_code=400, detail="Invalid visibility value")
-        
+        raise HTTPException(status_code=400, detail="Invalid visibility value")
+    
         with db._db_lock:
             session = db.get_session()
             try:
@@ -1607,7 +1607,7 @@ async def update_document_permissions(
                 # Check permission to update
                 target = master if master else document
                 if not current_user.is_superuser and target.owner_id != current_user.id:
-                    raise HTTPException(
+                raise HTTPException(
                         status_code=403,
                         detail="Only document owner can update permissions"
                     )
@@ -1624,19 +1624,19 @@ async def update_document_permissions(
                            doc_id=doc_id,
                            type="master" if master else "document",
                            user_id=current_user.id)
-                
+        
                 return JSONResponse(content={
                     "message": "Permissions updated successfully"
                 })
                 
-            except HTTPException:
-                session.rollback()
-                raise
-            except Exception as e:
-                session.rollback()
+    except HTTPException:
+        session.rollback()
+        raise
+    except Exception as e:
+        session.rollback()
                 raise e
-            finally:
-                session.close()
+    finally:
+        session.close()
                 
     except HTTPException:
         raise
